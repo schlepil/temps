@@ -14,6 +14,12 @@ from numpy import zeros as nzeros
 from numpy import ones as nones
 from numpy import empty as nempty
 
+from numpy import sum as nsum
+from numpy import multiply as nmultiply
+from numpy import power as npower
+from numpy import prod as nprod
+
+
 from numpy import float_ as nfloat
 from numpy import int_ as nint
 from numpy import int_ as nintu
@@ -34,3 +40,8 @@ lmap = lambda f,l: list(map(f,l))
 class variableStruct:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
+    
+    def __str__(self):
+        return str(self.__dict__)
+    def __repr__(self):
+        return self.__str__()
