@@ -4,7 +4,7 @@ from polynomial.utils import *
 from multivar_horner.multivar_horner import MultivarPolynomial, HornerMultivarPolynomial
 
 class polynomials():
-    def __init__(self, repr:polynomialRepr, coeffs:np.ndarray=None, alwaysFull:bool=True):
+    def __init__(self, repr:polynomialRepr, coeffs:np.ndarray=None, maxDeg:int=None, alwaysFull:bool=True):
         
         self.repr = repr
         
@@ -21,6 +21,13 @@ class polynomials():
         self._alwaysFull = alwaysFull
 
         self._evalPoly = None
+
+        if maxDeg is None:
+            self.maxDeg = self.repr.maxDeg
+        else:
+            assert maxDeg<=self.repr.maxDeg
+            self.maxDeg = maxDeg
+
     
     def __copy__(self):
         return polynomials(self.repr, np.copy(self.__coeffs), self._alwaysFull)
@@ -39,8 +46,13 @@ class polynomials():
         except:
             print("Could not be converted -> skip")
         self.__coeffs.setflags(write=False)
+        # Update degree
+        self.maxDeg = self.getMaxDegre() #monomial are of ascending degree -> last nonzero coeff determines degree
         self._isUpdate = False
-        
+
+    def getMaxDegree(self):
+        return self.repr.listOfMonomials[np.argwhere(self.__coeffs != 0.)[-1]].sum()
+
     def computeInternal(self, full:bool=False):
         # This computes and stores the horner scheme
         # If not told otherwise it will try to seek a sparse layout, but only takes into account explicit zeros

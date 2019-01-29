@@ -30,3 +30,7 @@ from copy import copy as cp
 
 
 lmap = lambda f,l: list(map(f,l))
+
+class variableStruct:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
