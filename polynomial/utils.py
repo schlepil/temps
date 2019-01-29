@@ -16,6 +16,39 @@ def importDynFunc(name):
     return module.linCoordChange
 
 
+@njit(cache=True)
+def linChangeNumba(firstIdxPerMonom, cIdx,cpIdx,multiplier,numElem,idxList,c,cp,Aflat):
+    
+    nMonoms = firstIdxPerMonom.size
+    
+    idxListShape0 = idxList.shape[0]
+    idxListShape1 = idxList.shape[1]
+    
+    #Loop over old coeffs/monoms
+    for k in range(nMonoms):
+        tmpVal = c[cIdx[k]]
+        if tmpVal != 0:
+            #old monomial has nonzero coeffs -> take into account
+            startIdx = firstIdxPerMonom[k]
+            if k+1 == nMonoms:
+                #Last monomial loop till end
+                stopIdx = idxListShape1
+            else:
+                # Other -> Loop till nex
+                stopIdx = firstIdxPerMonom[k+1]
+            
+            for j in range(startIdx, stopIdx):
+                # Do the actual computation
+                tmpVal2 = c[cIdx[k]]*multiplier[j]
+                for i in range(numElem[j]):
+                    tmpVal2 *= Aflat[idxList[i,j]]
+                cp[cpIdx[j]] += tmpVal2
+    
+    return cp
+    
+    
+
+
 @njit
 def list2int(anArr:np.ndarray, digits:int=1):
     """
@@ -118,7 +151,7 @@ def linChangeList2Dict(linChangeList):
             except KeyError:
                 thisDict[newMonom] = [(origMonom,aIdx)]
     
-def List2Str(nDims, maxDeg, digits, monom2num, num2monom, linChangeDict, A='A', c='c', cp='cp'):
+def List2Str(nDims, maxDeg, digits, monom2num, num2monom, linChangeDict, A='A', c='cIdx', cp='cp'):
     
     from os import path
     
@@ -132,6 +165,10 @@ def List2Str(nDims, maxDeg, digits, monom2num, num2monom, linChangeDict, A='A', 
     # TODO
     # Combine valuations to increase efficiency -> First build up a dict and count occurences
     # Even better -> this is surely following some binomial thingy -> get directly this
+    
+    newStyleDict = {'firstIdxPerMonomial':[0], 'cIdx':[], 'cpIdx':np.zeros((0,), dtype=nintu), 'multiplier':np.zeros((0,), dtype=nintu), 'numElem':np.zeros((0,), dtype=nintu), 'idxList':np.zeros((maxDeg,0), dtype=nintu)}
+    idxMat = np.arange((nDims+1)**2).reshape((nDims+1,nDims+1)).astype(nintu)
+    
     for monomOrig, newVal in linChangeDict.items():
         #Start new if-clause for each monomial to check if 0.
         fileAsList.append("\ttempVal={0}[{1}] # coef of {2}".format(c, monom2num[monomOrig], monomOrig))
@@ -166,8 +203,36 @@ def List2Str(nDims, maxDeg, digits, monom2num, num2monom, linChangeDict, A='A', 
                 # Cut last *
                 fileAsList[-1] = fileAsList[-1][:-1]
                 fileAsList[-1] += ") #{0}".format(num2monom[monomNewInt])
+        #Also convert it to the new style -> drop exponentiation beforehand
+        thisLen = 0
+        for _,thisSubDict in thisCounterDict.items():
+            thisLen += len(thisSubDict.keys())
             
-        fileAsList.append("")
+        newStyleDict['firstIdxPerMonomial'].append(newStyleDict['firstIdxPerMonomial'][-1]+thisLen)
+        newStyleDict['cIdx'].append(monom2num[monomOrig])
+        #new Matrices
+        newCP = nzeros((thisLen,), dtype=nintu)
+        newMultiplier = nzeros((thisLen,), dtype=nintu)
+        newNumElem = nzeros((thisLen,), dtype=nintu)
+        newIdxList = nzeros((maxDeg,thisLen), dtype=nintu)
+        
+        k=0
+        for monomNewInt, thisSubDict in thisCounterDict.items():
+            for powerKey, counter in thisSubDict.items():
+                newCP[k] = monomNewInt
+                newMultiplier[k] = counter
+                powerMat = narray(powerKey,dtype=nint).reshape((nDims+1,nDims+1))
+                for i in range(nDims+1):
+                    for j in range(nDims+1):
+                        for _ in range(powerMat[i,j]):
+                            newIdxList[newNumElem[k], k] = idxMat[i,j]
+                            newNumElem[k] += 1
+                k+=1
+
+        newStyleDict['cpIdx'] = np.hstack([newStyleDict['cpIdx'], newCP])
+        newStyleDict['multiplier'] = np.hstack([newStyleDict['multiplier'],newMultiplier])
+        newStyleDict['numElem'] = np.hstack([newStyleDict['numElem'],newNumElem])
+        newStyleDict['idxList'] = np.hstack([newStyleDict['idxList'],newIdxList])
     
     fileAsList.append("\treturn {0}".format(cp))
     
@@ -176,8 +241,11 @@ def List2Str(nDims, maxDeg, digits, monom2num, num2monom, linChangeDict, A='A', 
     
     with open(path.join(base, pyFileName+".py"), "w+") as pyFile:
         pyFile.write("\n".join(fileAsList))
+    
+    newStyleDict['firstIdxPerMonomial'] = narray(newStyleDict['firstIdxPerMonomial'][:-1], dtype=nintu)
+    newStyleDict['cIdx'] = narray(newStyleDict['cIdx'],dtype=nintu)
         
-    return fileAsList, pyFileName
+    return fileAsList, pyFileName, newStyleDict
 
 
 
@@ -260,9 +328,9 @@ class polynomialRepr():
         for aMonomInt, aMonomList in zip(self.listOfMonomialsAsInt,self.listOfMonomials):
             self.linChangeList[aMonomInt] = compLinChangeList(self.nDims,self.digits,aMonomList)
 
-        self.linChangeListStr,self.linChangeModName = List2Str(self.nDims,self.maxDeg,self.digits,self.monom2num, self.num2monom,self.linChangeList,*self.linChangeVar)
+        self.linChangeListStr,self.linChangeModName, self.newStyleDict = List2Str(self.nDims,self.maxDeg,self.digits,self.monom2num, self.num2monom,self.linChangeList,*self.linChangeVar)
         
-        self.linCoordChangeFun = importDynFunc("polynomial."+self.linChangeModName)
+        #self.linCoordChangeFun = importDynFunc("polynomial."+self.linChangeModName)
         
         return None
     
@@ -286,10 +354,12 @@ class polynomialRepr():
         cp = nzeros((self.nMonoms,), dtype=nfloat)
         
         #Build up
-        AhatL = [np.power(Ahat,k) for k in range(self.maxDeg+1)] #Attention if A**2 -> A[i,j] = A[i,j]**2 if array, A**2 = A*A if A is matrix
-        
+        #AhatL = [np.power(Ahat,k) for k in range(self.maxDeg+1)] #Attention if A**2 -> A[i,j] = A[i,j]**2 if array, A**2 = A*A if A is matrix
         #call
-        cp = self.linCoordChangeFun(c,cp,*AhatL)
+        #cp = self.linCoordChangeFun(np.copy(c),cp,*AhatL)
+
+        Ahatflat = Ahat.flatten()
+        cp = linChangeNumba(self.newStyleDict['firstIdxPerMonomial'],self.newStyleDict["cIdx"],self.newStyleDict["cpIdx"],self.newStyleDict["multiplier"],self.newStyleDict["numElem"],self.newStyleDict["idxList"],c,cp,Ahatflat)
         return cp
         
         

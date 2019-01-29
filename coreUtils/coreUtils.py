@@ -16,6 +16,7 @@ from numpy import empty as nempty
 
 from numpy import float_ as nfloat
 from numpy import int_ as nint
+from numpy import int_ as nintu
 
 from scipy import sparse
 

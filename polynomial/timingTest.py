@@ -9,6 +9,8 @@ from math import ceil
 
 import subprocess
 
+import time
+
 #
 # map1 = np.zeros((thisRepr.listOfMonomialsAsInt.max()+1,),dtype=nint)
 #
@@ -150,7 +152,11 @@ def evalRand(nDims, maxDegree):
     
 
 if __name__ == "__main__":
+    T = time.time()
     evalRand(2,2)
+    print("2x2 time ", time.time()-T)
+    T = time.time()
     evalRand(6,4)
+    print("6x4 time ",time.time()-T)
     #funcEval(2,2)
     #funcEval(6,4)
