@@ -23,10 +23,10 @@ class polynomials():
         self._evalPoly = None
 
         if maxDeg is None:
-            self.maxDeg = self.repr.maxDeg
-        else:
+            self.maxDeg = self.getMaxDegree()
+        
+        if __debug__:
             assert maxDeg<=self.repr.maxDeg
-            self.maxDeg = maxDeg
 
     
     def __copy__(self):
@@ -49,6 +49,73 @@ class polynomials():
         # Update degree
         self.maxDeg = self.getMaxDegre() #monomial are of ascending degree -> last nonzero coeff determines degree
         self._isUpdate = False
+    
+    
+    def __add__(self, other):
+        if __debug__:
+            assert isinstance(other, polynomials)
+            assert self.repr == other.repr
+        return polynomials(self.repr, self._coeffs+other._coeffs,allwaysFull=self._alwaysFull)
+    
+    def __iadd__(self, other):
+        if __debug__:
+            assert isinstance(other, polynomials)
+            assert self.repr == other.repr
+        self._coeffs+=other._coeffs
+        self.maxDeg=self.getMaxDegree()
+        return None
+    
+    def __sub__(self, other):
+        if __debug__:
+            assert isinstance(other, polynomials)
+            assert self.repr == other.repr
+        return polynomials(self.repr, self._coeffs-other._coeffs,allwaysFull=self._alwaysFull)
+    
+    def __isub__(self, other):
+        if __debug__:
+            assert isinstance(other, polynomials)
+            assert self.repr == other.repr
+        self._coeffs-=other._coeffs
+        self.maxDeg=self.getMaxDegree()
+        return None
+    
+    def __mul__(self, other):
+        if __debug__:
+            assert isinstance(other, polynomials)
+            assert self.repr == other.repr
+            assert self.maxDeg+other.maxDeg<=self.repr.maxDeg
+        
+        c = polyMul(self._coeffs, other._coefs, self.repr.idxMat)
+        return polynomials(self.repr, c, self.maxDeg+other.maxDeg, alwaysFull=self._alwaysFull)
+    
+    def __rmul__(self, other):
+        # Commute
+        return self.__mul__(other)
+    
+    def __imul__(self, other):
+        if __debug__:
+            assert isinstance(other,polynomials)
+            assert self.repr == other.repr
+            assert self.maxDeg+other.maxDeg <= self.repr.maxDeg
+    
+        self._coeffs = polyMul(self._coeffs,other._coefs,self.repr.idxMat)
+        self.maxDeg = self.maxDeg+other.maxDeg
+        return None
+    
+    def __pow__(self, power:int, modulo=None):
+        if __debug__:
+            assert self.maxDeg*power<=self.repr.maxDeg
+        #very simplistic
+        newPoly = self*self
+        
+        for _ in range(power-2):
+            newPoly*=self
+        return newPoly
+        
+    
+    def round(self,atol=1e-12):
+        self._coeffs[np.abs(self._coeffs)<=atol]=0.
+        self.maxDeg=self.getMaxDegree()
 
     def getMaxDegree(self):
         return self.repr.listOfMonomials[int(np.argwhere(self._coeffs != 0.)[-1])].sum()

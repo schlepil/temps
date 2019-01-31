@@ -5,7 +5,7 @@ from relaxations.constraints import *
 
 
 
-class polynomialProg():
+class convexProg():
 
     def __init__(self, repr:polynomialRepr, solver:str='cvxopt', objective:polynomials=None):
 
@@ -14,7 +14,7 @@ class polynomialProg():
 
         self.solver = solver
         self.repr = repr
-        self.constraints=variableStruct('l':variableStruct(nCstr=0),'q':variableStruct(nCstr=0),'s':variableStruct(nCstr=0))
+        self.constraints=variableStruct(l=variableStruct(nCstr=0, cstrList=[]),q=variableStruct(nCstr=0, cstrList=[]),s=variableStruct(nCstr=0, cstrList=[]))
         self.__objective = polynomials(repr) if objective is None else objective
 
         self.isUpdate = False
@@ -32,28 +32,53 @@ class polynomialProg():
 
         self.isUpdate = False
 
-    def addCstr(self, newConstraint:Union):
+    def addCstr(self, newConstraint:Union[linearConstraint,socpConstraint,lasserreConstraint]):
+        if isinstance(newConstraint, linearConstraint):
+            self.constraints.l.nCstr += 1
+            self.constraints.l.cstrList.append(newConstraint)
+        elif isinstance(newConstraint, socpConstraint):
+            self.constraints.q.nCstr += 1
+            self.constraints.q.cstrList.append(newConstraint)
+        elif isinstance(newConstraint, lasserreConstraint):
+            self.constraints.s.nCstr += 1
+            self.constraints.s.cstrList.append(newConstraint)
+        else:
+            raise NotImplementedError
+        
+        self.isUpdate = False
+        
+        return None
 
     def precomp(self):
         if self.solver == 'cvxopt':
             self.precomp_cvxopt()
         else:
             raise NotImplementedError
+        
+        self.isUpdate = True
 
         return None
 
     def precomp_cvxopt(self):
         return None #Nothing to do for the moment
 
-    def solve(self):
+    def solve(self, opts={}):
         if not self.isUpdate:
             self.precomp()
 
         if self.solver == 'cvxopt':
-            return self.solve_cvxopt()
+            return self.solve_cvxopt(opts)
         else:
             return None
 
-    def solve_cvxopt
+    def solve_cvxopt(self,opts={}):
+        # Currently focalised on sdp with linear constraints
+        _opts = {}
+        _opts.update(opts)
+        
+        assert self.constraints.q.nCstr == 0
+        
+        #Assemble
+        
 
 
