@@ -25,6 +25,9 @@ def funcTestBase(nDims, maxDeg):
 
     return None
 
+def funcTestFirstOpt():
+
+
 
 if __name__ == "__main__":
     funcTestBase(2,4)

@@ -185,21 +185,19 @@ class lasserreConstraint:
                     self.cstrMatDef.posInCMat.append(self.monom2num[monomP+cMatMonom]) #variable number associated to the product monomial
         # Done, transform to array
         self.cstrMatDef.firstIdxPerK, self.cstrMatDef.posInCMat, self.cstrMatDef.whichCoeff = narray(self.cstrMatDef.firstIdxPerK, dtype=nintu), narray(self.cstrMatDef.posInCMat, dtype=nintu), narray(self.cstrMatDef.whichCoeff, dtype=nintu)
+        self.cstrMatDef.firstIdxPerK = np.cumsum(self.cstrMatDef.firstIdxPerK)
         self.cstrMatDef.cstrMatRelax = cstrMatRelax
         self.cstrMatDef.shapeMatRelax = cstrMatRelax.shape
         self.cstrMatDef.shapeCstr = (cstrMatRelax.size, self.repr.nMonoms)
         return None
     
-    def getCstr(self, c:np.array=None, isSparse=False):
+    def getCstr(self, isSparse=False):
         if __debug__:
             assert isSparse in [False, 'coo', 'csr', 'csc'], "unrecongnized"
 
         cstrMat = np.zeros(self.cstrMatDef.shapeCstr, dtype=nfloat)
-        
-        c = self.poly.coeffs if c is None else c
-        assert c.size == self.repr.nMonoms, "coefficients must be given for all monomials"
 
-        cstrMat = populateCstr(cMat, self.cstrMatDef.firstIdxPerK, posInCMat, whichCoeff, c)
+        cstrMat = populateCstr(cstrMat, self.cstrMatDef.firstIdxPerK, self.cstrMatDef.posInCMat, self.cstrMatDef.whichCoeff, self.poly.coeffs.ravel())
         
         if isSparse is False:
             return cstrMat
@@ -212,11 +210,11 @@ class lasserreConstraint:
     
     def evalCstr(self, x:np.array):
         # evalCtrMat(listOfMonomials,cstrMat,x):
-        if x.size in self.repr.nMonoms:
+        if x.size == self.repr.nMonoms:
             thisC = x
         else:
             thisC = polyListEval(self.listOfMonomials, x)
-        return evalCtrMat(self.listOfMonomials, self.getCstr(thisC, isSparse=False),x)
+        return evalCtrMat(self.listOfMonomials, self.getCstr(isSparse=False),x)
         
     
     
