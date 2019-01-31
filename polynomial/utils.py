@@ -318,8 +318,27 @@ class polynomialRepr():
         self.generateDict()
         
         self.precompLinearChange()
+
+        self.getIdxMat()
         
         return None
+
+    def getIdxMat(self):
+
+        self.idxMat = self.listOfMonomialsAsInt.reshape((-1,1))+self.listOfMonomialsAsInt.reshape((1,-1))
+        intMax = np.iinfo(nintu).max
+
+        for i in range(self.nMonoms):
+            for j in range(self.nMonoms):
+                try:
+                    self.idxMat[i,j] = self.monom2num[self.idxMat[i,j]]
+                except KeyError:
+                    #exceeding relaxation
+                    self.idxMat[i, j] = intMax
+
+        return None
+
+
     
     def precompLinearChange(self):
         

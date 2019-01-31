@@ -11,12 +11,12 @@ class polynomials():
         self._isUpdate=False
         
         if coeffs is None:
-            self.__coeffs = np.zeros((self.repr.nMonoms,), dtype=nfloat)
+            self._coeffs = np.zeros((self.repr.nMonoms,), dtype=nfloat)
         else:
             # Must be convertible
-            self.__coeffs = narray(coeffs).astype(nfloat).reshape((self.repr.nMonoms,))
+            self._coeffs = narray(coeffs).astype(nfloat).reshape((self.repr.nMonoms,))
         
-        self.__coeffs.setflags(write=False)
+        self._coeffs.setflags(write=False)
         
         self._alwaysFull = alwaysFull
 
@@ -30,28 +30,28 @@ class polynomials():
 
     
     def __copy__(self):
-        return polynomials(self.repr, np.copy(self.__coeffs), self._alwaysFull)
+        return polynomials(self.repr, np.copy(self._coeffs), self._alwaysFull)
     
     def __deepcopy__(self, memodict={}):
-        return polynomials(dp(self.repr, memodict), np.copy(self.__coeffs), cp(self._alwaysFull))
+        return polynomials(dp(self.repr, memodict), np.copy(self._coeffs), cp(self._alwaysFull))
     
     @property
     def coeffs(self):
-        return self.__coeffs
+        return self._coeffs
     
     @coeffs.setter
     def coeffs(self, newCoeffs):
         try:
-            self.__coeffs = narray(newCoeffs).astype(nfloat).reshape((self.repr.nMonoms,))
+            self._coeffs = narray(newCoeffs).astype(nfloat).reshape((self.repr.nMonoms,))
         except:
             print("Could not be converted -> skip")
-        self.__coeffs.setflags(write=False)
+        self._coeffs.setflags(write=False)
         # Update degree
         self.maxDeg = self.getMaxDegre() #monomial are of ascending degree -> last nonzero coeff determines degree
         self._isUpdate = False
 
     def getMaxDegree(self):
-        return self.repr.listOfMonomials[np.argwhere(self.__coeffs != 0.)[-1]].sum()
+        return self.repr.listOfMonomials[int(np.argwhere(self._coeffs != 0.)[-1])].sum()
 
     def computeInternal(self, full:bool=False):
         # This computes and stores the horner scheme
@@ -60,7 +60,7 @@ class polynomials():
         #shortcut of always full
         if self._alwaysFull:
             if self._evalPoly is None:
-                self._evalPoly = MultivarPolynomial(self.__coeffs.reshape((-1,1)),np.require(narray(self.repr.listOfMonomials), dtype=nint))
+                self._evalPoly = MultivarPolynomial(self._coeffs.reshape((-1, 1)), np.require(narray(self.repr.listOfMonomials), dtype=nint))
             else:
                 self._evalPoly.coefficients = self.coeffs.reshape((-1,1))
             self._isUpdate = True
@@ -69,11 +69,11 @@ class polynomials():
         
         if full:
             thisExp = np.require(narray(self.repr.listOfMonomials), dtype=nint)
-            thisCoeffs = self.__coeffs
+            thisCoeffs = self._coeffs
         else:
             thisExp = []
             thisCoeffs = []
-            for aExp, aCoeff in zip(self.repr.listOfMonomials, self.__coeffs):
+            for aExp, aCoeff in zip(self.repr.listOfMonomials, self._coeffs):
                 if aCoeff != 0:
                     thisExp.append(aExp)
                     thisCoeffs.append(aCoeff)

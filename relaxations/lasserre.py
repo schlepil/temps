@@ -25,13 +25,26 @@ def populateCstr(cMat, firstIdxPerK, posInCMat, whichCoeff, c):
 
 #We will only look at the upper triangular matrix as they are all symmetric
 
-def evalCtrMat(listOfMonomials,cstrMat,x):
-    
+def polyListEval(listOfMonomials:"List of np.arrays", x:np.array):
+    if __debug__:
+        lenExp = listOfMonomials[0].size
+        assert all([aMonom.size==lenExp for aMonom in listOfMonomials])
+        assert x.size==lenExp
+
     allMonoms = np.vstack(listOfMonomials)
-    x=x.reshape((-1,))
-    
-    monomVals = nprod(npower(x,allMonoms),axis=1)
-    monomVals.resize((1,monomVals.size))
+    x = x.reshape((-1,))
+
+    monomVals = nprod(npower(x, allMonoms), axis=1)
+    monomVals.resize((1, monomVals.size))
+
+    return monomVals
+
+
+def evalCtrMat(listOfMonomials,cstrMat,x):
+    if x.size == len(listOfMonomials):
+        monomVals = x
+    else:
+        monomVals = polyListEval(listOfMonomials, x)
     
     dim = int(cstrMat.shape[0]**.5)
     
@@ -45,30 +58,18 @@ class lasserreRelax:
         self.repr = repr
         
         self.degHalf = repr.maxDeg//2
-        
+
+        #Forward. Note: Do not exchange the repr
+        self.digits = self.repr.digits
+        self.listOfMonomials = self.repr.listOfMonomials
+        self.listOfMonomialsAsInt = self.repr.listOfMonomialsAsInt
+        self.listOfMonomialsPerDeg = self.repr.listOfMonomialsPerDeg
+        self.maxDeg = self.repr.maxDeg
+        self.nMonoms = self.repr.nMonoms
+
+
         if not emptyClass:
             self.compute()
-    
-    #Forward
-    @property
-    def digits(self):
-        return self.repr.digits
-    
-    @property
-    def maxDeg(self):
-        return self.repr.maxDeg
-
-    @property
-    def listOfMonomialsAsInt(self):
-        return self.repr.listOfMonomialsAsInt
-
-    @property
-    def nMonoms(self):
-        return self.repr.nMonoms
-
-#    @property
-#    def(self):
-#        return self.repr.
 
     def compute(self):
         
@@ -120,15 +121,19 @@ class lasserreRelax:
     
     def evalCstr(self, x:np.array):
         if __debug__:
-            assert x.size == self.repr.nDims, "Wrong dimension, only single point evaluation"
-        return evalCtrMat(self.listOfMonomials, self.getCstr(sparse=False),x.flatten())
+            assert (x.size == self.repr.nDims) or (x.size == self.repr.nMonoms), "Wrong dimension, only single point evaluation"
+        if x.size == self.repr.nMonoms:
+            thisC = x
+        else:
+            thisC = polyListEval(self.repr.listOfMonomials, x)
+        return evalCtrMat(self.listOfMonomials, self.getCstr(isSparse=False),thisC)
 
 
 class lasserreConstraint:
     def __init__(self, baseRelax:lasserreRelax, poly:polynomials, nRelax:int=None):
         assert poly.getMaxDegree()<poly.repr.maxDeg, "Increase relaxation order of the base relaxation"
         assert (nRelax is None) or ((poly.maxDeg+nRelax) <= poly.repr.maxDeg), "Decrease relaxation order of this constraint"
-        assert poly.getMaxDegree() == poly.maxDeg, "Inconsistent"
+        assert poly.getMaxDegree() < baseRelax.maxDeg, "Inconsistent"
 
         self.baseRelax = baseRelax
         self.poly = poly
@@ -170,14 +175,14 @@ class lasserreConstraint:
                 # Entry mat[i,j]
                 # New k -> Create or increment
                 k += 1
-                self.cstrMatDef.firstIdxPerK.append([0])
+                self.cstrMatDef.firstIdxPerK.append(0)
 
                 cMatMonom = cstrMatRelax[i,j]
                 # Multiply with polynomial
                 for idxC, monomP in enumerate(self.poly.repr.listOfMonomialsAsInt[:maxIdxPoly]):
                     self.cstrMatDef.firstIdxPerK[-1] +=1
                     self.cstrMatDef.whichCoeff.append(idxC) #Save this coefficient
-                    self.cstrMatDef.posInCMat.append(self.monom2num(monomP+cMatMonom)) #variable number associated to the product monomial
+                    self.cstrMatDef.posInCMat.append(self.monom2num[monomP+cMatMonom]) #variable number associated to the product monomial
         # Done, transform to array
         self.cstrMatDef.firstIdxPerK, self.cstrMatDef.posInCMat, self.cstrMatDef.whichCoeff = narray(self.cstrMatDef.firstIdxPerK, dtype=nintu), narray(self.cstrMatDef.posInCMat, dtype=nintu), narray(self.cstrMatDef.whichCoeff, dtype=nintu)
         self.cstrMatDef.cstrMatRelax = cstrMatRelax
@@ -206,6 +211,12 @@ class lasserreConstraint:
             return sparse.csc_matrix(cstrMat)
     
     def evalCstr(self, x:np.array):
+        # evalCtrMat(listOfMonomials,cstrMat,x):
+        if x.size in self.repr.nMonoms:
+            thisC = x
+        else:
+            thisC = polyListEval(self.listOfMonomials, x)
+        return evalCtrMat(self.listOfMonomials, self.getCstr(thisC, isSparse=False),x)
         
     
     

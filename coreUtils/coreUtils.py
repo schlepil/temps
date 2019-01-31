@@ -28,14 +28,14 @@ from scipy import sparse
 
 from scipy.linalg import eig,eigh,cholesky,lstsq,eigvals,eigvalsh,inv
 
-from typing import List, Tuple
+from typing import List, Tuple, Callable, Union, Iterable
 
 
 from copy import deepcopy as dp
 from copy import copy as cp
 
-
-lmap = lambda f,l: list(map(f,l))
+def lmap(f:Callable, l:Iterable)->List:
+    return list(map(f,l))
 
 class variableStruct:
     def __init__(self, **kwargs):
