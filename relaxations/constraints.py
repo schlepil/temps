@@ -8,17 +8,17 @@ class constraint:
         raise NotImplementedError
 
 class linearConstraint(constraint):
-    def __init__(self, A, b):
+    def __init__(self,Gl,hl):
 
-        self.A = A
-        self.b = np.array(b,dtype=nfloat).reshape((-1,1))
+        self.Gl = Gl
+        self.hl = np.array(hl,dtype=nfloat).reshape((-1,1))
 
-        if isinstance(A, np.ndarray):
-            self.shape = self.A.shape
+        if isinstance(Gl,np.ndarray):
+            self.shape = self.Gl.shape
             self.isSparse = False
-        elif isinstance(A, (sparse.coo_matrix, sparse.csc_matrix,sparse.csr_matrix)):
-            self.A = sparse.coo_matrix(A)
-            self.shape = self.A.shape
+        elif isinstance(Gl,(sparse.coo_matrix,sparse.csc_matrix,sparse.csr_matrix)):
+            self.Gl = sparse.coo_matrix(Gl)
+            self.shape = self.Gl.shape
             self.isSparse = True
         else:
             raise TypeError
@@ -27,25 +27,25 @@ class linearConstraint(constraint):
         
         if not isSparse:
             if not self.isSparse:
-                A = self.A.todense()
+                Gl = self.Gl.todense()
             else:
-                A = self.A
+                Gl = self.Gl
         else:
             if self.isSparse:
                 if isSparse == 'coo':
-                    A = self.A
+                    Gl = self.Gl
                 elif isSparse == 'csr':
-                    A = self.A.tocsr()
+                    Gl = self.Gl.tocsr()
                 else:
-                    A = self.A.tocsc()
+                    Gl = self.Gl.tocsc()
             else:
                 if isSparse == 'coo':
-                    A = sparse.coo_matrix(self.A)
+                    Gl = sparse.coo_matrix(self.Gl)
                 elif isSparse == 'csr':
-                    A = sparse.csr_matrix(self.A)
+                    Gl = sparse.csr_matrix(self.Gl)
                 else:
-                    A = sparse.csr_matrix(self.A)
-        return A, self.b
+                    Gl = sparse.csr_matrix(self.Gl)
+        return Gl, self.hl
             
         
 class socpConstraint(constraint):

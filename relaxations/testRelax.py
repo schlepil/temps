@@ -26,8 +26,8 @@ def funcTestBase(nDims, maxDeg):
 
     return None
 
-def funcTestFirstOpt():
-    thisRepr = polynomialRepr(2,4)
+def funcTestFirstOpt(relaxOrder=4):
+    thisRepr = polynomialRepr(2,relaxOrder)
     thisRelax = lasserreRelax(thisRepr)
     # x^2+y^2<=1 -> 1.-x^2-y^2>=0.
     #1,x,y,x**2,xy,y**2
@@ -51,10 +51,49 @@ def funcTestFirstOpt():
     
     obj = obj1**2+obj2**2
     
+    thisOpt = convexProg(thisRepr, objective=obj)
     
+    thisOpt.addCstr(thisRelax)
+    sol = thisOpt.solve()
+    print("Analytic solution is 0. obtained {0}".format(sol['primal objective']))
+    print("Analytic minimizer is (-1,-1) obtained {0}".format(sol['x_np'][0,1:3]))
+    print("relax mat is \n {0}".format(thisRelax.evalCstr(sol['x_np'])))
+    print("With eigvals \n {0} \n and eigvec \n{1}".format(*eigh(thisRelax.evalCstr(sol['x_np']))))
+    print("Delta constraints is \n {0}".format(thisRelax.evalCstr(sol['x_np'])-thisRelax.evalCstr(narray([-1.,-1.],dtype=nfloat))) )
+    print("With eigvals \n {0} \n and eigvec \n {1}".format(*eigh(thisRelax.evalCstr(sol['x_np'])-thisRelax.evalCstr(narray([-1.,-1.],dtype=nfloat)))))
+    
+    thisOpt.addCstr(thisPolyCstr)
+    sol = thisOpt.solve()
+    Osq2 = -1./2.**0.5
+    print("Analytic solution is 0.17157287525381 obtained {0}".format(sol['primal objective']))
+    print("Analytic minimizer is (-1/sq2,-1/sq2) obtained {0}".format(sol['x_np'][0,1:3]))
+    print("relax mat is \n {0}".format(thisRelax.evalCstr(sol['x_np'])))
+    print("With eigvals \n {0} \n and eigvec \n{1}".format(*eigh(thisRelax.evalCstr(sol['x_np']))))
+    print("Delta constraints is \n {0}".format(thisRelax.evalCstr(sol['x_np'])-thisRelax.evalCstr(narray([Osq2,Osq2],dtype=nfloat))))
+    print("With eigvals \n {0} \n and eigvec \n {1}".format(*eigh(thisRelax.evalCstr(sol['x_np'])-thisRelax.evalCstr(narray([Osq2,Osq2],dtype=nfloat)))))
+    
+    obj2 = -obj
+    thisOpt.removeCstr('s', 1)
+    thisOpt.objective = obj2
+    sol = thisOpt.solve()
+    print("Solution should be unbounded")
+    print(sol)
+
+    thisOpt.addCstr(thisPolyCstr)
+    sol = thisOpt.solve()
+    Osq2 = 1./2.**0.5
+    print("Analytic solution is -5.82842712474619 obtained {0}".format(sol['primal objective']))
+    print("Analytic minimizer is (1/sq2,1/sq2) obtained {0}".format(sol['x_np'][0,1:3]))
+    print("relax mat is \n {0}".format(thisRelax.evalCstr(sol['x_np'])))
+    print("With eigvals \n {0} \n and eigvec \n{1}".format(*eigh(thisRelax.evalCstr(sol['x_np']))))
+    print("Delta constraints is \n {0}".format(thisRelax.evalCstr(sol['x_np'])-thisRelax.evalCstr(narray([Osq2,Osq2],dtype=nfloat))))
+    print("With eigvals \n {0} \n and eigvec \n {1}".format(*eigh(thisRelax.evalCstr(sol['x_np'])-thisRelax.evalCstr(narray([Osq2,Osq2],dtype=nfloat)))))
     
 
 
 
 if __name__ == "__main__":
     funcTestBase(2,4)
+    funcTestFirstOpt(4)
+    funcTestFirstOpt(6)
+    funcTestFirstOpt(8)

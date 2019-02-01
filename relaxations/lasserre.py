@@ -40,7 +40,7 @@ def polyListEval(listOfMonomials:"List of np.arrays", x:np.array):
     return monomVals
 
 
-def evalCtrMat(listOfMonomials,cstrMat,x):
+def evalCtrMat(listOfMonomials,cstrMat, cstrRHS,x):
     if x.size == len(listOfMonomials):
         monomVals = x
     else:
@@ -48,7 +48,7 @@ def evalCtrMat(listOfMonomials,cstrMat,x):
     
     dim = int(cstrMat.shape[0]**.5)
     
-    return nsum(nmultiply(cstrMat, monomVals),axis=1).reshape((dim,dim))
+    return nsum(nmultiply(cstrMat, monomVals),axis=1).reshape((dim,dim))-cstrRHS.reshape((dim,dim))
 
 class lasserreRelax:
     def __init__(self, repr:polynomialRepr, emptyClass=False):
@@ -96,13 +96,17 @@ class lasserreRelax:
             thisCMat = (self.monomMatrix == aMonomInt).astype(nfloat)
             self.occurencesPerVarnum[k] = np.sum(thisCMat)
             allCMat[:,k] = thisCMat.flatten('F')
+        
+        # Lasserre -> constraintMat >= 0 ; cone programming A.x <= b
+        # -> Inverse sign
 
-        self.constraintMat.allCMat = allCMat
+        self.constraintMat.allCMat = -allCMat
         self.constraintMat.allCMatCOO = sparse.coo_matrix(allCMat)
         self.constraintMat.i = self.constraintMat.allCMatCOO.row.astype(nintu)
         self.constraintMat.col = self.constraintMat.allCMatCOO.col.astype(nintu)
         self.constraintMat.data = self.constraintMat.allCMatCOO.data.astype(nfloat)
         self.constraintMat.firstIdxPerMonom = np.hstack((0, np.cumsum(self.occurencesPerVarnum))).astype(nintu)
+        self.constraintMat.rhs = np.zeros((self.constraintMat.allCMat.shape[0],1),dtype=nfloat)
 
         self.constraintMat.shape = (self.monomMatrix.size, self.nMonoms)
 
@@ -111,13 +115,13 @@ class lasserreRelax:
         assert isSparse in [False, 'coo', 'csr', 'csc'], "unqualified format"
 
         if isSparse is False:
-            return self.constraintMat.allCMat
+            return self.constraintMat.allCMat,self.constraintMat.rhs
         elif isSparse == 'coo':
-            return self.constraintMat.allCMatCOO
+            return self.constraintMat.allCMatCOO,self.constraintMat.rhs
         elif isSparse == 'csr':
-            return self.constraintMat.allCMatCOO.tocsr()
+            return self.constraintMat.allCMatCOO.tocsr(),self.constraintMat.rhs
         else:
-            return self.constraintMat.allCMatCOO.tocsc()
+            return self.constraintMat.allCMatCOO.tocsc(),self.constraintMat.rhs
     
     def evalCstr(self, x:np.array):
         if __debug__:
@@ -126,7 +130,7 @@ class lasserreRelax:
             thisC = x
         else:
             thisC = polyListEval(self.repr.listOfMonomials, x)
-        return evalCtrMat(self.listOfMonomials, self.getCstr(isSparse=False),thisC)
+        return evalCtrMat(self.listOfMonomials, *self.getCstr(isSparse=False),thisC)
 
 
 class lasserreConstraint:
@@ -183,12 +187,16 @@ class lasserreConstraint:
                     self.cstrMatDef.firstIdxPerK[-1] +=1
                     self.cstrMatDef.whichCoeff.append(idxC) #Save this coefficient
                     self.cstrMatDef.posInCMat.append(self.monom2num[monomP+cMatMonom]) #variable number associated to the product monomial
+        # Here again: Lasserre cstrMatRelax >= 0 -> inverse sign for cone prog
+        # This is done when constructing the constraint
+        
         # Done, transform to array
         self.cstrMatDef.firstIdxPerK, self.cstrMatDef.posInCMat, self.cstrMatDef.whichCoeff = narray(self.cstrMatDef.firstIdxPerK, dtype=nintu), narray(self.cstrMatDef.posInCMat, dtype=nintu), narray(self.cstrMatDef.whichCoeff, dtype=nintu)
         self.cstrMatDef.firstIdxPerK = np.cumsum(self.cstrMatDef.firstIdxPerK)
         self.cstrMatDef.cstrMatRelax = cstrMatRelax
         self.cstrMatDef.shapeMatRelax = cstrMatRelax.shape
         self.cstrMatDef.shapeCstr = (cstrMatRelax.size, self.repr.nMonoms)
+        self.cstrMatDef.rhs = np.zeros((cstrMatRelax.size,1),dtype=nfloat)
         return None
     
     def getCstr(self, isSparse=False):
@@ -198,15 +206,16 @@ class lasserreConstraint:
         cstrMat = np.zeros(self.cstrMatDef.shapeCstr, dtype=nfloat)
 
         cstrMat = populateCstr(cstrMat, self.cstrMatDef.firstIdxPerK, self.cstrMatDef.posInCMat, self.cstrMatDef.whichCoeff, self.poly.coeffs.ravel())
+        cstrMat = -cstrMat
         
         if isSparse is False:
-            return cstrMat
+            return cstrMat, self.cstrMatDef.rhs
         elif isSparse == 'coo':
-            return sparse.coo_matrix(cstrMat)
+            return sparse.coo_matrix(cstrMat), self.cstrMatDef.rhs
         elif isSparse == 'csr':
-            return sparse.csr_matrix(cstrMat)
+            return sparse.csr_matrix(cstrMat), self.cstrMatDef.rhs
         else:
-            return sparse.csc_matrix(cstrMat)
+            return sparse.csc_matrix(cstrMat), self.cstrMatDef.rhs
     
     def evalCstr(self, x:np.array):
         # evalCtrMat(listOfMonomials,cstrMat,x):
@@ -214,7 +223,7 @@ class lasserreConstraint:
             thisC = x
         else:
             thisC = polyListEval(self.listOfMonomials, x)
-        return evalCtrMat(self.listOfMonomials, self.getCstr(isSparse=False),x)
+        return evalCtrMat(self.listOfMonomials, *self.getCstr(isSparse=False),x)
         
     
     

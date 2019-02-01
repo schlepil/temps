@@ -45,3 +45,6 @@ class variableStruct:
         return str(self.__dict__)
     def __repr__(self):
         return self.__str__()
+
+
+np.set_printoptions(precision=3, linewidth=200, floatmode='maxprec_equal')

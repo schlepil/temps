@@ -80,9 +80,9 @@ def polyMul(c0,c1,idxMat):
     cp = np.zeros(c0.shape, dtype=nfloat)
     
     #Loop
-    for i,ac0 in range(c0.size):
+    for i,ac0 in enumerate(c0):
         if ac0 != 0.:
-            for j,ac1 in range(c1.size):
+            for j,ac1 in enumerate(c1):
                 if ac1!=0:
                     cp[idxMat[i,j]] += ac0*ac1
     

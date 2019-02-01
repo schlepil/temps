@@ -4,7 +4,7 @@ from polynomial.utils import *
 from multivar_horner.multivar_horner import MultivarPolynomial, HornerMultivarPolynomial
 
 class polynomials():
-    def __init__(self, repr:polynomialRepr, coeffs:np.ndarray=None, maxDeg:int=None, alwaysFull:bool=True):
+    def __init__(self, repr:polynomialRepr, coeffs:np.ndarray=None, alwaysFull:bool=True):
         
         self.repr = repr
         
@@ -22,11 +22,10 @@ class polynomials():
 
         self._evalPoly = None
 
-        if maxDeg is None:
-            self.maxDeg = self.getMaxDegree()
+        self.maxDeg = self.getMaxDegree()
         
         if __debug__:
-            assert maxDeg<=self.repr.maxDeg
+            assert self.maxDeg<=self.repr.maxDeg
 
     
     def __copy__(self):
@@ -55,7 +54,7 @@ class polynomials():
         if __debug__:
             assert isinstance(other, polynomials)
             assert self.repr == other.repr
-        return polynomials(self.repr, self._coeffs+other._coeffs,allwaysFull=self._alwaysFull)
+        return polynomials(self.repr, self._coeffs+other._coeffs,alwaysFull=self._alwaysFull)
     
     def __iadd__(self, other):
         if __debug__:
@@ -69,7 +68,7 @@ class polynomials():
         if __debug__:
             assert isinstance(other, polynomials)
             assert self.repr == other.repr
-        return polynomials(self.repr, self._coeffs-other._coeffs,allwaysFull=self._alwaysFull)
+        return polynomials(self.repr, self._coeffs-other._coeffs, alwaysFull=self._alwaysFull)
     
     def __isub__(self, other):
         if __debug__:
@@ -79,27 +78,36 @@ class polynomials():
         self.maxDeg=self.getMaxDegree()
         return None
     
+    def __neg__(self):
+        return polynomials(self.repr,-self._coeffs,alwaysFull=self._alwaysFull)
+    
     def __mul__(self, other):
-        if __debug__:
-            assert isinstance(other, polynomials)
-            assert self.repr == other.repr
-            assert self.maxDeg+other.maxDeg<=self.repr.maxDeg
-        
-        c = polyMul(self._coeffs, other._coefs, self.repr.idxMat)
-        return polynomials(self.repr, c, self.maxDeg+other.maxDeg, alwaysFull=self._alwaysFull)
+        if isinstance(other, (float,int)):
+            return polynomials(self.repr,float(other)*self._coeffs,alwaysFull=self._alwaysFull)
+        else:
+            if __debug__:
+                assert isinstance(other, polynomials)
+                assert self.repr == other.repr
+                assert self.maxDeg+other.maxDeg<=self.repr.maxDeg
+            
+            c = polyMul(self._coeffs, other._coeffs, self.repr.idxMat)
+            return polynomials(self.repr, c, alwaysFull=self._alwaysFull)
     
     def __rmul__(self, other):
         # Commute
         return self.__mul__(other)
     
     def __imul__(self, other):
-        if __debug__:
-            assert isinstance(other,polynomials)
-            assert self.repr == other.repr
-            assert self.maxDeg+other.maxDeg <= self.repr.maxDeg
-    
-        self._coeffs = polyMul(self._coeffs,other._coefs,self.repr.idxMat)
-        self.maxDeg = self.maxDeg+other.maxDeg
+        if isinstance(other,(float,int)):
+            self._coeffs *= float(other)
+        else:
+            if __debug__:
+                assert isinstance(other,polynomials)
+                assert self.repr == other.repr
+                assert self.maxDeg+other.maxDeg <= self.repr.maxDeg
+        
+            self._coeffs = polyMul(self._coeffs,other._coefs,self.repr.idxMat)
+            self.maxDeg = self.maxDeg+other.maxDeg
         return None
     
     def __pow__(self, power:int, modulo=None):
