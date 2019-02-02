@@ -75,6 +75,31 @@ def int2list(aInt: int,nVars: int,digits: int = 1,out: np.ndarray = None) -> np.
     
     return out
 
+
+# idxParent, idxVar = getIdxAndParent(aMonom, self.repr.listOfMonomialsPerDeg[k-1], digits)
+@njit
+def getIdxAndParent(aMonom: int,aMonomList: narray,nVars: int,digits: int):
+    if __debug__:
+        assert isinstance(aMonom,int)
+        assert isinstance(aMonomList,np.ndarray)
+    
+    found = False
+    
+    deltaMonom = nzeros((nVars,),dtype=nintu)
+    for idxVar in range(nVars):
+        deltaMonom[:] = 0
+        deltaMonom[idxVar] = 1
+        deltaMonomAsInt = list2int(deltaMonom,digits=digits)
+        oldMonomAsInt = aMonom-deltaMonomAsInt
+        
+        for idxParent,aParent in enumerate(aMonomList):
+            if aParent == oldMonomAsInt:
+                found = True
+        if found:
+            break
+    
+    return idxVar, idxParent
+    
 @njit
 def polyMul(c0,c1,idxMat):
     cp = np.zeros(c0.shape, dtype=nfloat)

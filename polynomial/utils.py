@@ -1,6 +1,5 @@
 from polynomial.utils_numba import *
 
-
 def importDynFunc(name):
     import importlib.util
     import sys
@@ -158,11 +157,12 @@ def List2Str(nDims, maxDeg, digits, monom2num, num2monom, linChangeDict, A='A', 
     
     fileAsList.append("\treturn {0}".format(cp))
     
-    pyFileName = "helper_{0:d}_{1:d}_{2:d}_numba".format(nDims, maxDeg, digits)
-    base, _ = path.split(__file__)
-    
-    with open(path.join(base, pyFileName+".py"), "w+") as pyFile:
-        pyFile.write("\n".join(fileAsList))
+    if 0:
+        pyFileName = "helper_{0:d}_{1:d}_{2:d}_numba".format(nDims, maxDeg, digits)
+        base, _ = path.split(__file__)
+        
+        with open(path.join(base, pyFileName+".py"), "w+") as pyFile:
+            pyFile.write("\n".join(fileAsList))
     
     newStyleDict['firstIdxPerMonomial'] = narray(newStyleDict['firstIdxPerMonomial'][:-1], dtype=nintu)
     newStyleDict['cIdx'] = narray(newStyleDict['cIdx'],dtype=nintu)
@@ -231,11 +231,13 @@ class polynomialRepr():
         
         self.listOfMonomialsPerDeg = getListOfMonoms(self.nDims,self.maxDeg,self.digits)
         self.listOfMonomials = []
+        self.listOfMonomialsPerDegAsInt
         for aList in self.listOfMonomialsPerDeg:
             self.listOfMonomials.extend(aList)
+            self.listOfMonomialsPerDegAsInt.append(narray(lmap(list2int,aList)).astype(nintu))
         
         # get the integer reps
-        self.listOfMonomialsAsInt = narray(lmap(list2int,self.listOfMonomials)).astype(nint)
+        self.listOfMonomialsAsInt = narray(lmap(list2int,self.listOfMonomials)).astype(nintu)
         
         self.generateDict()
         
