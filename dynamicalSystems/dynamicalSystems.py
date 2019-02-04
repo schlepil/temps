@@ -236,12 +236,14 @@ class secondOrderSys(dynamicalSystem):
         
         # Now loop over all
         nVar = list(range(self.nq))
+        nameIdxList = []
         for k,aMonom in enumerate(self.repr.listOfMonomials):
-            thisIdxList = []
-            for aVarNum,aExp in zip(nVar,aMonom):
-                thisIdxList.extend(aExp*[aVarNum])
+            
+            for i,(aStr,aExp) in enumerate(zip(self.inversionTaylor.derivStr,aMonom)):
+                for _ in range(aExp):
+                    thisNameIdxList.append(aStr,i)
             # Get
-            allDependentList = 
+            allDependentList =
         
         
         
