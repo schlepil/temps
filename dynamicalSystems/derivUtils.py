@@ -27,9 +27,14 @@ def getInverseTaylorStrings(Mstr='M',Mistr='Mi',fstr='f',derivStrings=['x','y','
     subsList = [(str(M),Mstr),(str(Mi),Mistr),(str(f),fstr)]
     #Succesively append all derivatives
     idxL = list(range(nDerivs))
+    allDerivs = []
+    allDerivStr = []
     for nDeriv in range(1,nDerivs+1):
-        for aDeriv in combinations(idxL,nDeriv):
+        thisDerivs = list(combinations(idxL,nDeriv))
+        allDerivs.extend(thisDerivs)
+        for aDeriv in thisDerivs:
             thisStr = "".join(derivStrings[aIdx] for aIdx in reversed(aDeriv))
+            allDerivStr.append(thisStr)
             for aDerivPermut in permutations(aDeriv, nDeriv):
                 thisDList = [derivSyms[aIdx] for aIdx in aDerivPermut]
                 subsList.append( (str(sy.Derivative(M,*thisDList)), thisStr+Mstr) )
@@ -55,4 +60,4 @@ def getInverseTaylorStrings(Mstr='M',Mistr='Mi',fstr='f',derivStrings=['x','y','
     if __debug__:
         print(allDerivsListStr)
     
-    return {'funcstr':allDerivsListStr, 'derivStr':derivStrings}
+    return {'funcstr':allDerivsListStr, 'derivStr':derivStrings, 'allDerivs':dict(zip(allDerivStr,allDerivs))}

@@ -79,7 +79,7 @@ def int2list(aInt: int,nVars: int,digits: int = 1,out: np.ndarray = None) -> np.
 # idxParent, idxVar = getIdxAndParent(aMonom, self.repr.listOfMonomialsPerDeg[k-1], digits)
 @njit
 def getIdxAndParent(aMonom: int,aMonomList: narray,nVars: int,digits: int):
-    if __debug__:
+    if __debug__: #numba .43
         assert isinstance(aMonom,(int, nint, nintu))
         assert isinstance(aMonomList,np.ndarray)
     

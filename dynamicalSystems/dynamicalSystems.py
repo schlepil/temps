@@ -66,6 +66,8 @@ class secondOrderSys(dynamicalSystem):
             self.compTaylor()
         else:
             self.fromFile(file)
+
+        return None
     
     def compTaylor(self):
         self.compTaylorF()
@@ -76,6 +78,8 @@ class secondOrderSys(dynamicalSystem):
         else:
             derivStrings = string.ascii_lowercase[23:23+self.maxTaylorDeg]
         self.inversionTaylor = variableStruct(**getInverseTaylorStrings('M','Mi','W',derivStrings))
+
+        return None
         
     def compTaylorF(self):
         
@@ -112,7 +116,8 @@ class secondOrderSys(dynamicalSystem):
             cCols += aVal.shape[1]
         
         #array2mat = [{'ImmutableDenseMatrix':np.matrix},'numpy']
-        array2mat = ['numpy']
+        array2mat = [{'ImmutableDenseMatrix': np.array}, 'numpy']
+        #array2mat = ['numpy']
         
         tempDict=dict()
 
@@ -123,6 +128,8 @@ class secondOrderSys(dynamicalSystem):
         del tempDict
         
         self.taylorF = variableStruct(**taylorFD)
+
+        return None
     
     def compTaylorM(self):
         """
@@ -157,7 +164,9 @@ class secondOrderSys(dynamicalSystem):
     
             taylorMD["MTaylor"].extend(aVal)
 
-        array2mat = ['numpy']
+        #array2mat = [{'ImmutableDenseMatrix': np.matrix}, 'numpy']
+        array2mat = [{'ImmutableDenseMatrix': np.array}, 'numpy']
+        #array2mat = ['numpy']
     
         tempDict = {}
         for aKey, aVal in taylorMD.items():
@@ -198,8 +207,10 @@ class secondOrderSys(dynamicalSystem):
             aVal = taylorGD[aKey]
         
             taylorGD["GTaylor"].extend(aVal)
-    
-        array2mat = ['numpy']
+
+        #array2mat = [{'ImmutableDenseMatrix': np.matrix}, 'numpy']
+        array2mat = [{'ImmutableDenseMatrix': np.array}, 'numpy']
+        #array2mat = ['numpy']
         
         tempDict = {}
         for aKey,aVal in taylorGD.items():
@@ -207,6 +218,8 @@ class secondOrderSys(dynamicalSystem):
         taylorGD.update(tempDict)
     
         self.taylorG = variableStruct(**taylorGD)
+
+        return None
     
     def evalTaylor(self, x:np.ndarray, maxDeg:int=None):
         
@@ -225,25 +238,48 @@ class secondOrderSys(dynamicalSystem):
         MifTaylor[:self.nqv, 1:1+self.nqv] = nidentity(self.nqv, dtype=nfloat)
         
         # Setup the inputs
-        xList = list(x)
+        xList = [float(ax) for ax in x]
         # First get all taylor series of non-inversed
-        fTaylor = nmatrix(self.taylorF.fTaylor(*xList)) # Pure np.matrix
-        MTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorM.MTaylor] #List of matrices
-        GTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorG.GTaylor] #List of matrices
+        fTaylor = nmatrix(self.taylorF.fTaylor_eval(*xList)) # Pure np.matrix #TODO search for ways to vectorize
+        MTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorM.MTaylor] #List of matrices #TODO search for ways to vectorize
+        GTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorG.GTaylor] #List of matrices #TODO search for ways to vectorize
         
         # Inverse the inertia matrix at the current point
         Mi = inv(MTaylor[0])
-        
+
+        #Build up the dict
+        evalDixt = {'M':MTaylor[0], 'Mi':Mi, 'W':None}
+
         # Now loop over all
+        digits_ = self.repr.digits
+        derivStr_ = self.inversionTaylor.derivStr
+        monom2num_ = self.repr.monom2num
+
+
         nVar = list(range(self.nq))
-        nameIdxList = []
+        nameAsIntList =[None for _ in range(nVar)]
+
         for k,aMonom in enumerate(self.repr.listOfMonomials):
-            
-            for i,(aStr,aExp) in enumerate(zip(self.inversionTaylor.derivStr,aMonom)):
+            idxC = 0
+            for i, aExp in enumerate(aMonom):
                 for _ in range(aExp):
-                    thisNameIdxList.append(aStr,i)
+                    #Save as int
+                    nameAsIntList[idxC] = 10**(digits_*i) #The int of each deriv
+                    idxC += 1
+            idxDict = dp(self.inversionTaylor.allDerivs) # -> get the column of the corresponding column
+            for aKey, aVal in idxDict.items():
+                tmpVal = 0
+                for aaVal in aVal:
+                    tmpVal += nameIdxList[aaVal]
+                #To idxColumn
+                idxDict[aKey] = monom2num_(tmpVal)
+
+
+
+
+
             # Get
-            allDependentList =
+            #allDependentList =
         
         
         
