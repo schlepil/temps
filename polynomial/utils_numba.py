@@ -80,7 +80,7 @@ def int2list(aInt: int,nVars: int,digits: int = 1,out: np.ndarray = None) -> np.
 @njit
 def getIdxAndParent(aMonom: int,aMonomList: narray,nVars: int,digits: int):
     if __debug__:
-        assert isinstance(aMonom,int)
+        assert isinstance(aMonom,(int, nint, nintu))
         assert isinstance(aMonomList,np.ndarray)
     
     found = False
@@ -95,6 +95,7 @@ def getIdxAndParent(aMonom: int,aMonomList: narray,nVars: int,digits: int):
         for idxParent,aParent in enumerate(aMonomList):
             if aParent == oldMonomAsInt:
                 found = True
+                break
         if found:
             break
     

@@ -10,7 +10,7 @@ from copy import deepcopy as dp
 
 from numba import jit,njit
 
-import testNumba
+#import testNumba
 
 digits_ = 2
 

@@ -156,9 +156,9 @@ def List2Str(nDims, maxDeg, digits, monom2num, num2monom, linChangeDict, A='A', 
         newStyleDict['idxList'] = np.hstack([newStyleDict['idxList'],newIdxList])
     
     fileAsList.append("\treturn {0}".format(cp))
-    
+
+    pyFileName = "helper_{0:d}_{1:d}_{2:d}_numba".format(nDims,maxDeg,digits)
     if 0:
-        pyFileName = "helper_{0:d}_{1:d}_{2:d}_numba".format(nDims, maxDeg, digits)
         base, _ = path.split(__file__)
         
         with open(path.join(base, pyFileName+".py"), "w+") as pyFile:
@@ -231,7 +231,7 @@ class polynomialRepr():
         
         self.listOfMonomialsPerDeg = getListOfMonoms(self.nDims,self.maxDeg,self.digits)
         self.listOfMonomials = []
-        self.listOfMonomialsPerDegAsInt
+        self.listOfMonomialsPerDegAsInt = []
         for aList in self.listOfMonomialsPerDeg:
             self.listOfMonomials.extend(aList)
             self.listOfMonomialsPerDegAsInt.append(narray(lmap(list2int,aList)).astype(nintu))
