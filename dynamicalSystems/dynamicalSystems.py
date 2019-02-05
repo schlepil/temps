@@ -137,41 +137,65 @@ class secondOrderSys(dynamicalSystem):
         MTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorM.MTaylor_eval] #List of matrices #TODO search for ways to vectorize
         GTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorG.GTaylor_eval] #List of matrices #TODO search for ways to vectorize
         
+        #Setup the results
+        MifTaylor = nzeros((self.nq, self.repr.nMonoms),dtype=nfloat)
+        MifTaylor[0:self.nqv,1:1+self.nqv] = nidentity(self.nqv) #Second order nature of the system
+        MiGTaylor = [None for _ in range(self.repr.nMonoms)]
+        
         # Inverse the inertia matrix at the current point
-        Mi = inv(MTaylor[0])
+        Mi = nmatrix(inv(MTaylor[0]))
 
         #Build up the dict
-        evalDixt = {'M':MTaylor[0], 'Mi':Mi, 'W':None}
+        evalDictF = {'M':MTaylor[0], 'Mi':Mi, 'W':None}
+        #Add the derivative keys (values set later on
+        for aDerivStr,_ in self.inversionTaylor.allDerivs.items():
+            evalDictF[aDerivStr+'M'] = None
+            evalDictF[aDerivStr+'W'] = None
+        
+        evalDictG = evalDictF.copy()
+        
+        evalDictF['W'] = nmatrix(fTaylor[:,[0]])
+        evalDictF['W'] = nmatrix(GTaylor[0])
 
         # Now loop over all
         digits_ = self.repr.digits
-        derivStr_ = self.inversionTaylor.derivStr
         monom2num_ = self.repr.monom2num
 
-
-        nVar = list(range(self.nq))
-        nameAsIntList =[None for _ in range(nVar)]
+        derivVarAsInt = nzeros((self.nq,),dtype=nintu)
 
         for k,aMonom in enumerate(self.repr.listOfMonomials):
             idxC = 0
+            derivVarAsInt[:] = 0
             for i, aExp in enumerate(aMonom):
                 for _ in range(aExp):
                     #Save as int
-                    nameAsIntList[idxC] = 10**(digits_*i) #The int of each deriv
+                    derivVarAsInt[idxC] = 10**(digits_*i) #The int of each deriv
                     idxC += 1
-            idxDict = dp(self.inversionTaylor.allDerivs) # -> get the column of the corresponding column
+
+            idxDict = self.inversionTaylor.allDerivs.copy() # -> get the column of the corresponding column
             for aKey, aVal in idxDict.items():
                 tmpVal = 0
                 for aaVal in aVal:
-                    tmpVal += nameIdxList[aaVal]
+                    tmpVal += derivVarAsInt[aaVal]
                 #To idxColumn
-                idxDict[aKey] = monom2num_(tmpVal)
+                idxDict[aKey] = monom2num_[tmpVal]
+            
+            # Now we have the correct id associated to each derivative
+            # TODO here we simply calculate all, even the ones that are not used, ie the degree of the current monome is smaller than the maximal degree
 
-
-
-
-
-            # Get
+            # Set up the two dicts
+            for idxKey,idxVal in idxDict.items():
+                #Set deriv mass mat
+                evalDictF[idxKey+'M'] = evalDictG[idxKey+'M'] = MTaylor[idxVal]
+                #Set the "function"
+                evalDictF[idxKey+'W'] = nmatrix(fTaylor[:,[idxVal]])
+                evalDictF[idxKey+'W'] = nmatrix(GTaylor[idxVal])
+            
+            
+    
+    
+    
+                # Get
             #allDependentList =
         
         
