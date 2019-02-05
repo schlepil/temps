@@ -1,5 +1,9 @@
 from coreUtils import *
 
+from polynomial import polynomialRepr
+
+from polynomial.utils_numba import getIdxAndParent
+
 from itertools import permutations, combinations
 
 def getInverseTaylorStrings(Mstr='M',Mistr='Mi',fstr='f',derivStrings=['x','y','z'], doCompile:bool=False):
@@ -61,3 +65,108 @@ def getInverseTaylorStrings(Mstr='M',Mistr='Mi',fstr='f',derivStrings=['x','y','
         print(allDerivsListStr)
     
     return {'funcstr':allDerivsListStr, 'derivStr':derivStrings, 'allDerivs':dict(zip(allDerivStr,allDerivs))}
+
+
+def compTaylorExp(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxTaylorDeg:int, repr:polynomialRepr)->dict:
+    """
+    Computes the Taylor expansion of a given formula
+    :param f:
+    :param fStr:
+    :param q:
+    :param maxTaylorDeg:
+    :param repr:
+    :return:
+    """
+    if __debug__:
+        assert repr.nDims == q.shape[0]*q.shape[1]
+
+    #Definitions
+    # array2mat = [{'ImmutableDenseMatrix':np.matrix},'numpy']
+    array2mat = [{'ImmutableDenseMatrix': np.array}, 'numpy']
+    # array2mat = ['numpy']
+
+
+    n,m = f.shape
+
+    if not isMat:
+        if __debug__:
+            assert m==1, 'only vectors allowed'
+        #Vector case
+        taylorFD = {fStr+'0': sy.Matrix(nzeros((n, 1)))}
+
+        taylorFD[fStr+'0'] += f
+
+        lastMat = f
+        for k in range(1, maxTaylorDeg + 1):
+            thisMat = sy.Matrix(nzeros((n, len(repr.listOfMonomialsPerDeg[k]))))
+
+            # Get the derivative corresponding to each monomial
+            for j, aMonom in enumerate(repr.listOfMonomialsPerDegAsInt[k]):
+                idxDeriv, idxParent = getIdxAndParent(aMonom, repr.listOfMonomialsPerDegAsInt[k - 1], repr.nDims, repr.digits)
+
+                # Derive the (sliced) vector
+                thisMat[:, j] = sy.diff(lastMat[:, idxParent], q[idxDeriv, 0]) / float(k)
+
+            # save
+            taylorFD["{1:s}{0:d}".format(k, fStr)] = thisMat
+            # Iterate
+            lastMat = thisMat
+
+        # for all 0-N
+        totCols = sum([len(aList) for aList in repr.listOfMonomialsPerDeg[:maxTaylorDeg + 1]])
+        taylorFD[fStr+"Taylor"] = sy.Matrix(nzeros((n, totCols)))
+        cCols = 0
+        for k in range(0, maxTaylorDeg + 1):
+            aKey = "{1}{0:d}".format(k,fStr)
+            aVal = taylorFD[aKey]
+
+            taylorFD[fStr+"Taylor"][:, cCols:cCols + aVal.shape[1]] = aVal
+            cCols += aVal.shape[1]
+
+        tempDict = dict()
+
+        for aKey, aVal in taylorFD.items():
+            tempDict[aKey + "_eval"] = sy.lambdify(q, aVal, modules=array2mat)
+
+        taylorFD.update(tempDict)
+    else:
+        taylorFD = {fStr+'0': [sy.Matrix(nzeros((n, m)))]}
+
+        taylorFD[fStr+'0'][0] += f
+
+        lastList = [f]
+
+        for k in range(1, maxTaylorDeg + 1):
+            thisList = [sy.Matrix(nzeros((n, m))) for _ in
+                        range(repr.listOfMonomialsPerDegAsInt[k].size)]
+
+            # Get the derivative corresponding to each monomial
+            for j, aMonom in enumerate(repr.listOfMonomialsPerDegAsInt[k]):
+                idxDeriv, idxParent = getIdxAndParent(aMonom, repr.listOfMonomialsPerDegAsInt[k - 1], repr.nDims, repr.digits)
+
+                thisList[j] = sy.diff(lastList[idxParent], q[idxDeriv, 0]) / float(k)
+
+            # save
+            taylorFD["{1}{0:d}".format(k, fStr)] = thisList
+            # Iterate
+            lastList = thisList
+
+        taylorFD[fStr+"Taylor"] = []
+        for k in range(0, maxTaylorDeg + 1):
+            aKey = "{1}{0:d}".format(k, fStr)
+            aVal = taylorFD[aKey]
+
+            taylorFD[fStr+"Taylor"].extend(aVal)
+
+        # array2mat = [{'ImmutableDenseMatrix': np.matrix}, 'numpy']
+        array2mat = [{'ImmutableDenseMatrix': np.array}, 'numpy']
+        # array2mat = ['numpy']
+
+        tempDict = {}
+        for aKey, aVal in taylorFD.items():
+            tempDict[aKey + "_eval"] = [sy.lambdify(q, aMat, modules=array2mat) for aMat in aVal]
+        taylorFD.update(tempDict)
+
+    return taylorFD
+
+

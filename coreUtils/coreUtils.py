@@ -47,4 +47,4 @@ class variableStruct:
         return self.__str__()
 
 
-np.set_printoptions(precision=3, linewidth=200, floatmode='maxprec_equal')
+np.set_printoptions(precision=2, linewidth=225, floatmode='maxprec_equal')

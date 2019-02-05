@@ -5,7 +5,7 @@ from polynomial.utils_numba import getIdxAndParent
 
 import string
 
-from dynamicalSystems.derivUtils import getInverseTaylorStrings
+from dynamicalSystems.derivUtils import getInverseTaylorStrings, compTaylorExp
 
 class dynamicalSystem:
     
@@ -83,50 +83,8 @@ class secondOrderSys(dynamicalSystem):
         
     def compTaylorF(self):
         
-        taylorFD ={ 'f0':sy.Matrix(nzeros((self.nqv,1))) }
-        
-        taylorFD['f0'] += self.f
-        
-        lastMat = self.f
-        for k in range(1,self.maxTaylorDeg+1):
-            thisMat = sy.Matrix(nzeros((self.nqv,len(self.repr.listOfMonomialsPerDeg[k]))))
+        taylorFD = compTaylorExp(self.f, 'f', self.q, False, self.maxTaylorDeg, self.repr)
 
-            #Get the derivative corresponding to each monomial
-            for j,aMonom in enumerate(self.repr.listOfMonomialsPerDegAsInt[k]):
-                idxDeriv, idxParent = getIdxAndParent(aMonom, self.repr.listOfMonomialsPerDegAsInt[k-1], self.nq, self.repr.digits)
-                
-                # Derive the (sliced) vector
-                thisMat[:,j] = sy.diff(lastMat[:,idxParent], self.q[idxDeriv,0])/float(k)
-            
-            #save
-            taylorFD["f{0:d}".format(k)] = thisMat
-            #Iterate
-            lastMat = thisMat
-            
-        
-        #for all 0-N
-        totCols = sum([len(aList) for aList in self.repr.listOfMonomialsPerDeg[:self.maxTaylorDeg+1]])
-        taylorFD["fTaylor"] = sy.Matrix(nzeros((self.nqv,totCols)))
-        cCols=0
-        for k in range(0,self.maxTaylorDeg+1):
-            aKey = "f{0:d}".format(k)
-            aVal = taylorFD[aKey]
-            
-            taylorFD["fTaylor"][:,cCols:cCols+aVal.shape[1]] = aVal
-            cCols += aVal.shape[1]
-        
-        #array2mat = [{'ImmutableDenseMatrix':np.matrix},'numpy']
-        array2mat = [{'ImmutableDenseMatrix': np.array}, 'numpy']
-        #array2mat = ['numpy']
-        
-        tempDict=dict()
-
-        for aKey, aVal in taylorFD.items():
-            tempDict[aKey+"_eval"] = sy.lambdify(self.q, aVal, modules=array2mat)
-        
-        taylorFD.update(tempDict)
-        del tempDict
-        
         self.taylorF = variableStruct(**taylorFD)
 
         return None
@@ -137,41 +95,9 @@ class secondOrderSys(dynamicalSystem):
         
         :return:
         """
-        taylorMD = {'M0':sy.Matrix(nzeros((self.nqv,self.nqv)))}
-    
-        taylorMD['M0'] += self.massMat
-        
-        lastList = [self.massMat]
 
-        for k in range(1,self.maxTaylorDeg+1):
-            thisList = [sy.Matrix(nzeros((self.nqv,self.nqv))) for _ in range(self.repr.listOfMonomialsAsInt.size)]
-    
-            #Get the derivative corresponding to each monomial
-            for j,aMonom in enumerate(self.repr.listOfMonomialsPerDegAsInt[k]):
-                idxDeriv,idxParent = getIdxAndParent(aMonom,self.repr.listOfMonomialsPerDegAsInt[k-1],self.nq,self.repr.digits)
-                
-                thisList[j] = sy.diff(lastList[idxParent], self.q[idxDeriv,0])/float(k)
-            
-            #save
-            taylorMD["M{0:d}".format(k)] = thisList
-            #Iterate
-            lastList = thisList
+        taylorMD = compTaylorExp(self.massMat, 'M', self.q, True, self.maxTaylorDeg, self.repr)
 
-        taylorMD["MTaylor"] = []
-        for k in range(0,self.maxTaylorDeg+1):
-            aKey = "M{0:d}".format(k)
-            aVal = taylorMD[aKey]
-    
-            taylorMD["MTaylor"].extend(aVal)
-
-        #array2mat = [{'ImmutableDenseMatrix': np.matrix}, 'numpy']
-        array2mat = [{'ImmutableDenseMatrix': np.array}, 'numpy']
-        #array2mat = ['numpy']
-    
-        tempDict = {}
-        for aKey, aVal in taylorMD.items():
-            tempDict[aKey+"_eval"] = [sy.lambdify(self.q, aMat, modules=array2mat) for aMat in aVal]
-        taylorMD.update(tempDict)
 
         self.taylorM = variableStruct(**taylorMD)
 
@@ -181,41 +107,8 @@ class secondOrderSys(dynamicalSystem):
 
         :return:
         """
-        taylorGD = {'G0':sy.Matrix(nzeros((self.nqv,self.nu)))}
-    
-        taylorGD['G0'] += self.g
-    
-        lastList = [self.g]
-    
-        for k in range(1,self.maxTaylorDeg+1):
-            thisList = [sy.Matrix(nzeros((self.nqv,self.nu))) for _ in range(self.repr.listOfMonomialsAsInt.size)]
 
-            # Get the derivative corresponding to each monomial
-            for j,aMonom in enumerate(self.repr.listOfMonomialsPerDegAsInt[k]):
-                idxDeriv,idxParent = getIdxAndParent(aMonom,self.repr.listOfMonomialsPerDegAsInt[k-1],self.nq,self.repr.digits)
-            
-                thisList[j] = sy.diff(lastList[idxParent],self.q[idxDeriv,0])/float(k)
-
-            # save
-            taylorGD["G{0:d}".format(k)] = thisList
-            # Iterate
-            lastList = thisList
-    
-        taylorGD["GTaylor"] = []
-        for k in range(0,self.maxTaylorDeg+1):
-            aKey = "G{0:d}".format(k)
-            aVal = taylorGD[aKey]
-        
-            taylorGD["GTaylor"].extend(aVal)
-
-        #array2mat = [{'ImmutableDenseMatrix': np.matrix}, 'numpy']
-        array2mat = [{'ImmutableDenseMatrix': np.array}, 'numpy']
-        #array2mat = ['numpy']
-        
-        tempDict = {}
-        for aKey,aVal in taylorGD.items():
-            tempDict[aKey+"_eval"] = [sy.lambdify(self.q,aMat,modules=array2mat) for aMat in aVal]
-        taylorGD.update(tempDict)
+        taylorGD = compTaylorExp(self.g, 'G', self.q, True, self.maxTaylorDeg, self.repr)
     
         self.taylorG = variableStruct(**taylorGD)
 
@@ -241,8 +134,8 @@ class secondOrderSys(dynamicalSystem):
         xList = [float(ax) for ax in x]
         # First get all taylor series of non-inversed
         fTaylor = nmatrix(self.taylorF.fTaylor_eval(*xList)) # Pure np.matrix #TODO search for ways to vectorize
-        MTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorM.MTaylor] #List of matrices #TODO search for ways to vectorize
-        GTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorG.GTaylor] #List of matrices #TODO search for ways to vectorize
+        MTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorM.MTaylor_eval] #List of matrices #TODO search for ways to vectorize
+        GTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorG.GTaylor_eval] #List of matrices #TODO search for ways to vectorize
         
         # Inverse the inertia matrix at the current point
         Mi = inv(MTaylor[0])
