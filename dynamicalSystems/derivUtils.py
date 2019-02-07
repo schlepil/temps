@@ -122,6 +122,13 @@ def compTaylorExp(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxTaylorDeg:i
 
             taylorFD[fStr+"Taylor"][:, cCols:cCols + aVal.shape[1]] = aVal
             cCols += aVal.shape[1]
+        
+        #Create each
+        for k in range(0,maxTaylorDeg+1):
+            totCols = sum([len(aList) for aList in repr.listOfMonomialsPerDeg[:k+1]])
+            taylorFD[fStr+"Taylor_to_{0:d".format(k)] = sy.Matrix(nzeros((n,totCols)))
+            
+            
 
         tempDict = dict()
 

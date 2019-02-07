@@ -123,24 +123,27 @@ class secondOrderSys(dynamicalSystem):
         
         maxDeg = self.maxTaylorDeg if maxDeg is None else maxDeg
         
+        # Set up the monoms need for the Taylor exp
+        listOfMonomsTaylor_ = []
+        for k in range(maxDeg+1):
+            listOfMonomsTaylor_.extend(self.repr.listOfMonomialsPerDeg[k])
+        nMonomsTaylor = len(listOfMonomsTaylor_)
+        
         # return Value
-        MifTaylor = nzeros((self.nq, self.repr.nMonoms), dtype=nfloat)
-        MigTaylor = nzeros((self.repr.nMonoms,self.nq,self.nu), dtype=nfloat)
+        MifTaylor = nzeros((self.nq, nMonomsTaylor), dtype=nfloat)
+        MifTaylor[0:self.nqv,1:1+self.nqv] = nidentity(self.nqv)  # Second order nature of the system
+        MiGTaylor = nzeros((nMonomsTaylor,self.nq,self.nu), dtype=nfloat)
         
         # The integration of the velocity
         MifTaylor[:self.nqv, 1:1+self.nqv] = nidentity(self.nqv, dtype=nfloat)
         
         # Setup the inputs
         xList = [float(ax) for ax in x]
-        # First get all taylor series of non-inversed
+        # First get all taylor series of non-inversed up to maxDeg
+        # The functions [f,M,G]Taylor are  created such that the monomials up maxDeg are returned
         fTaylor = nmatrix(self.taylorF.fTaylor_eval(*xList)) # Pure np.matrix #TODO search for ways to vectorize
         MTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorM.MTaylor_eval] #List of matrices #TODO search for ways to vectorize
         GTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorG.GTaylor_eval] #List of matrices #TODO search for ways to vectorize
-        
-        #Setup the results
-        MifTaylor = nzeros((self.nq, self.repr.nMonoms),dtype=nfloat)
-        MifTaylor[0:self.nqv,1:1+self.nqv] = nidentity(self.nqv) #Second order nature of the system
-        MiGTaylor = [None for _ in range(self.repr.nMonoms)]
         
         # Inverse the inertia matrix at the current point
         Mi = nmatrix(inv(MTaylor[0]))
@@ -155,22 +158,27 @@ class secondOrderSys(dynamicalSystem):
         evalDictG = evalDictF.copy()
         
         evalDictF['W'] = nmatrix(fTaylor[:,[0]])
-        evalDictF['W'] = nmatrix(GTaylor[0])
+        evalDictG['W'] = nmatrix(GTaylor[0])
 
         # Now loop over all
         digits_ = self.repr.digits
         monom2num_ = self.repr.monom2num
+        funcStrings_ = self.inversionTaylor.funcstr
+        eDict_ = {}
 
-        derivVarAsInt = nzeros((self.nq,),dtype=nintu)
+        derivVarAsInt = nzeros((self.maxTaylorDeg,),dtype=nintu)
 
         for k,aMonom in enumerate(self.repr.listOfMonomials):
             idxC = 0
             derivVarAsInt[:] = 0
-            for i, aExp in enumerate(aMonom):
+            multi0 = 1
+            multi1 = 10**digits_
+            for aExp in reversed(aMonom):
                 for _ in range(aExp):
                     #Save as int
-                    derivVarAsInt[idxC] = 10**(digits_*i) #The int of each deriv
+                    derivVarAsInt[idxC] = multi0 #The int of each deriv
                     idxC += 1
+                multi0*=multi1#New exponent -> adjust
 
             idxDict = self.inversionTaylor.allDerivs.copy() # -> get the column of the corresponding column
             for aKey, aVal in idxDict.items():
@@ -189,14 +197,16 @@ class secondOrderSys(dynamicalSystem):
                 evalDictF[idxKey+'M'] = evalDictG[idxKey+'M'] = MTaylor[idxVal]
                 #Set the "function"
                 evalDictF[idxKey+'W'] = nmatrix(fTaylor[:,[idxVal]])
-                evalDictF[idxKey+'W'] = nmatrix(GTaylor[idxVal])
+                evalDictG[idxKey+'W'] = nmatrix(GTaylor[idxVal])
+            
+            thisFuncString = funcStrings_[aMonom.sum()]
+            #Evaluate
+            MifTaylor[self.nq-self.nqv:,[k]] = eval(thisFuncString,eDict_,evalDictF)
+            MiGTaylor[k,self.nq-self.nqv:,:] = eval(thisFuncString,eDict_,evalDictG)
             
             
-    
-    
-    
-                # Get
-            #allDependentList =
+        #Done
+        return MifTaylor, MiGTaylor
         
         
         
