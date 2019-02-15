@@ -60,7 +60,7 @@ def getSys(repr:polynomialRepr):
     
     h12 = I2+m2*l1*lc2*sy.cos(q[1]);
     
-    M = sy.Matrix([[I1+I2+m2*l1**2+2*m2*l1*lc2*sy.cos(q[1]),h12],[h12,I2]])
+    M = sy.Matrix([[I1 + I2 + m2*l1**2 + 2*m2*l1*lc2*sy.cos(q[1]),h12],[h12,I2]])
     
     G = g*sy.Matrix([m1*lc1*sy.sin(q[0])+m2*(l1*sy.sin(q[0])+lc2*sy.sin(q[0]+q[1])),m2*lc2*sy.sin(q[0]+q[1])]) #gravity
     # old
@@ -72,7 +72,7 @@ def getSys(repr:polynomialRepr):
     # input mapping
     gInput = sy.Matrix([[0.],[1.]])
     
-    dynSys = secondOrderSys(repr, M, G+C, gInput, qM, uM)
+    dynSys = secondOrderSys(repr, M, -G-C, gInput, qM, uM)
     
     return dynSys
     

@@ -218,6 +218,14 @@ class polynomialRepr():
         self.nMonoms = len(self.listOfMonomials)
 
         self.varNums = np.arange(self.nbrVar0,self.nbrVar0+self.nMonoms,dtype=nint)
+        self.varNumsPerDeg = []
+        
+        sCol=0
+        for aDegList in self.listOfMonomialsPerDeg:
+            self.varNumsPerDeg.append( self.varNums[sCol:sCol+len(aDegList)] ).copy()
+            sCol+=len(aDegList)
+        
+        self.varNumsUpToDeg = [np.hstack(self.varNumsPerDeg[:k]) for k in range(self.maxDeg+1)]
 
         # Setup fast access.
         # Fastest (by far) method seems to be using standard dicts...
@@ -251,7 +259,9 @@ class polynomialRepr():
 
         self.idxMat = self.listOfMonomialsAsInt.reshape((-1,1))+self.listOfMonomialsAsInt.reshape((1,-1))
         intMax = np.iinfo(nintu).max
-
+        
+        #TODO use symmetry
+        
         for i in range(self.nMonoms):
             for j in range(self.nMonoms):
                 try:
@@ -260,6 +270,18 @@ class polynomialRepr():
                     #exceeding relaxation
                     self.idxMat[i, j] = intMax
 
+        #this gets out of hand too quickly
+        #self.idxMat3d = self.listOfMonomialsAsInt.reshape((-1,1,1))+self.listOfMonomialsAsInt.reshape((1,-1,1))+self.listOfMonomialsAsInt.reshape((1,1,-1))
+        
+        #for i in range(self.nMonoms):
+        #    for j in range(self.nMonoms):
+        #        for k in range(self.nMonoms):
+        #            try:
+        #                self.idxMat[i,j] = self.monom2num[self.idxMat[i,j]]
+        #            except KeyError:
+        #                #exceeding relaxation
+        #                self.idxMat[i, j] = intMax
+        
         return None
 
 

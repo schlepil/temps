@@ -1,21 +1,23 @@
 from coreUtils import *
 from polynomial import polynomialRepr
+from dynamicalSystems.inputs import boxInputCstr
 
 from polynomial.utils_numba import getIdxAndParent
 
 import string
 
-from dynamicalSystems.derivUtils import getInverseTaylorStrings, compTaylorExp
+from dynamicalSystems.derivUtils import getInverseTaylorStrings, compParDerivs
 
 class dynamicalSystem:
     
-    def __init__(self, repr:polynomialRepr, q, u, maxTaylorDegree):
+    def __init__(self, repr:polynomialRepr, q, u, maxTaylorDegree, ctrlInput:boxInputCstr):
         
         if __debug__:
             assert q.shape[1] == 1
             assert u.shape[1] == 1
             assert maxTaylorDegree <= repr.maxDeg
             assert repr.nDims == q.shape[0]
+            assert u.shape[0] == ctrlInput.nu
         
         self.repr = repr
         
@@ -24,6 +26,8 @@ class dynamicalSystem:
         
         self.nq = int(q.shape[0])
         self.nu = int(u.shape[0])
+        
+        self.ctrlInput = ctrlInput
         
         self.maxTaylorDeg=maxTaylorDegree
         
@@ -39,7 +43,7 @@ class dynamicalSystem:
 
 class secondOrderSys(dynamicalSystem):
     
-    def __init__(self, repr:polynomialRepr, massMat:sy.Matrix, f:sy.Matrix, g:sy.Matrix, q:"symbols", u:"symbols", maxTaylorDegree:int=3, file:str=None):
+    def __init__(self, repr:polynomialRepr, massMat:sy.Matrix, f:sy.Matrix, g:sy.Matrix, q:"symbols", u:"symbols", maxTaylorDegree:int=3, ctrlInput:boxInputCstr, file:str=None):
         """
         represents a system of the form
         q is composed of (position,velocity) -> (q_p,q_v)
@@ -54,67 +58,76 @@ class secondOrderSys(dynamicalSystem):
         :param u:
         """
         
-        super(secondOrderSys,self).__init__(repr,q,u,maxTaylorDegree)
+        super(secondOrderSys,self).__init__(repr,q,u,maxTaylorDegree,ctrlInput)
         
         self.massMat = massMat
         self.f = f
         self.g = g
         
         self.nqv = self.nq//2
+        self.nqp = self.nqv
         
         if file == None:
-            self.compTaylor()
+            self.compPderivAndTaylor()
         else:
             self.fromFile(file)
 
         return None
     
-    def compTaylor(self):
-        self.compTaylorF()
-        self.compTaylorG()
-        self.compTaylorM()
+    def compPderivAndTaylor(self):
+        from math import factorial
+        
+        self.compPDerivF()
+        self.compPDerivG()
+        self.compPDerivM()
         if self.maxTaylorDeg<=3:
             derivStrings = string.ascii_lowercase[23:23+self.maxTaylorDeg]
         else:
-            derivStrings = string.ascii_lowercase[23:23+self.maxTaylorDeg]
+            derivStrings = string.ascii_lowercase[:self.maxTaylorDeg]
         self.inversionTaylor = variableStruct(**getInverseTaylorStrings('M','Mi','W',derivStrings))
+        #Add an array with the weighting coefficient of the Taylor expansion
+        self.inversionTaylor.weightingMonoms = []
+        for k in range(self.maxTaylorDeg+1):
+            self.inversionTaylor.weightingMonoms.extend( len(self.repr.listOfMonomialsPerDeg[k])*[1./float(factorial(k))] )
+        self.inversionTaylor.weightingMonoms = narray(self.inversionTaylor.weightingMonoms, dtype=nfloat)
+        self.inversionTaylor.weightingMonoms3d = np.transpose(np.broadcast_to(self.inversionTaylor.weightingMonoms,(self.nu,self.nq,self.inversionTaylor.weightingMonoms.size)),(2,1,0))
 
         return None
         
-    def compTaylorF(self):
+    def compPDerivF(self):
         
-        taylorFD = compTaylorExp(self.f, 'f', self.q, False, self.maxTaylorDeg, self.repr)
+        pDerivFD = compParDerivs(self.f, 'f', self.q, False, self.maxTaylorDeg, self.repr)
 
-        self.taylorF = variableStruct(**taylorFD)
+        self.pDerivF = variableStruct(**pDerivFD)
 
         return None
     
-    def compTaylorM(self):
+    def compPDerivM(self):
         """
         Taylor expansion of the mass matrix
         
         :return:
         """
 
-        taylorMD = compTaylorExp(self.massMat, 'M', self.q, True, self.maxTaylorDeg, self.repr)
+        pDerivMD = compParDerivs(self.massMat, 'M', self.q, True, self.maxTaylorDeg, self.repr)
 
 
-        self.taylorM = variableStruct(**taylorMD)
+        self.pDerivM = variableStruct(**pDerivMD)
 
-    def compTaylorG(self):
+    def compPDerivG(self):
         """
         Taylor expansion of the input matrix
 
         :return:
         """
 
-        taylorGD = compTaylorExp(self.g, 'G', self.q, True, self.maxTaylorDeg, self.repr)
+        pDerivGD = compParDerivs(self.g, 'G', self.q, True, self.maxTaylorDeg, self.repr)
     
-        self.taylorG = variableStruct(**taylorGD)
+        self.pDerivG = variableStruct(**pDerivGD)
 
         return None
     
-    def evalTaylor(self, x:np.ndarray, maxDeg:int=None):
+    def getTaylorApprox(self,x:np.ndarray,maxDeg:int=None):
         
         # TODO this is a naive implementation
         
@@ -131,25 +144,29 @@ class secondOrderSys(dynamicalSystem):
         
         # return Value
         MifTaylor = nzeros((self.nq, nMonomsTaylor), dtype=nfloat)
-        MifTaylor[0:self.nqv,1:1+self.nqv] = nidentity(self.nqv)  # Second order nature of the system
+        #Integration of velocity
+        MifTaylor[0:self.nqp,1+self.nqp:1+self.nq] = nidentity(self.nqv)  # Second order nature of the system
         MiGTaylor = nzeros((nMonomsTaylor,self.nq,self.nu), dtype=nfloat)
-        
-        # The integration of the velocity
-        MifTaylor[:self.nqv, 1:1+self.nqv] = nidentity(self.nqv, dtype=nfloat)
         
         # Setup the inputs
         xList = [float(ax) for ax in x]
         # First get all taylor series of non-inversed up to maxDeg
         # The functions [f,M,G]Taylor are  created such that the monomials up maxDeg are returned
-        fTaylor = nmatrix(self.taylorF.fTaylor_eval(*xList)) # Pure np.matrix #TODO search for ways to vectorize
-        MTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorM.MTaylor_eval] #List of matrices #TODO search for ways to vectorize
-        GTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorG.GTaylor_eval] #List of matrices #TODO search for ways to vectorize
+        #fTaylor = nmatrix(self.taylorF.fTaylor_eval(*xList)) # Pure np.matrix #TODO search for ways to vectorize
+        #MTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorM.MTaylor_eval] #List of matrices #TODO search for ways to vectorize
+        #GTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorG.GTaylor_eval] #List of matrices #TODO search for ways to vectorize
+        
+        # Compute the taylor only up to the degree needed
+        indexKey = "PDeriv_to_{0:d}_eval".format(maxDeg)
+        fPDeriv = nmatrix(self.pDerivF.__dict__["f"+indexKey](*xList)) # Pure np.matrix #TODO search for ways to vectorize
+        MPDeriv = [nmatrix(aFunc(*xList)) for aFunc in self.pDerivM.__dict__["M"+indexKey]] #List of matrices #TODO search for ways to vectorize
+        GPDeriv = [nmatrix(aFunc(*xList)) for aFunc in self.pDerivG.__dict__["G"+indexKey]] #List of matrices #TODO search for ways to vectorize
         
         # Inverse the inertia matrix at the current point
-        Mi = nmatrix(inv(MTaylor[0]))
+        Mi = nmatrix(inv(MPDeriv[0]))
 
         #Build up the dict
-        evalDictF = {'M':MTaylor[0], 'Mi':Mi, 'W':None}
+        evalDictF = {'M':MPDeriv[0], 'Mi':Mi, 'W':None}
         #Add the derivative keys (values set later on
         for aDerivStr,_ in self.inversionTaylor.allDerivs.items():
             evalDictF[aDerivStr+'M'] = None
@@ -157,8 +174,8 @@ class secondOrderSys(dynamicalSystem):
         
         evalDictG = evalDictF.copy()
         
-        evalDictF['W'] = nmatrix(fTaylor[:,[0]])
-        evalDictG['W'] = nmatrix(GTaylor[0])
+        evalDictF['W'] = nmatrix(fPDeriv[:,[0]])
+        evalDictG['W'] = nmatrix(GPDeriv[0])
 
         # Now loop over all
         digits_ = self.repr.digits
@@ -166,9 +183,9 @@ class secondOrderSys(dynamicalSystem):
         funcStrings_ = self.inversionTaylor.funcstr
         eDict_ = {}
 
-        derivVarAsInt = nzeros((self.maxTaylorDeg,),dtype=nintu)
+        derivVarAsInt = nzeros((maxDeg,),dtype=nintu)
 
-        for k,aMonom in enumerate(self.repr.listOfMonomials):
+        for k,aMonom in enumerate(listOfMonomsTaylor_):
             idxC = 0
             derivVarAsInt[:] = 0
             multi0 = 1
@@ -194,22 +211,45 @@ class secondOrderSys(dynamicalSystem):
             # Set up the two dicts
             for idxKey,idxVal in idxDict.items():
                 #Set deriv mass mat
-                evalDictF[idxKey+'M'] = evalDictG[idxKey+'M'] = MTaylor[idxVal]
+                evalDictF[idxKey+'M'] = evalDictG[idxKey+'M'] = MPDeriv[idxVal]
                 #Set the "function"
-                evalDictF[idxKey+'W'] = nmatrix(fTaylor[:,[idxVal]])
-                evalDictG[idxKey+'W'] = nmatrix(GTaylor[idxVal])
+                evalDictF[idxKey+'W'] = nmatrix(fPDeriv[:,[idxVal]])
+                evalDictG[idxKey+'W'] = nmatrix(GPDeriv[idxVal])
             
             thisFuncString = funcStrings_[aMonom.sum()]
             #Evaluate
-            MifTaylor[self.nq-self.nqv:,[k]] = eval(thisFuncString,eDict_,evalDictF)
-            MiGTaylor[k,self.nq-self.nqv:,:] = eval(thisFuncString,eDict_,evalDictG)
+            MifTaylor[self.nqp:,[k]] = eval(thisFuncString,eDict_,evalDictF)
+            MiGTaylor[k,self.nqp:,:] = eval(thisFuncString,eDict_,evalDictG)
             
-            
+        # Do the weighting to go from partial derivs to taylor
+        nmultiply(MifTaylor, self.inversionTaylor.weightingMonoms, out=MifTaylor)
+        nmultiply(MiGTaylor,self.inversionTaylor.weightingMonoms3d,out=MiGTaylor)
         #Done
         return MifTaylor, MiGTaylor
+    
+    def __call__(self, x:np.ndarray, u:np.ndarray):
+        """Evaluate dynamics for current position and control input"""
+        if __debug__:
+            assert x.shape[1] == u.shape[1]
+            assert x.shape[0] == self.nq
+            assert u.shape[0] == self.nu
         
-        
-        
+        if x.shape[1] == 1:
+            #Integrative part
+            xd = nzeros((self.nq,1), dtype=nfloat)
+            xd[:self.nqp,0] = x[self.nqp:,0]
+            
+            #Evaluate
+            x = x.squeeze()
+            Mi = self.pDerivM.M0_eval(x)
+            F = self.pDerivM.f0_eval(x)
+            G = self.pDerivM.G0_eval(x)
+            
+            xd[self.nqp:,0] = ssolve(Mi, F+G, assume_a='pos')# Mass matrix is positive definite
+        else:
+            raise NotImplementedError
+
+        return xd
         
         
 

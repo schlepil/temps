@@ -67,13 +67,13 @@ def getInverseTaylorStrings(Mstr='M',Mistr='Mi',fstr='f',derivStrings=['x','y','
     return {'funcstr':allDerivsListStr, 'derivStr':derivStrings, 'allDerivs':dict(zip(allDerivStr,allDerivs))}
 
 
-def compTaylorExp(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxTaylorDeg:int, repr:polynomialRepr)->dict:
+def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:int, repr:polynomialRepr)->dict:
     """
-    Computes the Taylor expansion of a given formula
+    Computes the partial derivatives needed for taylor expansion of a given formula
     :param f:
     :param fStr:
     :param q:
-    :param maxTaylorDeg:
+    :param maxPDerivDeg:
     :param repr:
     :return:
     """
@@ -92,12 +92,12 @@ def compTaylorExp(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxTaylorDeg:i
         if __debug__:
             assert m==1, 'only vectors allowed'
         #Vector case
-        taylorFD = {fStr+'0': sy.Matrix(nzeros((n, 1)))}
+        pDerivFD = {fStr+'0': sy.Matrix(nzeros((n, 1)))}
 
-        taylorFD[fStr+'0'] += f
+        pDerivFD[fStr+'0'] += f
 
         lastMat = f
-        for k in range(1, maxTaylorDeg + 1):
+        for k in range(1, maxPDerivDeg + 1):
             thisMat = sy.Matrix(nzeros((n, len(repr.listOfMonomialsPerDeg[k]))))
 
             # Get the derivative corresponding to each monomial
@@ -105,45 +105,44 @@ def compTaylorExp(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxTaylorDeg:i
                 idxDeriv, idxParent = getIdxAndParent(aMonom, repr.listOfMonomialsPerDegAsInt[k - 1], repr.nDims, repr.digits)
 
                 # Derive the (sliced) vector
-                thisMat[:, j] = sy.diff(lastMat[:, idxParent], q[idxDeriv, 0]) / float(k)
+                thisMat[:, j] = sy.diff(lastMat[:, idxParent], q[idxDeriv, 0])
 
             # save
-            taylorFD["{1:s}{0:d}".format(k, fStr)] = thisMat
+            pDerivFD["{1:s}{0:d}".format(k, fStr)] = thisMat
             # Iterate
             lastMat = thisMat
 
         # for all 0-N
-        totCols = sum([len(aList) for aList in repr.listOfMonomialsPerDeg[:maxTaylorDeg + 1]])
-        taylorFD[fStr+"Taylor"] = sy.Matrix(nzeros((n, totCols)))
+        totCols = sum([len(aList) for aList in repr.listOfMonomialsPerDeg[:maxPDerivDeg + 1]])
+        pDerivFD[fStr+"PDeriv"] = sy.Matrix(nzeros((n, totCols)))
         cCols = 0
-        for k in range(0, maxTaylorDeg + 1):
+        for k in range(0, maxPDerivDeg + 1):
             aKey = "{1}{0:d}".format(k,fStr)
-            aVal = taylorFD[aKey]
+            aVal = pDerivFD[aKey]
 
-            taylorFD[fStr+"Taylor"][:, cCols:cCols + aVal.shape[1]] = aVal
+            pDerivFD[fStr+"PDeriv"][:, cCols:cCols + aVal.shape[1]] = aVal
             cCols += aVal.shape[1]
         
-        #Create each
-        for k in range(0,maxTaylorDeg+1):
-            totCols = sum([len(aList) for aList in repr.listOfMonomialsPerDeg[:k+1]])
-            taylorFD[fStr+"Taylor_to_{0:d".format(k)] = sy.Matrix(nzeros((n,totCols)))
-            
-            
+        #Create each taylor expansion of up to degree k
+        totCols = 0
+        for k in range(0,maxPDerivDeg+1):
+            totCols += len( repr.listOfMonomialsPerDeg[k])
+            pDerivFD[fStr+"PDeriv_to_{0:d}".format(k)] = pDerivFD[fStr+"PDeriv"][:, :totCols]
 
         tempDict = dict()
 
-        for aKey, aVal in taylorFD.items():
+        for aKey, aVal in pDerivFD.items():
             tempDict[aKey + "_eval"] = sy.lambdify(q, aVal, modules=array2mat)
 
-        taylorFD.update(tempDict)
+        pDerivFD.update(tempDict)
     else:
-        taylorFD = {fStr+'0': [sy.Matrix(nzeros((n, m)))]}
+        pDerivFD = {fStr+'0': [sy.Matrix(nzeros((n, m)))]}
 
-        taylorFD[fStr+'0'][0] += f
+        pDerivFD[fStr+'0'][0] += f
 
         lastList = [f]
 
-        for k in range(1, maxTaylorDeg + 1):
+        for k in range(1, maxPDerivDeg + 1):
             thisList = [sy.Matrix(nzeros((n, m))) for _ in
                         range(repr.listOfMonomialsPerDegAsInt[k].size)]
 
@@ -151,29 +150,35 @@ def compTaylorExp(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxTaylorDeg:i
             for j, aMonom in enumerate(repr.listOfMonomialsPerDegAsInt[k]):
                 idxDeriv, idxParent = getIdxAndParent(aMonom, repr.listOfMonomialsPerDegAsInt[k - 1], repr.nDims, repr.digits)
 
-                thisList[j] = sy.diff(lastList[idxParent], q[idxDeriv, 0]) / float(k)
+                thisList[j] = sy.diff(lastList[idxParent], q[idxDeriv, 0])
 
             # save
-            taylorFD["{1}{0:d}".format(k, fStr)] = thisList
+            pDerivFD["{1}{0:d}".format(k, fStr)] = thisList
             # Iterate
             lastList = thisList
 
-        taylorFD[fStr+"Taylor"] = []
-        for k in range(0, maxTaylorDeg + 1):
+        pDerivFD[fStr+"PDeriv"] = []
+        for k in range(0, maxPDerivDeg + 1):
             aKey = "{1}{0:d}".format(k, fStr)
-            aVal = taylorFD[aKey]
+            aVal = pDerivFD[aKey]
 
-            taylorFD[fStr+"Taylor"].extend(aVal)
+            pDerivFD[fStr+"PDeriv"].extend(aVal)
+        
+        #Create each
+        totMonoms = 0
+        for k in range(0, maxPDerivDeg + 1):
+            totMonoms += len( repr.listOfMonomialsPerDeg[k])
+            pDerivFD[fStr+"PDeriv_to_{0:d}".format(k)] = pDerivFD[fStr+"PDeriv"][:totMonoms]
 
         # array2mat = [{'ImmutableDenseMatrix': np.matrix}, 'numpy']
         array2mat = [{'ImmutableDenseMatrix': np.array}, 'numpy']
         # array2mat = ['numpy']
 
         tempDict = {}
-        for aKey, aVal in taylorFD.items():
+        for aKey, aVal in pDerivFD.items():
             tempDict[aKey + "_eval"] = [sy.lambdify(q, aMat, modules=array2mat) for aMat in aVal]
-        taylorFD.update(tempDict)
+        pDerivFD.update(tempDict)
 
-    return taylorFD
+    return pDerivFD
 
 
