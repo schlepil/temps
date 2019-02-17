@@ -1,14 +1,16 @@
 from coreUtils import *
 
 @njit
-def evalPolyLyap_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU, idxMat, coeffsOut):
+def evalPolyLyap_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU, idxMat, coeffsOut, Pdot=None):
     """
     Generates the polynomial corresponding to the derivative of the Lyapunov function
     V = z'.P.z
+    V = 2.*z'.P.dz + z'.Pdot.z
     where z is the vector of monomials stored in monomP
     f and monomF have to store the derivatives of z (system dynamics)
     g and monomG have to store the derivatives of z (input dynamics)
     u and monomU respresent the control law
+    Pdot : Time-derivative of the Lyapunov region. If None: P != func(t)
     #Attention for efficiency, the monomials have to be given as the variable number
     # TODO check if this is computationally intensive and if so do some precomputations
     :param P:
@@ -23,6 +25,7 @@ def evalPolyLyap_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU
     :param uMonom:
     :param idxMat:
     :param coeffsOut:
+    :param Pdot:
     :return:
     """
     
@@ -75,6 +78,22 @@ def evalPolyLyap_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU
         for b,amz in enumerate(monomP):
             # No need to check for zeros, zeros are not very likely and there is not much to gain
             coeffsOut[idxMat[amDX,amz]] += P[b,a]*dx0[a,0]
+    
+    # Multiply by two
+    coeffsOut *= 2.
+    
+    # Add time-derivative (if necessary)
+    if Pdot is not None:
+        # Use symmetry
+        for a,ampa in enumerate(monomP):
+            # Diagonal
+            coeffsOut[idxMat[ampa,ampa]] += Pdot[a,a]
+            for b,ampb in enumerate(monomP[a+1:]):
+                #Strict Upper triang
+                coeffsOut[idxMat[ampa,ampb]] += Pdot[a,b]
+    
+    return coeffsOut
+    
     
     
 @njit

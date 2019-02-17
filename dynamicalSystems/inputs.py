@@ -93,7 +93,7 @@ class boxInputCstr(inputConstraints):
             return uOut,self.repr.varNumsPerDeg[0]
     
     #######################
-    def __call__(self,inputNonCstr,t=0):
+    def __call__(self,inputNonCstr,t:float=0.):
         # Limit given input array
         t = np.array(t)
         if t.size == 1:

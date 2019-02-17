@@ -72,7 +72,7 @@ def linChangeList2Dict(linChangeList):
             except KeyError:
                 thisDict[newMonom] = [(origMonom,aIdx)]
     
-def List2Str(nDims, maxDeg, digits, monom2num, num2monom, linChangeDict, A='A', c='cIdx', cp='cp'):
+def List2Str(nDims, maxDeg, digits, monom2num, num2monom, linChangeDict, A='A', c='cIdx', cp='cp', doFile=False):
     
     from os import path
     
@@ -92,7 +92,7 @@ def List2Str(nDims, maxDeg, digits, monom2num, num2monom, linChangeDict, A='A', 
     
     for monomOrig, newVal in linChangeDict.items():
         #Start new if-clause for each monomial to check if 0.
-        fileAsList.append("\ttempVal={0}[{1}] # coef of {2}".format(c, monom2num[monomOrig], monomOrig))
+        fileAsList.append(f"\ttempVal={c}[{monom2num[monomOrig]}] # coef of {monomOrig}")
         fileAsList.append("\tif tempVal!=0.:")
         thisCounterDict = {}
         for monomNew, coeffs in newVal:
@@ -115,15 +115,15 @@ def List2Str(nDims, maxDeg, digits, monom2num, num2monom, linChangeDict, A='A', 
         # Now make it a string
         for monomNewInt, thisSubDict in thisCounterDict.items():
             for powerKey, counter in thisSubDict.items():
-                fileAsList.append("\t\t{0}[{1}] += tempVal*{2:.1f}*(".format(cp,monomNewInt,counter))
+                fileAsList.append(f"\t\t{cp}[{monomNewInt}] += tempVal*{counter:.1f}*(")
                 powerMat = narray(powerKey, dtype=nint).reshape((nDims+1,nDims+1))
                 for i in range(nDims+1):
                     for j in range(nDims+1):
                         if powerMat[i,j] != 0:
-                            fileAsList[-1] += "{0}{1:d}[{2:d},{3:d}]*".format(A,powerMat[i,j],i,j)
+                            fileAsList[-1] += f"{A}{powerMat[i, j]:d}[{i:d},{j:d}]*"
                 # Cut last *
                 fileAsList[-1] = fileAsList[-1][:-1]
-                fileAsList[-1] += ") #{0}".format(num2monom[monomNewInt])
+                fileAsList[-1] += f") #{num2monom[monomNewInt]}"
         #Also convert it to the new style -> drop exponentiation beforehand
         thisLen = 0
         for _,thisSubDict in thisCounterDict.items():
@@ -222,10 +222,11 @@ class polynomialRepr():
         
         sCol=0
         for aDegList in self.listOfMonomialsPerDeg:
-            self.varNumsPerDeg.append( self.varNums[sCol:sCol+len(aDegList)] ).copy()
+            self.varNumsPerDeg.append( self.varNums[sCol:sCol+len(aDegList)].copy() )
             sCol+=len(aDegList)
         
-        self.varNumsUpToDeg = [np.hstack(self.varNumsPerDeg[:k]) for k in range(self.maxDeg+1)]
+        #self.varNumsUpToDeg = [np.hstack(self.varNumsPerDeg[:k]) for k in range(1,self.maxDeg+2)]
+        self.varNumsUpToDeg = [ self.varNums[:nVars] for nVars in [sum([len(aV) for aV in self.varNumsPerDeg[:k]]) for k in range(1,self.maxDeg+2)] ]
 
         # Setup fast access.
         # Fastest (by far) method seems to be using standard dicts...

@@ -1,18 +1,86 @@
 from Lyapunov.core import *
 from Lyapunov.utils_numba import *
 
+from control import lqr
+
 class quadraticLyapunovFunction(LyapunovFunction):
     """
     Lyapunov function of the form x'.P.x
     """
-    def __init__(self,dynSys: dynamicalSystem,P: np.ndarray):
+    def __init__(self,dynSys: dynamicalSystem,P: np.ndarray, alpha:float=1.):
         
         if __debug__:
             assert (P.shape[0] == P.shape[1]) and (P.shape[0] == self.dynSys.nq)
             
         super(quadraticLyapunovFunction,self).__init__(dynSys)
         
-        self.P = P
+        self.P_
+        self.alpha_
+        self.C_
+        self.Ci_
+
+    @property
+    def Ps(self):
+        return self.P_/self.alpha_
+    @property
+    def P(self):
+        return self.P_
+    @P.setter
+    def P(self, newP):
+        self.P_ = newP
+        self.C_ = cholesky(self.P_/self.alpha_)
+        self.Ci_ = inv(self.C_)
+        
+    @property
+    def alpha(self):
+        return self.alpha_
+    @alpha.setter
+    def alpha(self, newAlpha):
+        self.alpha_ = newAlpha
+        self.C_ = cholesky(self.P_/self.alpha_)
+        self.Ci_ = inv(self.C_)
+    
+    def evalV(self, x:np.ndarray, kd:bool=True):
+        x = x.reshape((self.P_.shape[0],-1))
+        return nsum(ndot(self.C_, x)**2,axis=0,keepdims=kd)
+    
+    def evalVd(self, x:np.ndarray, dx:np.ndarray, kd:bool=True):
+        x = x.reshape((self.P_.shape[0],-1))
+        dx = dx.reshape((self.P_.shape[0], -1))
+        return nsum(nmultiply(x, ndot((2.*self.P_), dx)),axis=0,keepdims=kd)
+    
+    def sphere2Ellip(self, x):
+        x = x.reshape((self.P_.shape[0], -1))
+        return ndot(self.Ci_,x)
+    
+    def ellip2Sphere(self, x):
+        x = x.reshape((self.P_.shape[0], -1))
+        return ndot(self.C_, x)
+    
+    def lqrP(self, Q:np.ndarray, R:np.ndarray, x:np.ndarray=None, A:np.ndarray=None, B:np.ndarray=None, N:np.ndarray=None):
+        """
+        Solves lqr for
+        xd = A.x + B.u
+        :param Q:
+        :param R:
+        :param A:
+        :param B:
+        :param t:
+        :param N:
+        :return:
+        """
+        if __debug__:
+            assert (A is None) and (B is None)
+        
+        if A is None:
+            A,_ = self.dynSys.getTaylorApprox(x,1,1) # TODO change getTaylorApprox
+            _,B = self.dynSys.getTaylorApprox(x,0,0)
+        
+        #solve lqr
+        K,P,_ = lqr(A,B,Q,R,N)
+        
+        return K,P
+        
 
     def getObjectivePoly(self,x0: np.ndarray = None,dx0: np.ndarray = None,fTaylor: np.ndarray = None,gTaylor: np.ndarray = None,uOpt: np.ndarray = None,idxCtrl: np.ndarray = None,t: float = 0.,taylorDeg: int = 3):
         if __debug__:

@@ -1,1 +1,2 @@
-from coreUtils.coreUtilsImport import *
+import numba as nb
+from numba import jit, njit, prange

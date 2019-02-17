@@ -1,4 +1,4 @@
-from coreUtils.coreUtilsImport import *
+from coreUtils.coreUtilsImport import Callable, Iterable, List
 
 def lmap(f:Callable, l:Iterable)->List:
     return list(map(f,l))

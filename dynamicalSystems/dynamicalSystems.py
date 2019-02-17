@@ -17,7 +17,8 @@ class dynamicalSystem:
             assert u.shape[1] == 1
             assert maxTaylorDegree <= repr.maxDeg
             assert repr.nDims == q.shape[0]
-            assert u.shape[0] == ctrlInput.nu
+            if ctrlInput is not None:
+                assert u.shape[0] == ctrlInput.nu
         
         self.repr = repr
         
@@ -40,10 +41,46 @@ class dynamicalSystem:
     
     def __call__(self, x:np.ndarray, u:np.ndarray, mode:str='OO', x0:np.ndarray=None):
         raise NotImplementedError
+    
+    def getUopt(self,x:np.ndarray, dx:np.ndarray, respectCstr:bool=False, t:float=0.):
+        """
+        Computes the necessary control input to achieve the derivative given the position
+        Seek uStar such that xd = f(x)+g(x).uStar
+        :param x:
+        :param dx:
+        :param respectCstr:
+        :param t:
+        :return:
+        """
+        
+        x = x.reshape((self.nq,-1))
+        dx = dx.reshape((self.nq,-1))
+        m = x.shape(1)
+        
+        if __debug__:
+            assert x.shape==dx.shape
+        
+        uStar = np.zeros((self.nu, m), dtype=nfloat_)
+        
+        for k in range(m):
+            fx, gx = self.getTaylorApprox(x[:,[k]],maxDeg=0)
+            # We need to solve
+            # g(x).uStar = xd - f(x)
+            uStar[:,[k]], res, _, _ = lstsq(gx[0], dx[:,[k]]-fx)
+            if __debug__:
+                assert res < 1e-9, "Could not solve"
+        
+        if respectCstr:
+            self.ctrlInput(uStar,t)
+        
+        return uStar
+        
+        
+        
 
 class secondOrderSys(dynamicalSystem):
     
-    def __init__(self, repr:polynomialRepr, massMat:sy.Matrix, f:sy.Matrix, g:sy.Matrix, q:"symbols", u:"symbols", maxTaylorDegree:int=3, ctrlInput:boxInputCstr, file:str=None):
+    def __init__(self, repr:polynomialRepr, massMat:sy.Matrix, f:sy.Matrix, g:sy.Matrix, q:"symbols", u:"symbols", maxTaylorDegree:int=3, ctrlInput:boxInputCstr=None, file:str=None):
         """
         represents a system of the form
         q is composed of (position,velocity) -> (q_p,q_v)
@@ -127,7 +164,7 @@ class secondOrderSys(dynamicalSystem):
 
         return None
     
-    def getTaylorApprox(self,x:np.ndarray,maxDeg:int=None):
+    def getTaylorApprox(self,x:np.ndarray,maxDeg:int=None,minDeg:int=0):
         
         # TODO this is a naive implementation
         
@@ -138,18 +175,19 @@ class secondOrderSys(dynamicalSystem):
         
         # Set up the monoms need for the Taylor exp
         listOfMonomsTaylor_ = []
-        for k in range(maxDeg+1):
+        for k in range(minDeg,maxDeg+1):
             listOfMonomsTaylor_.extend(self.repr.listOfMonomialsPerDeg[k])
-        nMonomsTaylor = len(listOfMonomsTaylor_)
+        nMonomsTaylor_ = len(listOfMonomsTaylor_)
         
         # return Value
-        MifTaylor = nzeros((self.nq, nMonomsTaylor), dtype=nfloat)
-        #Integration of velocity
-        MifTaylor[0:self.nqp,1+self.nqp:1+self.nq] = nidentity(self.nqv)  # Second order nature of the system
-        MiGTaylor = nzeros((nMonomsTaylor,self.nq,self.nu), dtype=nfloat)
+        MifTaylor = nzeros((self.nq, nMonomsTaylor_), dtype=nfloat)
+        #Integration of velocity (Only if the first order terms appear
+        if (minDeg<=1) and (maxDeg>=1):
+            MifTaylor[0:self.nqp,int(minDeg==0)+self.nqp:int(minDeg==0)+self.nq] = nidentity(self.nqv)  # Second order nature of the system
+        MiGTaylor = nzeros((nMonomsTaylor_,self.nq,self.nu), dtype=nfloat)
         
         # Setup the inputs
-        xList = [float(ax) for ax in x]
+        xList = x.squeeze()#[float(ax) for ax in x]
         # First get all taylor series of non-inversed up to maxDeg
         # The functions [f,M,G]Taylor are  created such that the monomials up maxDeg are returned
         #fTaylor = nmatrix(self.taylorF.fTaylor_eval(*xList)) # Pure np.matrix #TODO search for ways to vectorize
@@ -227,30 +265,109 @@ class secondOrderSys(dynamicalSystem):
         #Done
         return MifTaylor, MiGTaylor
     
-    def __call__(self, x:np.ndarray, u:np.ndarray):
-        """Evaluate dynamics for current position and control input"""
+    def __call__(self, x:np.ndarray, u_:Union[np.ndarray,Callable], t:float=0., restrictInput:bool=True, mode:List[int]=[0,0], x0:np.ndarray=None):
+        """
+        Evaluate dynamics for current position and control input
+        :param x:
+        :param u_:
+        :param t:
+        :param restrictInput:
+        :param mode: First letter -> sys dyn; second: sym dyn; Zero is nonlinear dyn, int means taylor approx
+        :param x0:
+        :return:
+        """
+        if __debug__:
+            assert x.shape[0] == self.nq
+            assert all([(aMode >= 0) and (aMode <=self.maxTaylorDeg) for aMode in mode ])
+        
+        # Check if u_ is Callable evaluate first
+        if hasattr(u_, "__call__"):
+            # General function used for optimized input later on
+            u = u_(x,t)
+        elif u_.shape == (self.nu, self.nq):
+            #This is actually a feedback matrix
+            u = ndot(u_,x)
+        else:
+            # Its an actual control input
+            u=u_
+        
+        if restrictInput:
+            u = self.ctrlInput(u,t)
+        
         if __debug__:
             assert x.shape[1] == u.shape[1]
-            assert x.shape[0] == self.nq
             assert u.shape[0] == self.nu
         
         if x.shape[1] == 1:
-            #Integrative part
-            xd = nzeros((self.nq,1), dtype=nfloat)
-            xd[:self.nqp,0] = x[self.nqp:,0]
+            #Always
+            # Integrative part
+            xd = nzeros((self.nq, 1), dtype=nfloat)
+            xd[:self.nqp, 0] = x[self.nqp:, 0]
+
+            xL = x.squeeze()
+            if mode[0] == 0:
+                # This is a bit inconvenient as we have to solve twice with different approx of the mass matrix
+                # System dynamics
+                Mi = self.pDerivM.M0_eval(*xL)
+                F = self.pDerivM.f0_eval(*xL)
+                
+                xd[self.nqp:, 0] = ssolve(Mi, F, assume_a='pos')  # Mass matrix is positive definite
+            else:
+                # todo write a efficient function to evaluate all monomials
+                raise NotImplementedError
             
-            #Evaluate
-            x = x.squeeze()
-            Mi = self.pDerivM.M0_eval(x)
-            F = self.pDerivM.f0_eval(x)
-            G = self.pDerivM.G0_eval(x)
-            
-            xd[self.nqp:,0] = ssolve(Mi, F+G, assume_a='pos')# Mass matrix is positive definite
+            if mode[1] == 0:
+                Mi = self.pDerivM.M0_eval(*xL)
+                G = self.pDerivM.G0_eval(*xL)
+                
+                # Add input dependent part
+                xd[self.nqp:,0] += ssolve(Mi, ndot(G,u), assume_a='pos')# Mass matrix is positive definite
+            else:
+                raise NotImplementedError
+                
         else:
             raise NotImplementedError
 
         return xd
+
+    def getUopt(self,x: np.ndarray,ddx: np.ndarray,respectCstr: bool = False,t: float = 0., fullDeriv:bool=False):
+        """
+        Computes the necessary control input to achieve the second derivative given the position and velocity
+        Seek uStar such that M.ddx = f(x)+g(x).uStar
+        :param x:
+        :param dx:
+        :param respectCstr:
+        :param t:
+        :return:
+        """
+    
+        x = x.reshape((self.nq,-1))
+        if fullDeriv:
+            ddx = ddx.reshape((self.nq,-1))
+            ddx = ddx[self.nqv:,:]
+        else:
+            ddx = ddx.reshape((self.nqv,-1))
         
+        m = x.shape[1]
+    
+        if __debug__:
+            assert x.shape[1] == ddx.shape[1]
+    
+        uStar = np.zeros((self.nu,m),dtype=nfloat)
+    
+        for k in range(m):
+            # Compute current mass matrix, system dynamics and input dynamics
+            Mx = self.pDerivM.M0_eval[0](*x[:,k])
+            fx = self.pDerivF.f0_eval(*x[:,k])
+            Gx = self.pDerivG.G0_eval[0](*x[:,k])
+            # We need to solve
+            # g(x).uStar = M.ddx - f(x)
+            uStar[:,[k]],res,_,_ = lstsq(Gx,ndot(Mx,ddx[:,[k]])-fx)
+
+        if respectCstr:
+            self.ctrlInput(uStar,t)
+    
+        return uStar
         
 
 

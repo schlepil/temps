@@ -9,6 +9,9 @@ from polynomial import polynomialRepr
 
 # Zero is stable
 
+def getUlims():
+    return -10.,10.
+
 def getSys(repr: polynomialRepr):
     ##Taken from Drake - RobotLocomotion @ CSAIL
     # Implements the dynamics representing the inverted pendulum
@@ -31,7 +34,7 @@ def getSys(repr: polynomialRepr):
     qM = sy.Matrix([[q[0]],[q[1]]])
     
     M = sy.Matrix([[I]])
-    F = sy.Matrix([[m*g*lc*sy.sin(qM[0,0])+b*qM[1,1]]])
+    F = sy.Matrix([[m*g*lc*sy.sin(qM[0,0])+b*qM[1,0]]])
     gInput = sy.Matrix([[1.]])
     
     dynSys = secondOrderSys(repr,M,-F,gInput,qM,uM)

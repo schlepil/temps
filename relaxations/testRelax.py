@@ -1,7 +1,6 @@
 from coreUtils import *
 from polynomial import *
 from relaxations import *
-from constraints import *
 
 def funcTestBase(nDims, maxDeg):
     thisRepr = polynomialRepr(nDims, maxDeg)
@@ -88,8 +87,6 @@ def funcTestFirstOpt(relaxOrder=4):
     print("With eigvals \n {0} \n and eigvec \n{1}".format(*eigh(thisRelax.evalCstr(sol['x_np']))))
     print("Delta constraints is \n {0}".format(thisRelax.evalCstr(sol['x_np'])-thisRelax.evalCstr(narray([Osq2,Osq2],dtype=nfloat))))
     print("With eigvals \n {0} \n and eigvec \n {1}".format(*eigh(thisRelax.evalCstr(sol['x_np'])-thisRelax.evalCstr(narray([Osq2,Osq2],dtype=nfloat)))))
-    
-
 
 
 if __name__ == "__main__":

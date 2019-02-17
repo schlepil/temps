@@ -92,9 +92,9 @@ def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:i
         if __debug__:
             assert m==1, 'only vectors allowed'
         #Vector case
-        pDerivFD = {fStr+'0': sy.Matrix(nzeros((n, 1)))}
+        pDerivFD = {f"{fStr}0": sy.Matrix(nzeros((n, 1)))}
 
-        pDerivFD[fStr+'0'] += f
+        pDerivFD[f"{fStr}0"] += f
 
         lastMat = f
         for k in range(1, maxPDerivDeg + 1):
@@ -108,37 +108,37 @@ def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:i
                 thisMat[:, j] = sy.diff(lastMat[:, idxParent], q[idxDeriv, 0])
 
             # save
-            pDerivFD["{1:s}{0:d}".format(k, fStr)] = thisMat
+            pDerivFD[f"{fStr:s}{k:d}"] = thisMat
             # Iterate
             lastMat = thisMat
 
         # for all 0-N
         totCols = sum([len(aList) for aList in repr.listOfMonomialsPerDeg[:maxPDerivDeg + 1]])
-        pDerivFD[fStr+"PDeriv"] = sy.Matrix(nzeros((n, totCols)))
+        pDerivFD[f"{fStr}PDeriv"] = sy.Matrix(nzeros((n, totCols)))
         cCols = 0
         for k in range(0, maxPDerivDeg + 1):
-            aKey = "{1}{0:d}".format(k,fStr)
+            aKey = f"{fStr}{k:d}"
             aVal = pDerivFD[aKey]
 
-            pDerivFD[fStr+"PDeriv"][:, cCols:cCols + aVal.shape[1]] = aVal
+            pDerivFD[f"{fStr}PDeriv"][:, cCols:cCols + aVal.shape[1]] = aVal
             cCols += aVal.shape[1]
         
         #Create each taylor expansion of up to degree k
         totCols = 0
         for k in range(0,maxPDerivDeg+1):
             totCols += len( repr.listOfMonomialsPerDeg[k])
-            pDerivFD[fStr+"PDeriv_to_{0:d}".format(k)] = pDerivFD[fStr+"PDeriv"][:, :totCols]
+            pDerivFD[f"{fStr}PDeriv_to_{k:d}"] = pDerivFD[f"{fStr}PDeriv"][:,:totCols]
 
         tempDict = dict()
 
         for aKey, aVal in pDerivFD.items():
-            tempDict[aKey + "_eval"] = sy.lambdify(q, aVal, modules=array2mat)
+            tempDict[f"{aKey}_eval"] = sy.lambdify(q, aVal, modules=array2mat)
 
         pDerivFD.update(tempDict)
     else:
-        pDerivFD = {fStr+'0': [sy.Matrix(nzeros((n, m)))]}
+        pDerivFD = {f"{fStr}0": [sy.Matrix(nzeros((n, m)))]}
 
-        pDerivFD[fStr+'0'][0] += f
+        pDerivFD[f"{fStr}0"][0] += f
 
         lastList = [f]
 
@@ -153,22 +153,22 @@ def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:i
                 thisList[j] = sy.diff(lastList[idxParent], q[idxDeriv, 0])
 
             # save
-            pDerivFD["{1}{0:d}".format(k, fStr)] = thisList
+            pDerivFD[f"{fStr}{k:d}"] = thisList
             # Iterate
             lastList = thisList
 
-        pDerivFD[fStr+"PDeriv"] = []
+        pDerivFD[f"{fStr}PDeriv"] = []
         for k in range(0, maxPDerivDeg + 1):
-            aKey = "{1}{0:d}".format(k, fStr)
+            aKey = f"{fStr}{k:d}"
             aVal = pDerivFD[aKey]
 
-            pDerivFD[fStr+"PDeriv"].extend(aVal)
+            pDerivFD[f"{fStr}PDeriv"].extend(aVal)
         
         #Create each
         totMonoms = 0
         for k in range(0, maxPDerivDeg + 1):
             totMonoms += len( repr.listOfMonomialsPerDeg[k])
-            pDerivFD[fStr+"PDeriv_to_{0:d}".format(k)] = pDerivFD[fStr+"PDeriv"][:totMonoms]
+            pDerivFD[f"{fStr}PDeriv_to_{k:d}"] = pDerivFD[f"{fStr}PDeriv"][:totMonoms]
 
         # array2mat = [{'ImmutableDenseMatrix': np.matrix}, 'numpy']
         array2mat = [{'ImmutableDenseMatrix': np.array}, 'numpy']
@@ -176,7 +176,7 @@ def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:i
 
         tempDict = {}
         for aKey, aVal in pDerivFD.items():
-            tempDict[aKey + "_eval"] = [sy.lambdify(q, aMat, modules=array2mat) for aMat in aVal]
+            tempDict[f"{aKey}_eval"] = [sy.lambdify(q, aMat, modules=array2mat) for aMat in aVal]
         pDerivFD.update(tempDict)
 
     return pDerivFD

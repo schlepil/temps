@@ -23,3 +23,21 @@ def funcb(anArray):
     for k,val in enumerate(anArray):
         tmp += (float(k)+val)
     return tmp
+
+
+def fEmpty():
+    pass
+
+def fEmptyNCall0():
+    for _ in range(100000):
+        pass
+
+def fEmptyNCall1():
+    [None for _ in range(100000)]
+
+def fEmptyNCall2():
+    for _ in range(100000):
+        fEmpty()
+
+def fEmptyNCall3():
+    [fEmpty() for _ in range(100000)]
