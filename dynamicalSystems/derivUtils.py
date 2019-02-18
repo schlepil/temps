@@ -123,15 +123,15 @@ def compTaylorExp(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxTaylorDeg:i
             taylorFD[fStr+"Taylor"][:, cCols:cCols + aVal.shape[1]] = aVal
             cCols += aVal.shape[1]
         
-        #Create each
+        #Create a function for taylor approaximation of degree up to 1,2,3,...,maxdeg
+        totCols = 0
         for k in range(0,maxTaylorDeg+1):
-            totCols = sum([len(aList) for aList in repr.listOfMonomialsPerDeg[:k+1]])
-            taylorFD[fStr+"Taylor_to_{0:d".format(k)] = sy.Matrix(nzeros((n,totCols)))
-            
-            
+            totCols += len(repr.listOfMonomialsPerDeg[k])
+            taylorFD[fStr+"Taylor_to_{0:d".format(k)] = taylorFD[fStr+"Taylor"][:, :totCols] #Matrix
 
+        # Lambdify all expression
+        # TODO check if creating a numba/cython file is more efficient
         tempDict = dict()
-
         for aKey, aVal in taylorFD.items():
             tempDict[aKey + "_eval"] = sy.lambdify(q, aVal, modules=array2mat)
 
@@ -169,6 +169,14 @@ def compTaylorExp(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxTaylorDeg:i
         array2mat = [{'ImmutableDenseMatrix': np.array}, 'numpy']
         # array2mat = ['numpy']
 
+        # Create a function for taylor approaximation of degree up to 1,2,3,...,maxdeg
+        totItems = 0
+        for k in range(0,maxTaylorDeg+1):
+            totCols += len(repr.listOfMonomialsPerDeg[k])
+            taylorFD[fStr+"Taylor_to_{0:d".format(k)] = taylorFD[fStr+"Taylor"][:totCols] #List of matrices
+
+        #Lambdify all expression
+        #TODO check if creating a numba/cython file is more efficient
         tempDict = {}
         for aKey, aVal in taylorFD.items():
             tempDict[aKey + "_eval"] = [sy.lambdify(q, aMat, modules=array2mat) for aMat in aVal]

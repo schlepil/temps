@@ -141,9 +141,13 @@ class secondOrderSys(dynamicalSystem):
         xList = [float(ax) for ax in x]
         # First get all taylor series of non-inversed up to maxDeg
         # The functions [f,M,G]Taylor are  created such that the monomials up maxDeg are returned
-        fTaylor = nmatrix(self.taylorF.fTaylor_eval(*xList)) # Pure np.matrix #TODO search for ways to vectorize
-        MTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorM.MTaylor_eval] #List of matrices #TODO search for ways to vectorize
-        GTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorG.GTaylor_eval] #List of matrices #TODO search for ways to vectorize
+        #fTaylor = nmatrix(self.taylorF.fTaylor_eval(*xList)) # Pure np.matrix #TODO search for ways to vectorize
+        #MTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorM.MTaylor_eval] #List of matrices #TODO search for ways to vectorize
+        #GTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorG.GTaylor_eval] #List of matrices #TODO search for ways to vectorize
+        identString = "Taylor_to_{0:d}_eval".format(maxDeg)
+        fTaylor = nmatrix(self.taylorF.__dict__["f"+identString])
+        MTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorM.__dict__["M"+identString]]  # List of matrices
+        GTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorG.__dict__["G"+identString]] #List of matrices
         
         # Inverse the inertia matrix at the current point
         Mi = nmatrix(inv(MTaylor[0]))
