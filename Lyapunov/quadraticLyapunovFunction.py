@@ -7,17 +7,25 @@ class quadraticLyapunovFunction(LyapunovFunction):
     """
     Lyapunov function of the form x'.P.x
     """
-    def __init__(self,dynSys: dynamicalSystem,P: np.ndarray, alpha:float=1.):
+    def __init__(self,dynSys: dynamicalSystem,P: np.ndarray=None, alpha:float=None):
         
         if __debug__:
-            assert (P.shape[0] == P.shape[1]) and (P.shape[0] == self.dynSys.nq)
+            if P is not None:
+                assert (P.shape[0] == P.shape[1]) and (P.shape[0] == self.dynSys.nq)
+                assert alpha is not None
+            else:
+                assert alpha is None
             
         super(quadraticLyapunovFunction,self).__init__(dynSys)
         
-        self.P_
-        self.alpha_
-        self.C_
-        self.Ci_
+        self.P_=None
+        self.alpha_=None
+        self.C_=None
+        self.Ci_=None
+
+        if P is not None:
+            self.P = P
+            self.alpha = alpha
 
     @property
     def Ps(self):
@@ -28,8 +36,9 @@ class quadraticLyapunovFunction(LyapunovFunction):
     @P.setter
     def P(self, newP):
         self.P_ = newP
-        self.C_ = cholesky(self.P_/self.alpha_)
-        self.Ci_ = inv(self.C_)
+        if self.alpha_ is not None:
+            self.C_ = cholesky(self.P_/self.alpha_)
+            self.Ci_ = inv(self.C_)
         
     @property
     def alpha(self):
@@ -37,8 +46,9 @@ class quadraticLyapunovFunction(LyapunovFunction):
     @alpha.setter
     def alpha(self, newAlpha):
         self.alpha_ = newAlpha
-        self.C_ = cholesky(self.P_/self.alpha_)
-        self.Ci_ = inv(self.C_)
+        if self.P_ is not None:
+            self.C_ = cholesky(self.P_/self.alpha_)
+            self.Ci_ = inv(self.C_)
     
     def evalV(self, x:np.ndarray, kd:bool=True):
         x = x.reshape((self.P_.shape[0],-1))
@@ -70,16 +80,19 @@ class quadraticLyapunovFunction(LyapunovFunction):
         :return:
         """
         if __debug__:
-            assert (A is None) and (B is None)
+            assert (A is None) and (B is None) and (x is not None)
         
         if A is None:
-            A,_ = self.dynSys.getTaylorApprox(x,1,1) # TODO change getTaylorApprox
-            _,B = self.dynSys.getTaylorApprox(x,0,0)
+            A = self.dynSys.getTaylorApprox(x,1,1)[0] # TODO change getTaylorApprox
+            B = self.dynSys.getTaylorApprox(x,0,0)[1][0,:,:] # Only zero order matrix
         
         #solve lqr
-        K,P,_ = lqr(A,B,Q,R,N)
+        if N is None:
+            K, P, _ = lqr(A, B, Q, R)
+        else:
+            K, P, _ = lqr(A, B, Q, R, N)
         
-        return K,P
+        return P,K
         
 
     def getObjectivePoly(self,x0: np.ndarray = None,dx0: np.ndarray = None,fTaylor: np.ndarray = None,gTaylor: np.ndarray = None,uOpt: np.ndarray = None,idxCtrl: np.ndarray = None,t: float = 0.,taylorDeg: int = 3):

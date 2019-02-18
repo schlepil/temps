@@ -24,6 +24,9 @@ from numpy import min as nmin
 from numpy import maximum as nmaximum
 from numpy import minimum as nminimum
 
+from numpy import any as nany
+from numpy import all as nall
+
 from numpy import sin as nsin
 from numpy import cos as ncos
 
@@ -40,3 +43,5 @@ from typing import List, Tuple, Callable, Union, Iterable
 
 from copy import deepcopy as dp
 from copy import copy as cp
+
+from itertools import chain as ichain

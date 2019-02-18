@@ -271,17 +271,18 @@ class polynomialRepr():
                     #exceeding relaxation
                     self.idxMat[i, j] = intMax
 
-        #this gets out of hand too quickly
-        #self.idxMat3d = self.listOfMonomialsAsInt.reshape((-1,1,1))+self.listOfMonomialsAsInt.reshape((1,-1,1))+self.listOfMonomialsAsInt.reshape((1,1,-1))
-        
-        #for i in range(self.nMonoms):
-        #    for j in range(self.nMonoms):
-        #        for k in range(self.nMonoms):
-        #            try:
-        #                self.idxMat[i,j] = self.monom2num[self.idxMat[i,j]]
-        #            except KeyError:
-        #                #exceeding relaxation
-        #                self.idxMat[i, j] = intMax
+        # For faster evaluation
+        self.varNum2varNumParents = -nones((self.nMonoms, 2), dtype=nintu)
+        # Take the first parent found
+        # All monoms that have to be explicitely calculated can be found in the inner upper triangle of idxMat
+        for i in range(1, self.idxMat.shape[0]):
+            for j in range(1, self.idxMat.shape[0]):
+                if (self.idxMat[i, j] > self.varNums[-1]):
+                    #out of range for the monomials
+                    break
+                if (self.varNum2varNumParents[self.idxMat[i, j], 0] == -1):
+                    # Not treated yet
+                    self.varNum2varNumParents[self.idxMat[i, j], :] = [i, j]
         
         return None
 
@@ -327,6 +328,18 @@ class polynomialRepr():
         Ahatflat = Ahat.flatten()
         cp = linChangeNumba(self.newStyleDict['firstIdxPerMonomial'],self.newStyleDict["cIdx"],self.newStyleDict["cpIdx"],self.newStyleDict["multiplier"],self.newStyleDict["numElem"],self.newStyleDict["idxList"],c,cp,Ahatflat)
         return cp
+
+    def evalAllMonoms(self, x:np.ndarray, maxDeg:int=None):
+
+        x = x.reshape((self.nDims, -1))
+
+        if (maxDeg is None) or (maxDeg == self.maxDeg):
+            # Evaluate all
+            return evalMonomsNumba(x, self.varNum2varNumParents)
+        else:
+            assert maxDeg <= self.maxDeg
+            nMonoms_ = sum([len(a) for a in self.varNumsPerDeg[:maxDeg+1]])
+            return evalMonomsNumba(x, self.varNum2varNumParents[:nMonoms_,:])
         
         
         

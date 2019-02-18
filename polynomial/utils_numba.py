@@ -79,7 +79,9 @@ def int2list(aInt: int,nVars: int,digits: int = 1,out: np.ndarray = None) -> np.
 # idxParent, idxVar = getIdxAndParent(aMonom, self.repr.listOfMonomialsPerDeg[k-1], digits)
 @njit
 def getIdxAndParent(aMonom: int,aMonomList: narray,nVars: int,digits: int):
-    
+
+
+    # TODO change to additionally take varnum2varnumParents
     if __debug__: #numba .43
         assert isinstance(aMonom,(int, nint, nintu))
         assert isinstance(aMonomList,np.ndarray)
@@ -127,3 +129,37 @@ def polyMulExp(c0,c1,cout,idxMat,idxMax0,idxMax1):
                     cout[idxMat[i,j]] += ac0*ac1
     
     return cp
+
+
+@njit
+def evalMonomsNumba1(x, varNum2varNumParents):
+
+    z = nempty((varNum2varNumParents.shape[0],1))
+
+    #Init
+    z[0,0] = 1.
+    z[1:1+x.size[0],[0]] = x
+    #Loop
+    for k, (p0,p1) in enumerate(varNum2varNumParents[1+x.size,:]):
+        z[k] = z[p0]*z[p1]
+    return z
+
+@njit
+def evalMonomsNumbaN(x, varNum2varNumParents):
+
+    z = nempty((varNum2varNumParents.shape[0],x.shape[1]))
+
+    #Init
+    z[0,:] = 1.
+    z[1:1+x.size[0],:] = x
+    #Loop
+    for k, (p0,p1) in enumerate(varNum2varNumParents[1+x.size,:]):
+        z[k,:] = z[p0,:]*z[p1,:]
+    return z
+
+@njit
+def evalMonomsNumba(x, varNum2varNumParents):
+    if(x.shape[1]==1):
+        return evalMonomsNumba1(x, varNum2varNumParents)
+    else:
+        return evalMonomsNumbaN(x, varNum2varNumParents)

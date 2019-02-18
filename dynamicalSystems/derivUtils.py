@@ -88,6 +88,9 @@ def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:i
 
     n,m = f.shape
 
+    #TODO
+    # Check if derive_by_array is better
+
     if not isMat:
         if __debug__:
             assert m==1, 'only vectors allowed'
@@ -122,32 +125,18 @@ def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:i
 
             pDerivFD[f"{fStr}PDeriv"][:, cCols:cCols + aVal.shape[1]] = aVal
             cCols += aVal.shape[1]
-        
-<<<<<<< HEAD
-        #Create a function for taylor approaximation of degree up to 1,2,3,...,maxdeg
-        totCols = 0
-        for k in range(0,maxTaylorDeg+1):
-            totCols += len(repr.listOfMonomialsPerDeg[k])
-            taylorFD[fStr+"Taylor_to_{0:d".format(k)] = taylorFD[fStr+"Taylor"][:, :totCols] #Matrix
-=======
+
         #Create each taylor expansion of up to degree k
         totCols = 0
         for k in range(0,maxPDerivDeg+1):
             totCols += len( repr.listOfMonomialsPerDeg[k])
-            pDerivFD[f"{fStr}PDeriv_to_{k:d}"] = pDerivFD[f"{fStr}PDeriv"][:,:totCols]
->>>>>>> bcbe9b25a52b8cfdc5eb05aaf68e06fc487ce4cf
+            pDerivFD[f"{fStr}PDeriv_to_{k:d}"] = pDerivFD[f"{fStr}PDeriv"][:,:totCols] #Matrix
 
         # Lambdify all expression
         # TODO check if creating a numba/cython file is more efficient
         tempDict = dict()
-<<<<<<< HEAD
-        for aKey, aVal in taylorFD.items():
-            tempDict[aKey + "_eval"] = sy.lambdify(q, aVal, modules=array2mat)
-=======
-
         for aKey, aVal in pDerivFD.items():
             tempDict[f"{aKey}_eval"] = sy.lambdify(q, aVal, modules=array2mat)
->>>>>>> bcbe9b25a52b8cfdc5eb05aaf68e06fc487ce4cf
 
         pDerivFD.update(tempDict)
     else:
@@ -184,16 +173,17 @@ def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:i
         for k in range(0, maxPDerivDeg + 1):
             totMonoms += len( repr.listOfMonomialsPerDeg[k])
             pDerivFD[f"{fStr}PDeriv_to_{k:d}"] = pDerivFD[f"{fStr}PDeriv"][:totMonoms]
+            pDerivFD[f"{fStr}PDeriv_to_{k:d}_MAT"] = sy.Array.zeros(totMonoms,n,m).as_mutable()#tensor.array.MutableDenseNDimArray.zeros(totMonoms,n,
+            # m)#Array.zeros(totMonoms,n,m)
+            for j,aVal in enumerate(pDerivFD[f"{fStr}PDeriv_to_{k:d}"]):
+                #pDerivFD[f"{fStr}PDeriv_to_{k:d}_MAT"][j,:,:] = aVal #TODO I guess __setitem__ does not support slicing which would really sucks
+                for idxI in range(aVal.shape[0]):
+                    for idxJ in range(aVal.shape[1]):
+                        pDerivFD[f"{fStr}PDeriv_to_{k:d}_MAT"][j, idxI, idxJ] = aVal[idxI, idxJ]
 
         # array2mat = [{'ImmutableDenseMatrix': np.matrix}, 'numpy']
         array2mat = [{'ImmutableDenseMatrix': np.array}, 'numpy']
         # array2mat = ['numpy']
-
-        # Create a function for taylor approaximation of degree up to 1,2,3,...,maxdeg
-        totItems = 0
-        for k in range(0,maxTaylorDeg+1):
-            totCols += len(repr.listOfMonomialsPerDeg[k])
-            taylorFD[fStr+"Taylor_to_{0:d".format(k)] = taylorFD[fStr+"Taylor"][:totCols] #List of matrices
 
         #Lambdify all expression
         #TODO check if creating a numba/cython file is more efficient
@@ -203,5 +193,3 @@ def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:i
         pDerivFD.update(tempDict)
 
     return pDerivFD
-
-

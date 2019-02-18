@@ -16,7 +16,7 @@ class LyapunovFunction():
         self.listOfMonomialsAsInt = self.dynSys.repr.listOfMonomialsAsInt
         self.nMonoms = self.dynSys.repr.nMonoms
         self.idxMat = self.dynSys.repr.idxMat
-        self.self.dynSys.repr = self.dynSys.repr.num2monom
+        self.num2monom = self.dynSys.repr.num2monom
         self.monom2num = self.dynSys.repr.monom2num
         self.refTraj = self.dynSys.ctrlInput.refTraj
     

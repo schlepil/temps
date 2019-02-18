@@ -38,31 +38,35 @@ if __name__ == "__main__":
     pendSys.ctrlInput = dynSys.constraints.boxInputCstrLFBG(polyRelax, refTraj, 1, *getUlims())
     
     # Get a quadratic Lyapunov function, initialize it and perform some simulations
-    lyapF = lyap.quadraticLyapunovFunction(dynSys)
-    lyapF.P, K = lyapF.lqrP(np.identity(2), np.identity(1))
+    lyapF = lyap.quadraticLyapunovFunction(pendSys)
+    lyapF.P, K = lyapF.lqrP(np.identity(2), np.identity(1), refTraj.getX(0.))
+    lyapF.alpha = 1.
 
     lyapF.P = myMath.normalizeEllip(lyapF.P)*5.
     
-    xInit = plot.getV(lyapF.P, lyapF.alpha, endPoint=False)#regular points on surface
+    xInit = plot.getV(lyapF.P, n=10, alpha=lyapF.alpha, endPoint=False)+refTraj.getX(0.)#regular points on surface
     
     ff,aa = plt.subplots(1,2, figsize=[1+2*4,4])
     
-    plot.plotEllipse(aa[0], lyapF.P, 1., faceAlpha=0.)
+    plot.plotEllipse(aa[0], refTraj.getX(0.), lyapF.P, 1., faceAlpha=0.)
     
     #Get the integration function
     #def __call__(self, x:np.ndarray, u_:Union[np.ndarray,Callable], t:float=0., restrictInput:bool=True, mode:List[int]=[0,0], x0:np.ndarray=False):
-    fInt = lambda t, x: pendSys(x, u_=-K, t=t)
+    fInt = lambda t, x: pendSys(x, u_=-K, t=t, x0=refTraj.getX(0.))
     maxStep = 0.1
     
     # Define an end
-    fTerminalConv = lambda t, x: float(lyapF.evalV(x,kd=False))-1e-5
+    fTerminalConv = lambda t, x: float(lyapF.evalV(x.reshape((lyapF.nq,-1))-refTraj.getX(t),kd=False))-1e-5
     fTerminalConv.terminal = True
-    fTerminalDiverge = lambda t, x:float(lyapF.evalV(x, kd=False))-20.
+    fTerminalDiverge = lambda t, x:float(lyapF.evalV(x.reshape((lyapF.nq,-1))-refTraj.getX(t), kd=False))-20.
     fTerminalDiverge.terminal = True
     
     for k in range(xInit.shape[1]):
     
-        sol = solve_ivp(fInt, 2., xInit[:,[k]], events=[fTerminalConv, fTerminalDiverge], vectorized=True, max_step=maxStep)
+        sol = solve_ivp(fInt, [0.,1.], xInit[:,k], events=[fTerminalConv, fTerminalDiverge], vectorized=True, max_step=maxStep)
+
+        aa[0].plot(sol.y[0,:], sol.y[1,:])
+        aa[1].semilogy(sol.t, lyapF.evalV(sol.y-refTraj.getX(sol.t), kd=False))
     
     
     

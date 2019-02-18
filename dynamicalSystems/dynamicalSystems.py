@@ -177,6 +177,7 @@ class secondOrderSys(dynamicalSystem):
         listOfMonomsTaylor_ = []
         for k in range(minDeg,maxDeg+1):
             listOfMonomsTaylor_.extend(self.repr.listOfMonomialsPerDeg[k])
+        nMonomsOffset_ = sum([len(a) for a in self.repr.listOfMonomialsPerDeg[:minDeg]])
         nMonomsTaylor_ = len(listOfMonomsTaylor_)
         
         # return Value
@@ -193,30 +194,32 @@ class secondOrderSys(dynamicalSystem):
         #fTaylor = nmatrix(self.taylorF.fTaylor_eval(*xList)) # Pure np.matrix #TODO search for ways to vectorize
         #MTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorM.MTaylor_eval] #List of matrices #TODO search for ways to vectorize
         #GTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorG.GTaylor_eval] #List of matrices #TODO search for ways to vectorize
-<<<<<<< HEAD
-        identString = "Taylor_to_{0:d}_eval".format(maxDeg)
-        fTaylor = nmatrix(self.taylorF.__dict__["f"+identString])
-        MTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorM.__dict__["M"+identString]]  # List of matrices
-        GTaylor = [nmatrix(aFunc(*xList)) for aFunc in self.taylorG.__dict__["G"+identString]] #List of matrices
-=======
-        
+
         # Compute the taylor only up to the degree needed
-        indexKey = "PDeriv_to_{0:d}_eval".format(maxDeg)
+        # Note that, in order to compute the needed orders (i.e. minDeg>0) we have to compute all
+        # monoms of the original (non-inversed) dynamics
+        indexKey = f"PDeriv_to_{maxDeg:d}_eval"
         fPDeriv = nmatrix(self.pDerivF.__dict__["f"+indexKey](*xList)) # Pure np.matrix #TODO search for ways to vectorize
         MPDeriv = [nmatrix(aFunc(*xList)) for aFunc in self.pDerivM.__dict__["M"+indexKey]] #List of matrices #TODO search for ways to vectorize
         GPDeriv = [nmatrix(aFunc(*xList)) for aFunc in self.pDerivG.__dict__["G"+indexKey]] #List of matrices #TODO search for ways to vectorize
->>>>>>> bcbe9b25a52b8cfdc5eb05aaf68e06fc487ce4cf
+
         
         # Inverse the inertia matrix at the current point
         Mi = nmatrix(inv(MPDeriv[0]))
 
-        #Build up the dict
-        evalDictF = {'M':MPDeriv[0], 'Mi':Mi, 'W':None}
-        #Add the derivative keys (values set later on
-        for aDerivStr,_ in self.inversionTaylor.allDerivs.items():
-            evalDictF[aDerivStr+'M'] = None
-            evalDictF[aDerivStr+'W'] = None
-        
+        ##Build up the dict
+        #evalDictF = {'M':MPDeriv[0], 'Mi':Mi, 'W':None}
+        ##Add the derivative keys (values set later on)
+        #for aDerivStr,_ in self.inversionTaylor.allDerivs.items():
+        #    evalDictF[aDerivStr+'M'] = None
+        #    evalDictF[aDerivStr+'W'] = None
+
+        evalDictF = {}.fromkeys( ichain.from_iterable( [[aDerivStr+'M', aDerivStr+'W'] for aDerivStr in self.inversionTaylor.allDerivs.keys()] ) )
+        evalDictF['M'] = MPDeriv[0]
+        evalDictF['Mi'] = Mi
+        evalDictF['W'] = None
+
+
         evalDictG = evalDictF.copy()
         
         evalDictF['W'] = nmatrix(fPDeriv[:,[0]])
@@ -228,7 +231,7 @@ class secondOrderSys(dynamicalSystem):
         funcStrings_ = self.inversionTaylor.funcstr
         eDict_ = {}
 
-        derivVarAsInt = nzeros((maxDeg,),dtype=nintu)
+        derivVarAsInt = nzeros((self.maxTaylorDeg,),dtype=nintu) #Initialize all unused derivatives to zero
 
         for k,aMonom in enumerate(listOfMonomsTaylor_):
             idxC = 0
@@ -251,7 +254,6 @@ class secondOrderSys(dynamicalSystem):
                 idxDict[aKey] = monom2num_[tmpVal]
             
             # Now we have the correct id associated to each derivative
-            # TODO here we simply calculate all, even the ones that are not used, ie the degree of the current monome is smaller than the maximal degree
 
             # Set up the two dicts
             for idxKey,idxVal in idxDict.items():
@@ -267,8 +269,8 @@ class secondOrderSys(dynamicalSystem):
             MiGTaylor[k,self.nqp:,:] = eval(thisFuncString,eDict_,evalDictG)
             
         # Do the weighting to go from partial derivs to taylor
-        nmultiply(MifTaylor, self.inversionTaylor.weightingMonoms, out=MifTaylor)
-        nmultiply(MiGTaylor,self.inversionTaylor.weightingMonoms3d,out=MiGTaylor)
+        nmultiply(MifTaylor, self.inversionTaylor.weightingMonoms[nMonomsOffset_:nMonomsOffset_+nMonomsTaylor_], out=MifTaylor)
+        nmultiply(MiGTaylor,self.inversionTaylor.weightingMonoms3d[nMonomsOffset_:nMonomsOffset_+nMonomsTaylor_, :, :],out=MiGTaylor)
         #Done
         return MifTaylor, MiGTaylor
     
@@ -293,7 +295,7 @@ class secondOrderSys(dynamicalSystem):
             u = u_(x,t)
         elif u_.shape == (self.nu, self.nq):
             #This is actually a feedback matrix
-            u = ndot(u_,x)
+            u = ndot(u_,x-x0)
         else:
             # Its an actual control input
             u=u_
@@ -315,22 +317,51 @@ class secondOrderSys(dynamicalSystem):
             if mode[0] == 0:
                 # This is a bit inconvenient as we have to solve twice with different approx of the mass matrix
                 # System dynamics
-                Mi = self.pDerivM.M0_eval(*xL)
-                F = self.pDerivM.f0_eval(*xL)
-                
-                xd[self.nqp:, 0] = ssolve(Mi, F, assume_a='pos')  # Mass matrix is positive definite
+                Mi = self.pDerivM.M0_eval[0](*xL)
+                F = self.pDerivF.f0_eval(*xL)
+            elif mode[0] <= self.maxTaylorDeg:
+                # Get partial derivs
+                indexKey = f"PDeriv_to_{mode[0]:d}_eval"
+                fPDeriv = self.pDerivF.__dict__[f"f{indexKey}"](*xL)  # Pure np.matrix #TODO search for ways to vectorize
+                MPDeriv = self.pDerivM.__dict__[f"M{indexKey}"](*xL)
+
+                # Partial derivs to evaluated Taylor
+                z = self.repr.evalAllMonoms(x, mode[0])
+                # multiply with weights
+                z *= self.inversionTaylor.weightingMonoms[:z.size]
+                # (broadcast) multiply and sum up and contract
+                F = nsum(nmultiply(fPDeriv, z), axis=1, keepdims=True)
+                Mi = nsum(nmultiply(MPDeriv, np.transpose(np.broadcast_to(z, (self.nqv, self.nqv, z.size)), (2, 1, 0))), axis=0)
+
             else:
                 # todo write a efficient function to evaluate all monomials
                 raise NotImplementedError
-            
+
+            # Get the velocity induced by the system dynamics
+            xd[self.nqp:, 0] = ssolve(Mi, F, assume_a='pos')  # Mass matrix is positive definite
+
+
             if mode[1] == 0:
-                Mi = self.pDerivM.M0_eval(*xL)
-                G = self.pDerivM.G0_eval(*xL)
-                
-                # Add input dependent part
-                xd[self.nqp:,0] += ssolve(Mi, ndot(G,u), assume_a='pos')# Mass matrix is positive definite
+                Mi = self.pDerivM.M0_eval[0](*xL)
+                G = self.pDerivG.G0_eval[0](*xL)
+            elif mode[1] <= self.maxTaylorDeg:
+                # Get partial derivs
+                indexKey = f"PDeriv_to_{mode[1]:d}_MAT_eval"
+                GPDeriv = self.pDerivG.__dict__[f"G{indexKey}"](*xL)  # Pure np.matrix #TODO search for ways to vectorize
+                MPDeriv = self.pDerivM.__dict__[f"M{indexKey}"](*xL)
+
+                # Partial derivs to evaluated Taylor
+                z = self.repr.evalAllMonoms(x, mode[1])
+                # multiply with weights
+                z *= self.inversionTaylor.weightingMonoms[:z.size]
+                # (broadcast) multiply and sum up and contract
+                Mi = nsum(nmultiply(MPDeriv, np.transpose(np.broadcast_to(z, (self.nqv, self.nqv, z.size)), (2, 1, 0))), axis=0)
+                G = nsum(nmultiply(GPDeriv, np.transpose(np.broadcast_to(z, (self.nu, self.nq, z.size)), (2, 1, 0))), axis=0)
             else:
                 raise NotImplementedError
+
+            # Add input dependent part
+            xd[self.nqp:, [0]] += ssolve(Mi, ndot(G, u), assume_a='pos')  # Mass matrix is positive definite
                 
         else:
             raise NotImplementedError

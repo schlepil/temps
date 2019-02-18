@@ -13,9 +13,9 @@ class referenceTrajectory:
         return self.getX(t, doRestrict),self.getDX(t, doRestrict),self.getU(t, doRestrict)
     def checkTime(self,t,restrict=True):
         if __debug__:
-            if t>self.tLims[1]:
+            if nany(t>self.tLims[1]):
                 print("time larger then final time")
-            if t<self.tLims[0]:
+            if nany(t<self.tLims[0]):
                 print("time smaller then start time")
         if restrict:
             t = nminimum(self.tLims[1], nmaximum(self.tLims[0],t))
