@@ -1,3 +1,3 @@
 from dynamicalSystems.dynamicalSystems import *
 import dynamicalSystems.derivUtils
-from dynamicalSystems.inputs import *
+import dynamicalSystems.inputs as constraints

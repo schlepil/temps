@@ -1,10 +1,13 @@
 from coreUtils import *
 from dynamicalSystems.inputs_numba import *
+from trajectories import *
 
+from polynomial import polynomialRepr
 
 class inputConstraints:
-    def __init__(self):
-        pass
+    def __init__(self, repr:polynomialRepr, refTraj:referenceTrajectory, nu:int):
+        self.repr = repr
+        self.refTraj = refTraj
     
     def getMinU(self, *args, **kwargs):
         raise NotImplementedError
@@ -21,7 +24,7 @@ class inputConstraints:
         raise NotImplementedError
     
 class boxInputCstr(inputConstraints):
-    def __init__(self,nu,limL=None,limU=None):
+    def __init__(self, repr:polynomialRepr, refTraj:referenceTrajectory, nu:int,limL=None,limU=None):
         """
         Class implementing input constraints
         Box constraints limit the inputs to a hyperrectangle
@@ -29,9 +32,7 @@ class boxInputCstr(inputConstraints):
         :param limL:
         :param limU:
         """
-        super(boxInputCstr,self).__init__()
-        
-        self.nu = nu
+        super(boxInputCstr,self).__init__(repr,refTraj,nu)
         
         self.limLCall = hasattr(limL,"__call__")
         self.limUCall = hasattr(limU,"__call__")
@@ -62,8 +63,8 @@ class boxInputCstr(inputConstraints):
         return self.thisLimU
     #######################
     
-    def getU(self,idx:np.ndarray,t=0.,uRef=None, idxU=None):
-        # Get optimal input encoded by index vector thisInd
+    def getU(self,idx:np.ndarray,t=0.,uRef=None,uOut=None, monomOut=False, *args, **kwargs):
+        # Get optimal input encoded by index vector idx
         # 1 is maximum input
         # 0 is reference input (must be given if occuring!
         # -1 is minimal input
@@ -72,9 +73,12 @@ class boxInputCstr(inputConstraints):
             assert idx.dtype in (nintu,nint)
             assert len(idx.shape) == 1
             assert (uRef is not None) and (not np.any(idx==0))
-            assert (idxU is None) or (idxU.shape == (self.nu,1))
+            assert (uOut is None) or (uOut.shape == (self.nu,1))
         
-        idxU = np.zeros((self.nu,1)) if idxU is None else idxU
+        uOut = np.zeros((self.nu,1)) if uOut is None else uOut
+        
+        if (uRef is None) and (nany(idx==0)):
+            uRef = self.refTraj.getU(t)
         
         #set up new limits
         if self.limLCall:
@@ -82,12 +86,14 @@ class boxInputCstr(inputConstraints):
         if self.limUCall:
             self.thisLimU = self.limU(t)
             
-        setIdxNumba(idx, idxU, self.thisLimL, self.thisLimU, uRef)
-        
-        return idxU
+        setIdxNumba(idx,uOut,self.thisLimL,self.thisLimU,uRef)
+        if not monomOut:
+            return uOut
+        else:
+            return uOut,self.repr.varNumsPerDeg[0]
     
     #######################
-    def __call__(self,inputNonCstr,t=0):
+    def __call__(self,inputNonCstr,t:float=0.):
         # Limit given input array
         t = np.array(t)
         if t.size == 1:
@@ -139,6 +145,80 @@ class boxInputCstrNoised(boxInputCstr):
         if limLUisNone[1]:
             self.limU[nuCtrl:,0] *= -1.
             self.thislimU = self.limU
+
+class boxInputCstrLFBG(boxInputCstr):
+    """
+    Class implementing box constraint input with partially linear feedback control
+    """
+    
+    def __init__(self, repr:polynomialRepr, refTraj:referenceTrajectory, nu:int, limL=None, limU=None):
+        super(boxInputCstrLFBG, self).__init__(repr, refTraj, nu,limL,limU)
+    
+    
+    def getU(self,idx:np.ndarray,t=0.,uRef:np.ndarray=None,uOut:np.ndarray=None, P:np.ndarray=None, PG0:np.ndarray=None, alpha:float=None, monomOut=False, *args, **kwargs):
+        """
+        Computes the optimal bang-bang control or the optimal and scaled linear feedback law
+        We define:
+        # Get optimal input encoded by index vector idx
+        # 2 is linear feedback
+        # 1 is maximum input
+        # 0 is reference input (must be given if occuring!
+        # -1 is minimal input
+        :param idx:
+        :param t:
+        :param uRef:
+        :param uOut:
+        :param PG0:
+        :return:
+        """
+        
+        if __debug__:
+            assert (P is None) or (P.shape[0]==P.shape[1])
+            assert ((P is None) and (PG0 is None)) or ((P is not None) and (PG0 is not None))
+            assert np.all(idx<2) or (PG0 is not None)
+            assert (alpha is None) or (alpha > 0.)
+            
+        nq = 0 if PG0 is None else PG0.shape[1]
+        
+        #First column of uout is
+        uOut = np.zeros((self.nu,1+nq)) if uOut is None else uOut
+        
+        if uRef is None:
+            uRef = self.refTraj.getU(t)
+        
+        if __debug__:
+            assert uOut.shape[1] == 1+nq
+
+        # First get the bang bang optimal control
+        # This also computes the current lower and upper bound
+        uOut[:,[0]] = super(boxInputCstr,self).getU(idx,t,uRef)
+        
+        #Check if linear feedback control is needed
+        # Omega is defined as x'.P.x <= alpha
+        # The separating hyperplanes are stored in PG0 (the ith column vector corresponds to the ith hyperplane
+        for k,aIdx in enumerate(idx):
+            if aIdx==2:
+                # Linear feedback is demanded for this input
+                # smallest allowable abs input
+                if __debug__:
+                    assert self.thisLimL[k,0] <= uRef[k,0] <= self.thisLimU[k,0]
+                uMaxAbsK = min(uRef[k,0]-self.thisLimL[k,0],self.thisLimU[k,0]-uRef[k,0])
+                ki = -PG0[:,[k]].T/nnorm(PG0[:,k],ord=2,axis=0)#normalise
+                #scale such that uOut[k] never exceeds limits
+                ki *= uMaxAbsK*(ndot(ki.T,P,ki)/alpha)**.5
+                uOut[k,0]=uRef[k,0]
+                uOut[[k],1:]=ki
+
+        if not monomOut:
+            return uOut
+        else:
+            return uOut, np.hstack(self.repr.varNumsPerDeg[:2])
+
+
+                
+        
+    
+    
             
         
         

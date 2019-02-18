@@ -79,6 +79,7 @@ def int2list(aInt: int,nVars: int,digits: int = 1,out: np.ndarray = None) -> np.
 # idxParent, idxVar = getIdxAndParent(aMonom, self.repr.listOfMonomialsPerDeg[k-1], digits)
 @njit
 def getIdxAndParent(aMonom: int,aMonomList: narray,nVars: int,digits: int):
+    
     if __debug__: #numba .43
         assert isinstance(aMonom,(int, nint, nintu))
         assert isinstance(aMonomList,np.ndarray)
@@ -111,5 +112,18 @@ def polyMul(c0,c1,idxMat):
             for j,ac1 in enumerate(c1):
                 if ac1!=0:
                     cp[idxMat[i,j]] += ac0*ac1
+    
+    return cp
+
+
+@njit
+def polyMulExp(c0,c1,cout,idxMat,idxMax0,idxMax1):
+    
+    # Loop
+    for i,ac0 in enumerate(c0[:idxMax0]):
+        if ac0 != 0.:
+            for j,ac1 in enumerate(c1[idxMax1]):
+                if ac1 != 0:
+                    cout[idxMat[i,j]] += ac0*ac1
     
     return cp
