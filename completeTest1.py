@@ -44,7 +44,7 @@ if __name__ == "__main__":
 
     lyapF.P = myMath.normalizeEllip(lyapF.P)*5.
     
-    xInit = plot.getV(lyapF.P, n=10, alpha=lyapF.alpha, endPoint=False)+refTraj.getX(0.)#regular points on surface
+    xInit = plot.getV(lyapF.P, n=30, alpha=lyapF.alpha, endPoint=False)+refTraj.getX(0.)#regular points on surface
     
     ff,aa = plt.subplots(1,2, figsize=[1+2*4,4])
     
@@ -65,8 +65,11 @@ if __name__ == "__main__":
     
         sol = solve_ivp(fInt, [0.,1.], xInit[:,k], events=[fTerminalConv, fTerminalDiverge], vectorized=True, max_step=maxStep)
 
-        aa[0].plot(sol.y[0,:], sol.y[1,:])
-        aa[1].semilogy(sol.t, lyapF.evalV(sol.y-refTraj.getX(sol.t), kd=False))
+        aa[0].plot(sol.y[0,:], sol.y[1,:], 'k')
+        aa[1].semilogy(sol.t, lyapF.evalV(sol.y-refTraj.getX(sol.t), kd=False), 'k')
+    
+    
+    # Build up the optimization problem
     
     
     
