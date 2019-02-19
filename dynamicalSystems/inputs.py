@@ -8,6 +8,7 @@ class inputConstraints:
     def __init__(self, repr:polynomialRepr, refTraj:referenceTrajectory, nu:int):
         self.repr = repr
         self.refTraj = refTraj
+        self.nu = nu
     
     def getMinU(self, *args, **kwargs):
         raise NotImplementedError
@@ -155,7 +156,8 @@ class boxInputCstrLFBG(boxInputCstr):
         super(boxInputCstrLFBG, self).__init__(repr, refTraj, nu,limL,limU)
     
     
-    def getU(self,idx:np.ndarray,t=0.,uRef:np.ndarray=None,uOut:np.ndarray=None, P:np.ndarray=None, PG0:np.ndarray=None, alpha:float=None, monomOut=False, *args, **kwargs):
+    def getU(self,idx:np.ndarray,t=0.,uRef:np.ndarray=None,uOut:np.ndarray=None, P:np.ndarray=None, PG0:np.ndarray=None, alpha:float=None,
+             monomOut=False, scale:float=1., *args, **kwargs):
         """
         Computes the optimal bang-bang control or the optimal and scaled linear feedback law
         We define:
@@ -169,6 +171,7 @@ class boxInputCstrLFBG(boxInputCstr):
         :param uRef:
         :param uOut:
         :param PG0:
+        :param scale:
         :return:
         """
         
@@ -191,7 +194,7 @@ class boxInputCstrLFBG(boxInputCstr):
 
         # First get the bang bang optimal control
         # This also computes the current lower and upper bound
-        uOut[:,[0]] = super(boxInputCstr,self).getU(idx,t,uRef)
+        uOut[:,[0]] = super(type(self),self).getU(idx,t,uRef)
         
         #Check if linear feedback control is needed
         # Omega is defined as x'.P.x <= alpha
@@ -203,16 +206,16 @@ class boxInputCstrLFBG(boxInputCstr):
                 if __debug__:
                     assert self.thisLimL[k,0] <= uRef[k,0] <= self.thisLimU[k,0]
                 uMaxAbsK = min(uRef[k,0]-self.thisLimL[k,0],self.thisLimU[k,0]-uRef[k,0])
-                ki = -PG0[:,[k]].T/nnorm(PG0[:,k],ord=2,axis=0)#normalise
+                ki = -PG0[:,[k]].T/norm(PG0[:,k],ord=2,axis=0)#normalise
                 #scale such that uOut[k] never exceeds limits
-                ki *= uMaxAbsK*(ndot(ki.T,P,ki)/alpha)**.5
+                ki *= uMaxAbsK*(mndot([ki,P,ki.T])/alpha)**.5
                 uOut[k,0]=uRef[k,0]
                 uOut[[k],1:]=ki
 
         if not monomOut:
-            return uOut
+            return uOut*scale
         else:
-            return uOut, np.hstack(self.repr.varNumsPerDeg[:2])
+            return uOut*scale, self.repr.varNumsUpToDeg[1]
 
 
                 

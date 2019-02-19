@@ -3,7 +3,7 @@ from polynomial.utils import *
 
 from multivar_horner.multivar_horner import MultivarPolynomial, HornerMultivarPolynomial
 
-class polynomials():
+class polynomial():
     def __init__(self, repr:polynomialRepr, coeffs:np.ndarray=None, alwaysFull:bool=True):
         
         self.repr = repr
@@ -29,10 +29,10 @@ class polynomials():
 
     
     def __copy__(self):
-        return polynomials(self.repr, np.copy(self._coeffs), self._alwaysFull)
+        return polynomial(self.repr, np.copy(self._coeffs), self._alwaysFull)
     
     def __deepcopy__(self, memodict={}):
-        return polynomials(dp(self.repr, memodict), np.copy(self._coeffs), cp(self._alwaysFull))
+        return polynomial(dp(self.repr, memodict), np.copy(self._coeffs), cp(self._alwaysFull))
     
     @property
     def coeffs(self):
@@ -46,19 +46,19 @@ class polynomials():
             print("Could not be converted -> skip")
         self._coeffs.setflags(write=False)
         # Update degree
-        self.maxDeg = self.getMaxDegre() #monomial are of ascending degree -> last nonzero coeff determines degree
+        self.maxDeg = self.getMaxDegree() #monomial are of ascending degree -> last nonzero coeff determines degree
         self._isUpdate = False
     
     
     def __add__(self, other):
         if __debug__:
-            assert isinstance(other, polynomials)
+            assert isinstance(other, polynomial)
             assert self.repr == other.repr
-        return polynomials(self.repr, self._coeffs+other._coeffs,alwaysFull=self._alwaysFull)
+        return polynomial(self.repr, self._coeffs + other._coeffs, alwaysFull=self._alwaysFull)
     
     def __iadd__(self, other):
         if __debug__:
-            assert isinstance(other, polynomials)
+            assert isinstance(other, polynomial)
             assert self.repr == other.repr
         self._coeffs+=other._coeffs
         self.maxDeg=self.getMaxDegree()
@@ -66,32 +66,32 @@ class polynomials():
     
     def __sub__(self, other):
         if __debug__:
-            assert isinstance(other, polynomials)
+            assert isinstance(other, polynomial)
             assert self.repr == other.repr
-        return polynomials(self.repr, self._coeffs-other._coeffs, alwaysFull=self._alwaysFull)
+        return polynomial(self.repr, self._coeffs - other._coeffs, alwaysFull=self._alwaysFull)
     
     def __isub__(self, other):
         if __debug__:
-            assert isinstance(other, polynomials)
+            assert isinstance(other, polynomial)
             assert self.repr == other.repr
         self._coeffs-=other._coeffs
         self.maxDeg=self.getMaxDegree()
         return None
     
     def __neg__(self):
-        return polynomials(self.repr,-self._coeffs,alwaysFull=self._alwaysFull)
+        return polynomial(self.repr, -self._coeffs, alwaysFull=self._alwaysFull)
     
     def __mul__(self, other):
         if isinstance(other, (float,int)):
-            return polynomials(self.repr,float(other)*self._coeffs,alwaysFull=self._alwaysFull)
+            return polynomial(self.repr, float(other) * self._coeffs, alwaysFull=self._alwaysFull)
         else:
             if __debug__:
-                assert isinstance(other, polynomials)
+                assert isinstance(other, polynomial)
                 assert self.repr == other.repr
                 assert self.maxDeg+other.maxDeg<=self.repr.maxDeg
             
             c = polyMul(self._coeffs, other._coeffs, self.repr.idxMat)
-            return polynomials(self.repr, c, alwaysFull=self._alwaysFull)
+            return polynomial(self.repr, c, alwaysFull=self._alwaysFull)
     
     def __rmul__(self, other):
         # Commute
@@ -102,7 +102,7 @@ class polynomials():
             self._coeffs *= float(other)
         else:
             if __debug__:
-                assert isinstance(other,polynomials)
+                assert isinstance(other, polynomial)
                 assert self.repr == other.repr
                 assert self.maxDeg+other.maxDeg <= self.repr.maxDeg
         
@@ -126,7 +126,12 @@ class polynomials():
         self.maxDeg=self.getMaxDegree()
 
     def getMaxDegree(self):
-        return self.repr.listOfMonomials[int(np.argwhere(self._coeffs != 0.)[-1])].sum()
+        try:
+            return self.repr.listOfMonomials[int(np.argwhere(self._coeffs != 0.)[-1])].sum()
+        except IndexError:
+            #all zero
+            return 0
+
 
     def computeInternal(self, full:bool=False):
         # This computes and stores the horner scheme
@@ -164,4 +169,12 @@ class polynomials():
             self.computeInternal()
         
         return self._evalPoly.eval(x)
+
+    def eval2(self, x:np.array):
+        assert self._coeffs.size == self.repr.nMonoms
+
+        coeffsEval = np.reshape(self._coeffs, (1,self.repr.nMonoms))[[0],:self.repr.varNumsUpToDeg[self.maxDeg].size]
+
+        return ndot(coeffsEval, evalMonomsNumba(x, self.repr.varNum2varNumParents[:self.repr.varNumsUpToDeg[self.maxDeg].size,:]))
+
         

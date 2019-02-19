@@ -14,7 +14,7 @@ def funcTestBase(nDims, maxDeg):
     coeffs = nzeros((thisRepr.nMonoms,),dtype=nfloat)
     coeffs[0] = 1.1
     coeffs[1] = 2.2
-    thisPoly = polynomials(thisRepr, coeffs)
+    thisPoly = polynomial(thisRepr, coeffs)
 
     thisPolyCstr = lasserreConstraint(thisRelax, thisPoly)
 
@@ -34,7 +34,7 @@ def funcTestFirstOpt(relaxOrder=4):
     coeffs[0] = 1.
     coeffs[3] = -1.
     coeffs[5] = -1.
-    thisPoly = polynomials(thisRepr,coeffs)
+    thisPoly = polynomial(thisRepr, coeffs)
     thisPolyCstr = lasserreConstraint(thisRelax,thisPoly)
     
     #objective 1 : convex
@@ -42,11 +42,11 @@ def funcTestFirstOpt(relaxOrder=4):
     coeffs = nzeros((thisRepr.nMonoms,),dtype=nfloat)
     coeffs[0] = 1.
     coeffs[1] = 1.
-    obj1 = polynomials(thisRepr, np.copy(coeffs))
+    obj1 = polynomial(thisRepr, np.copy(coeffs))
     coeffs = nzeros((thisRepr.nMonoms,),dtype=nfloat)
     coeffs[0] = 1.
     coeffs[2] = 1.
-    obj2 = polynomials(thisRepr,np.copy(coeffs))
+    obj2 = polynomial(thisRepr, np.copy(coeffs))
     
     obj = obj1**2+obj2**2
     

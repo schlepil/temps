@@ -37,6 +37,7 @@ from numpy import int_ as nintu
 from scipy import sparse
 
 from scipy.linalg import eig,eigh,cholesky,lstsq,eigvals,eigvalsh,inv,det
+from scipy.linalg import norm
 from scipy.linalg import solve as ssolve
 
 from typing import List, Tuple, Callable, Union, Iterable

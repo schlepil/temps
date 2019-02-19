@@ -2,6 +2,7 @@ from coreUtils import *
 from polynomial import *
 from dynamicalSystems import dynamicalSystem
 
+from itertools import product
 
 class LyapunovFunction():
     

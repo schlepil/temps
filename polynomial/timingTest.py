@@ -94,7 +94,7 @@ import time
 
 def funcEval(nDims, maxDegree):
     thisRepr = polynomialRepr(nDims,maxDegree)
-    thisPoly = polynomials(thisRepr, np.random.rand(thisRepr.nMonoms,)-.5)
+    thisPoly = polynomial(thisRepr, np.random.rand(thisRepr.nMonoms,)-.5)
     
     C = np.random.rand(nDims,nDims)-.5
     C = ndot(C,C.T)+np.identity(nDims, nfloat)*.1
@@ -114,7 +114,7 @@ def funcEval(nDims, maxDegree):
 
 def getPoly(nDims, maxDegree):
     thisRepr = polynomialRepr(nDims,maxDegree)
-    thisPoly = polynomials(thisRepr,np.random.rand(thisRepr.nMonoms,)-.5)
+    thisPoly = polynomial(thisRepr,np.random.rand(thisRepr.nMonoms,)-.5)
 
     C = np.random.rand(nDims,nDims)-.5
     C = ndot(C,C.T)+np.identity(nDims,nfloat)*.1

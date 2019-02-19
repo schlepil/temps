@@ -134,7 +134,7 @@ class lasserreRelax:
 
 
 class lasserreConstraint:
-    def __init__(self, baseRelax:lasserreRelax, poly:polynomials, nRelax:int=None):
+    def __init__(self, baseRelax:lasserreRelax, poly:polynomial, nRelax:int=None):
         assert poly.getMaxDegree()<poly.repr.maxDeg, "Increase relaxation order of the base relaxation"
         assert (nRelax is None) or ((poly.maxDeg+nRelax) <= poly.repr.maxDeg), "Decrease relaxation order of this constraint"
         assert poly.getMaxDegree() < baseRelax.maxDeg, "Inconsistent"

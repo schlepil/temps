@@ -110,6 +110,10 @@ class secondOrderSys(dynamicalSystem):
             self.fromFile(file)
 
         return None
+
+    @classmethod
+    def fromFileOrDict(cls, repr:polynomialRepr, fileOrDict:Union[str,dict]):
+        raise NotImplementedError
     
     def compPderivAndTaylor(self):
         from math import factorial

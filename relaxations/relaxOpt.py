@@ -7,7 +7,7 @@ from relaxations.optUtils import *
 
 class convexProg():
 
-    def __init__(self, repr:polynomialRepr, solver:str='cvxopt', objective:polynomials=None, firstVarIsOne:bool=True):
+    def __init__(self, repr:polynomialRepr, solver:str='cvxopt', objective:polynomial=None, firstVarIsOne:bool=True):
 
         assert solver in ['cvxopt'], 'Solver not supported'
         assert (objective is None) or (repr is objective.repr)
@@ -15,7 +15,7 @@ class convexProg():
         self.solver = solver
         self.repr = repr
         self.constraints=variableStruct(l=variableStruct(nCstr=0, cstrList=[]),q=variableStruct(nCstr=0, cstrList=[]),s=variableStruct(nCstr=0, cstrList=[]),eq=variableStruct(nCstr=0, cstrList=[]))
-        self.__objective = polynomials(repr) if objective is None else objective
+        self.__objective = polynomial(repr) if objective is None else objective
         
         self.firstVarIsOne = firstVarIsOne
 
@@ -27,7 +27,7 @@ class convexProg():
         return self.__objective
     @objective.setter
     def objective(self,new):
-        if isinstance(new, polynomials):
+        if isinstance(new, polynomial):
             self.__objective = new
         elif isinstance(new, np.ndarray):
             self.__objective.coeffs = new
