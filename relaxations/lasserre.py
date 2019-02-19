@@ -135,6 +135,15 @@ class lasserreRelax:
 
 class lasserreConstraint:
     def __init__(self, baseRelax:lasserreRelax, poly:polynomial, nRelax:int=None):
+        """
+        This constraint relaxes the actual constraint
+        g(x)>=0.
+        
+        :param baseRelax:
+        :param poly:
+        :param nRelax:
+        """
+        
         assert poly.getMaxDegree()<poly.repr.maxDeg, "Increase relaxation order of the base relaxation"
         assert (nRelax is None) or ((poly.maxDeg+nRelax) <= poly.repr.maxDeg), "Decrease relaxation order of this constraint"
         assert poly.getMaxDegree() < baseRelax.maxDeg, "Inconsistent"
@@ -161,13 +170,9 @@ class lasserreConstraint:
 
         self.cstrMatDef = variableStruct(firstIdxPerK=[0], posInCMat=[], whichCoeff=[])
 
-        maxIdxPoly = 0
-        for k in range(self.polyDeg+1):
-            maxIdxPoly += len(self.baseRelax.repr.listOfMonomialsPerDeg[k])
+        maxIdxPoly = self.repr.varNumsUpToDeg[self.polyDeg].size
 
-        maxIdxRelax = 0
-        for k in range(self.nRelax//2+1):
-            maxIdxRelax += len(self.baseRelax.repr.listOfMonomialsPerDeg[k])
+        maxIdxRelax = self.repr.varNumsUpToDeg[self.nRelax//2].size
 
         cstrMonoms = self.listOfMonomialsAsInt[:maxIdxRelax]
         cstrMatRelax = cstrMonoms.reshape((-1,1))+cstrMonoms.reshape((1,-1))

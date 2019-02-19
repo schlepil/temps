@@ -130,6 +130,28 @@ def polyMulExp(c0,c1,cout,idxMat,idxMax0,idxMax1):
     
     return cp
 
+# self.coeffs = quadraticForm_Numba(Q,qMonoms, h, hMonom, self.repr.idxMat, np.zeros((self.repr.nMonoms,), dtype=nfloat))
+@njit
+def quadraticForm_Numba(Q,qMonoms, h, hMonom, idxMat, coeffsOut):
+    """
+    Here no special form is assumed for Q
+    :param Q:
+    :param qMonoms:
+    :param h:
+    :param hMonom:
+    :param idxMat:
+    :param coeffsOut:
+    :return:
+    """
+    
+    coeffsOut[hMonom] += h
+    
+    for i,imonom in enumerate(qMonoms):
+        for j, jmonom in enumerate(qMonoms):
+            coeffsOut[idxMat[imonom,jmonom]] += Q[i,j]
+    
+    return coeffsOut
+
 
 @njit
 def evalMonomsNumba1(x, varNum2varNumParents):

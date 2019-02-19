@@ -181,7 +181,7 @@ class boxInputCstrLFBG(boxInputCstr):
             assert np.all(idx<2) or (PG0 is not None)
             assert (alpha is None) or (alpha > 0.)
             
-        nq = 0 if PG0 is None else PG0.shape[1]
+        nq = 0 if PG0 is None else P.shape[0]
         
         #First column of uout is
         uOut = np.zeros((self.nu,1+nq)) if uOut is None else uOut
@@ -211,11 +211,14 @@ class boxInputCstrLFBG(boxInputCstr):
                 ki *= uMaxAbsK*(mndot([ki,P,ki.T])/alpha)**.5
                 uOut[k,0]=uRef[k,0]
                 uOut[[k],1:]=ki
+        
+        if nq != 0:
+            uOut[:,1:]*=scale
 
         if not monomOut:
-            return uOut*scale
+            return uOut
         else:
-            return uOut*scale, self.repr.varNumsUpToDeg[1]
+            return uOut, self.repr.varNumsUpToDeg[0 if nq==0 else 1]
 
 
                 

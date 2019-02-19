@@ -11,7 +11,7 @@ class polynomial():
         self._isUpdate=False
         
         if coeffs is None:
-            self._coeffs = np.zeros((self.repr.nMonoms,), dtype=nfloat)
+            self._coeffs = nzeros((self.repr.nMonoms,), dtype=nfloat)
         else:
             # Must be convertible
             self._coeffs = narray(coeffs).astype(nfloat).reshape((self.repr.nMonoms,))
@@ -163,6 +163,14 @@ class polynomial():
 
         self._evalPoly = MultivarPolynomial(thisCoeffs,thisExp)
         self._isUpdate = True
+        
+    def setQuadraticForm(self, Q:np.ndarray, qMonoms:np.ndarray=None, h=None, hMonoms=None):
+        if __debug__:
+            assert ((qMonoms is None) and (h is None) and (hMonoms is None)) or ((qMonoms is not None) and (h is not None) and (hMonoms is not None))
+            assert Q.shape[0] == Q.shape[1]
+        
+        qMonoms = self.repr.varNums[:Q.shape[0]] if qMonoms is None else qMonoms
+        self.coeffs = quadraticForm_Numba(Q,qMonoms, h, hMonoms, self.repr.idxMat, np.zeros((self.repr.nMonoms,), dtype=nfloat))
     
     def eval(self, x:np.array):
         if not self._isUpdate:

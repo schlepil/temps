@@ -17,7 +17,8 @@ if __name__ == "__main__":
     from plotting import plt
     
     # Get the polynomial representation which also decides on the maximal relaxation
-    thisRepr = poly.polynomialRepr(2, 4)
+    # Let use full here
+    thisRepr = poly.polynomialRepr(2, 6)
     
     #Get the dynamical system
     pendSys = getSys(thisRepr, fileName=None)#"~/tmp/pendulumDict.pickle")
@@ -76,31 +77,50 @@ if __name__ == "__main__":
     fTaylorX0, gTaylorX0 = pendSys.getTaylorApprox(refTraj.getX(0.), 3)
 
     #Constraint
-    polyCstr = poly.polynomial(thisRepr)
-    polyCstr.coeffs = lyapF.getCstrWithDeg(gTaylorX0, 3, 3)
+    cstrPolySep = poly.polynomial(thisRepr)
+    cstrPolySep.coeffs = lyapF.getCstrWithDeg(gTaylorX0, 3, 3)
 
     #Objective
     uCtrlStar = np.array([[1.]]) #Normalized input
     uMonomStar = thisRepr.varNumsUpToDeg[0]
-    objectArrayStr = lyapF.getObjectiveAsArray(fTaylorX0, gTaylorX0, taylorDeg=3, u=uCtrlStar, uMonom=uMonomStar )
+    objectArrayStar = lyapF.getObjectiveAsArray(fTaylorX0, gTaylorX0, taylorDeg=3, u=uCtrlStar, uMonom=uMonomStar)
 
     uCtrlLin, uMonomLin = pendSys.ctrlInput.getU(narray([2]), 0., P = lyapF.P, PG0 = ndot(lyapF.P_, gTaylorX0[0,:,:]), alpha=lyapF.alpha,
                                                  monomOut=True)
-    objectArrayLin = lyapF.getObjectiveAsArray(fTaylorX0, gTaylorX0, taylorDeg=3, u=uCtrlLin, uMonoms=uMonomLin)
-
-
-    Ngrid = 100
+    objectArrayLin = lyapF.getObjectiveAsArray(fTaylorX0, gTaylorX0, taylorDeg=3, u=uCtrlLin, uMonom=uMonomLin)
+    
+    Ngrid = 200
     plot.plotEllipse(aa[0], refTraj.getX(0.), lyapF.P, 1., faceAlpha=0.)
     aa[0].autoscale()
     xx,yy = plot.ax2Grid(aa[0], Ngrid)
     XX = np.vstack((xx.flatten(), yy.flatten()))
-    valCstr = polyCstr.eval2(XX-refTraj.getX(0.))
+    valCstr = cstrPolySep.eval2(XX-refTraj.getX(0.))
     aa[0].contour(xx,yy, valCstr.reshape((Ngrid,Ngrid)), [0.])
+
+    # Evaluate the norm of the control input
+    uNorm = ndot(uCtrlLin, np.vstack((np.zeros((1,XX.shape[1])), XX-refTraj.getX(0.)))).flatten()
+    plot.plotEllipse(aa[1], refTraj.getX(0.), lyapF.P, 1., faceAlpha=0.)
+    aa[1].contourf(xx,yy,uNorm.reshape((Ngrid,Ngrid)))
+    aa[1].contour(xx, yy, uNorm.reshape((Ngrid, Ngrid)), [-10,-5,0,5,10])
+    
 
     # Build up the optimization problem
     baseRelax = relax.lasserreRelax(thisRepr)
-    baseRelax = relax.lasserreConstraint()
+    cstrRelaxSep = relax.lasserreConstraint(baseRelax, cstrPolySep) # Here the 'plus' space is singled out -> negative input
+    cstrPolyEllip = poly.polynomial(thisRepr)
+    cstrPolyEllip.setQuadraticForm(-lyapF.P, thisRepr.varNumsPerDeg[1], narray([lyapF.alpha], dtype=nfloat), thisRepr.varNumsPerDeg[0]) #  x'.P.x<=alpha --> x'.(-P).x + alpha >= 0
+    cstrRelaxEllip = relax.lasserreConstraint(baseRelax, cstrPolyEllip)
+    
     probCVX = relax.convexProg(thisRepr)
+    probCVX.addCstr(baseRelax)
+    probCVX.addCstr(cstrRelaxSep)
+    probCVX.addCstr(cstrRelaxEllip)
+    
+    #Get the objective
+    #Solve for optimal input in the plus zone (negative input
+    probCVX.objective = objectArrayStar[0,:]+(-10.)*objectArrayStar[1,:]
+    solPlusStar = probCVX.solve()
+    
     plot.plt.show()
 
 
