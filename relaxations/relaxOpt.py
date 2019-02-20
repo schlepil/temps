@@ -81,6 +81,18 @@ class convexProg():
     def precomp_cvxopt(self):
         return None #Nothing to do for the moment
 
+    def checkPrimalSol(self, x:np.ndarray):
+
+        x_ = narray(x, dtype=nfloat).copy().squeeze()
+
+        nMonomsH_ = self.repr.varNumsUpToDeg[self.repr.maxDeg//2].size
+
+        varMat = x_[self.repr.idxMat[:nMonomsH_, :nMonomsH_].flatten()].reshape((nMonomsH_, nMonomsH_)) # -> Matrix corresponding to the solution
+
+        # ->Each singular value corresponds to one critical point
+
+        e,v = eigh(varMat)
+
     def solve(self, isSparse=False, opts={}):
         if not self.isUpdate:
             self.precomp()

@@ -110,17 +110,54 @@ if __name__ == "__main__":
     cstrPolyEllip = poly.polynomial(thisRepr)
     cstrPolyEllip.setQuadraticForm(-lyapF.P, thisRepr.varNumsPerDeg[1], narray([lyapF.alpha], dtype=nfloat), thisRepr.varNumsPerDeg[0]) #  x'.P.x<=alpha --> x'.(-P).x + alpha >= 0
     cstrRelaxEllip = relax.lasserreConstraint(baseRelax, cstrPolyEllip)
+    # Exclude inner as zero always yields zero
+    excludeInner = 0.1
+    cstrPolyEllipInner = poly.polynomial(thisRepr)
+    cstrPolyEllipInner.setQuadraticForm(lyapF.P, thisRepr.varNumsPerDeg[1], narray([-excludeInner*lyapF.alpha], dtype=nfloat),
+                                   thisRepr.varNumsPerDeg[0])  # x'.P.x>=epsilon*alpha --> x'.P.x - epsilon*alpha >= 0
+    cstrRelaxEllipInner = relax.lasserreConstraint(baseRelax, cstrPolyEllipInner)
     
     probCVX = relax.convexProg(thisRepr)
     probCVX.addCstr(baseRelax)
     probCVX.addCstr(cstrRelaxSep)
     probCVX.addCstr(cstrRelaxEllip)
+    probCVX.addCstr(cstrRelaxEllipInner)
     
     #Get the objective
     #Solve for optimal input in the plus zone (negative input
-    probCVX.objective = objectArrayStar[0,:]+(-10.)*objectArrayStar[1,:]
+    probCVX.objective = -(objectArrayStar[0,:]+(-10.)*objectArrayStar[1,:]) #Polynomial approximation of the convergence. The more negative the higher
+    # the convergence, if positive divergence -> inverse signs to get minimial convergence
     solPlusStar = probCVX.solve()
-    
+
+    # Plot
+    ff,aa = plt.subplots(1,2, figsize=(1+2*4,4))
+    plot.plotEllipse(aa[0], refTraj.getX(0.), lyapF.P, 1., faceAlpha=0.)
+    plot.plotEllipse(aa[0], refTraj.getX(0.), lyapF.P, excludeInner*1., faceAlpha=0.)
+    aa[0].autoscale()
+    xx,yy = plot.ax2Grid(aa[0], Ngrid)
+    XX = np.vstack((xx.flatten(), yy.flatten()))
+    DXX = XX-refTraj.getX(0.)
+    # Get the convergence values
+    dVx = probCVX.objective.eval2(DXX).squeeze()
+    #Get the index for the constraints
+    idxFeasible = nones((XX.shape[1],), dtype=np.bool_)
+    idxFeasible = np.logical_and(idxFeasible, cstrPolySep.eval2(DXX).squeeze()>=0.)
+    idxFeasible = np.logical_and(idxFeasible, cstrPolyEllip.eval2(DXX).squeeze() >= 0.)
+    idxFeasible = np.logical_and(idxFeasible, cstrPolyEllipInner.eval2(DXX).squeeze() >= 0.)
+
+    dVx[~idxFeasible] = nmin(dVx[idxFeasible])
+
+    aa[0].contour(xx,yy,dVx.reshape((Ngrid,Ngrid)))
+
+    aa[]
+
+
+
+    aa[0]
+
+
+
+
     plot.plt.show()
 
 

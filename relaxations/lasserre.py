@@ -211,7 +211,7 @@ class lasserreConstraint:
         cstrMat = np.zeros(self.cstrMatDef.shapeCstr, dtype=nfloat)
 
         cstrMat = populateCstr(cstrMat, self.cstrMatDef.firstIdxPerK, self.cstrMatDef.posInCMat, self.cstrMatDef.whichCoeff, self.poly.coeffs.ravel())
-        cstrMat = -cstrMat
+        cstrMat = -cstrMat #The constraint is g(x) >= 0, but optimization convention is A.x <_k b or more precisely A.x + gamma = b with gamma >=_k 0
         
         if isSparse is False:
             return cstrMat, self.cstrMatDef.rhs

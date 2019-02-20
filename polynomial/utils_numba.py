@@ -162,7 +162,9 @@ def evalMonomsNumba1(x, varNum2varNumParents):
     z[0,0] = 1.
     z[1:1+x.size[0],[0]] = x
     #Loop
-    for k, (p0,p1) in enumerate(varNum2varNumParents[1+x.size,:]):
+    for k, (p0, p1) in enumerate(varNum2varNumParents):
+        if k < (+1 + x.shape[0]):
+            continue
         z[k] = z[p0]*z[p1]
     return z
 
@@ -175,7 +177,9 @@ def evalMonomsNumbaN(x, varNum2varNumParents):
     z[0,:] = 1.
     z[1:1+x.shape[0],:] = x
     #Loop
-    for k, (p0,p1) in enumerate(varNum2varNumParents[1+x.shape[0]:,:]):
+    for k, (p0,p1) in enumerate(varNum2varNumParents):
+        if k<(+1+x.shape[0]):
+            continue
         z[k,:] = z[p0,:]*z[p1,:]
     return z
 
