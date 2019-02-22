@@ -89,9 +89,17 @@ class convexProg():
 
         varMat = x_[self.repr.idxMat[:nMonomsH_, :nMonomsH_].flatten()].reshape((nMonomsH_, nMonomsH_)) # -> Matrix corresponding to the solution
 
+        xMat = varMat[self.repr.varNumsUpToDeg[0].size:self.repr.varNumsUpToDeg[0].size+self.repr.varNumsUpToDeg[1].size, self.repr.varNumsUpToDeg[0].size:self.repr.varNumsUpToDeg[0].size+self.repr.varNumsUpToDeg[1].size]
         # ->Each singular value corresponds to one critical point
+        ux,sx,_ = svd(xMat, full_matrices=False)
+        # Get the corresponding monomials
+        xStar = ux*sx.reshape((1,-1))
+        zStar = evalMonomsNumba(xStar, self.repr.varNum2varNumParents[:, :self.repr.varNumsUpToDeg[1].size])
 
-        e,v = eigh(varMat)
+        varMatStar = np.zeros_like(varMat)
+        for
+
+
 
     def solve(self, isSparse=False, opts={}):
         if not self.isUpdate:

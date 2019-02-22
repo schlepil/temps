@@ -17,6 +17,7 @@ from numpy import sum as nsum
 from numpy import multiply as nmultiply
 from numpy import power as npower
 from numpy import prod as nprod
+from numpy import einsum as neinsum
 
 from numpy import max as nmax
 from numpy import min as nmin
