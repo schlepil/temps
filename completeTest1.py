@@ -124,11 +124,12 @@ if __name__ == "__main__":
     probCVX.addCstr(cstrRelaxEllipInner)
     
     #Get the objective
-    #Solve for optimal input in the plus zone (negative input
+    #Solve for optimal input in the plus zone (negative input)
     probCVX.objective = -(objectArrayStar[0,:]+(-10.)*objectArrayStar[1,:]) #Polynomial approximation of the convergence. The more negative the higher
     # the convergence, if positive divergence -> inverse signs to get minimial convergence
     solPlusStar = probCVX.solve()
-
+    xStarOpt = probCVX.checkSol(solPlusStar)
+    
     # Plot
     ff,aa = plt.subplots(1,2, figsize=(1+2*4,4))
     plot.plotEllipse(aa[0], refTraj.getX(0.), lyapF.P, 1., faceAlpha=0.)
@@ -137,6 +138,8 @@ if __name__ == "__main__":
     xx,yy = plot.ax2Grid(aa[0], Ngrid)
     XX = np.vstack((xx.flatten(), yy.flatten()))
     DXX = XX-refTraj.getX(0.)
+    
+    ## Optimal control
     # Get the convergence values
     dVx = probCVX.objective.eval2(DXX).squeeze()
     #Get the index for the constraints
@@ -148,15 +151,29 @@ if __name__ == "__main__":
     dVx[~idxFeasible] = nmin(dVx[idxFeasible])
 
     aa[0].contour(xx,yy,dVx.reshape((Ngrid,Ngrid)))
+    aa[0].plot(xStarOpt[0,:], xStarOpt[1,:], '*r')
+    
+    ##
+    #For the linear control input
+    probCVX.objective = -(objectArrayLin[0,:]+objectArrayLin[1,:])
+    solPlusLin = probCVX.solve()
+    xLinOpt = probCVX.checkSol(solPlusLin)
+    
+    # Get the convergence values
+    dVx = probCVX.objective.eval2(DXX).squeeze()
+    #Get the index for the constraints
+    idxFeasible = nones((XX.shape[1],), dtype=np.bool_)
+    idxFeasible = np.logical_and(idxFeasible, cstrPolySep.eval2(DXX).squeeze()>=0.)
+    idxFeasible = np.logical_and(idxFeasible, cstrPolyEllip.eval2(DXX).squeeze() >= 0.)
+    idxFeasible = np.logical_and(idxFeasible, cstrPolyEllipInner.eval2(DXX).squeeze() >= 0.)
+    dVx[~idxFeasible] = nmin(dVx[idxFeasible])
 
-    aa[]
+    aa[1].contour(xx,yy,dVx.reshape((Ngrid,Ngrid)))
+    aa[1].plot(xLinOpt[0,:], xLinOpt[1,:], '*r')
 
-
-
-    aa[0]
-
-
-
+    plot.plotEllipse(aa[1], refTraj.getX(0.), lyapF.P, 1., faceAlpha=0.)
+    plot.plotEllipse(aa[1], refTraj.getX(0.), lyapF.P, excludeInner*1., faceAlpha=0.)
+    aa[0].autoscale()
 
     plot.plt.show()
 

@@ -81,23 +81,35 @@ class convexProg():
     def precomp_cvxopt(self):
         return None #Nothing to do for the moment
 
-    def checkPrimalSol(self, x:np.ndarray):
-
-        x_ = narray(x, dtype=nfloat).copy().squeeze()
+    def checkSol(self, sol:Union[np.ndarray, dict]):
+        
+        if isinstance(x, dict):
+            x_ = sol["x_np"]
+        else:
+            x_ = narray(x, dtype=nfloat).copy().squeeze()
 
         nMonomsH_ = self.repr.varNumsUpToDeg[self.repr.maxDeg//2].size
 
         varMat = x_[self.repr.idxMat[:nMonomsH_, :nMonomsH_].flatten()].reshape((nMonomsH_, nMonomsH_)) # -> Matrix corresponding to the solution
 
-        xMat = varMat[self.repr.varNumsUpToDeg[0].size:self.repr.varNumsUpToDeg[0].size+self.repr.varNumsUpToDeg[1].size, self.repr.varNumsUpToDeg[0].size:self.repr.varNumsUpToDeg[0].size+self.repr.varNumsUpToDeg[1].size]
+        xMat = varMat[:self.repr.varNumsUpToDeg[1].size, :self.repr.varNumsUpToDeg[1].size]
         # ->Each singular value corresponds to one critical point
         ux,sx,_ = svd(xMat, full_matrices=False)
         # Get the corresponding monomials
-        xStar = ux*sx.reshape((1,-1))
-        zStar = evalMonomsNumba(xStar, self.repr.varNum2varNumParents[:, :self.repr.varNumsUpToDeg[1].size])
+        xStar = ux*sx.reshape((1,-1))[1:,:] #Cut first as it corresponds to the constant monomial
+        # Compare
+        zHalfStar = nsum(evalMonomsNumba(xStar, self.repr.varNum2varNumParents[:, :nMonomsH_]), axis=1, keepdims=False)
+        # Reset 1
+        zHalfStar[0] = 1.
 
-        varMatStar = np.zeros_like(varMat)
-        for
+        zMatStar = np.outer(zHalfStar, zHalfStar)
+        
+        print(f"Difference in moment matrix is \n {varMat-zMatStar)")
+        uz,sz,vz = svd(varMat-zMatStar)
+        print(f"With eigen values and vectors \n{sz}\n{sz}")
+        print(f"The resulting difference in the objective funciton is \n {np.inner(self.objective.coeffs.squeeze(), nsum(uz,sz, axis=1, keepdims=False))}")
+        
+        return xStar
 
 
 
