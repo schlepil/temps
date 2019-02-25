@@ -160,7 +160,7 @@ def evalMonomsNumba1(x, varNum2varNumParents):
 
     #Init
     z[0,0] = 1.
-    z[1:1+x.size[0],[0]] = x
+    z[1:1+x.shape[0],[0]] = x
     #Loop
     for k, (p0, p1) in enumerate(varNum2varNumParents):
         if k < (+1 + x.shape[0]):

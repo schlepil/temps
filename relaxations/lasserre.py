@@ -19,7 +19,7 @@ def populateCstr(cMat, firstIdxPerK, posInCMat, whichCoeff, c):
 
     for k in range(cMat.shape[0]):
         for idx in range(firstIdxPerK[k], firstIdxPerK[k+1]):
-            cMat[k,posInCMat[idx]] = c[whichCoeff[idx]]
+            cMat[k,posInCMat[idx]] += c[whichCoeff[idx]]
 
     return cMat
 
@@ -40,7 +40,7 @@ def polyListEval(listOfMonomials:"List of np.arrays", x:np.array):
     return monomVals
 
 
-def evalCtrMat(listOfMonomials,cstrMat, cstrRHS,x):
+def evalCstrMat(listOfMonomials, cstrMat, cstrRHS, x):
     if x.size == len(listOfMonomials):
         monomVals = x
     else:
@@ -130,7 +130,7 @@ class lasserreRelax:
             thisC = x
         else:
             thisC = polyListEval(self.repr.listOfMonomials, x)
-        return evalCtrMat(self.listOfMonomials, *self.getCstr(isSparse=False),thisC)
+        return evalCstrMat(self.listOfMonomials, *self.getCstr(isSparse=False), thisC)
 
 
 class lasserreConstraint:
@@ -223,12 +223,12 @@ class lasserreConstraint:
             return sparse.csc_matrix(cstrMat), self.cstrMatDef.rhs
     
     def evalCstr(self, x:np.array):
-        # evalCtrMat(listOfMonomials,cstrMat,x):
+        # evalCstrMat(listOfMonomials,cstrMat,x):
         if x.size == self.repr.nMonoms:
             thisC = x
         else:
             thisC = polyListEval(self.listOfMonomials, x)
-        return evalCtrMat(self.listOfMonomials, *self.getCstr(isSparse=False),x)
+        return evalCstrMat(self.listOfMonomials, *self.getCstr(isSparse=False), thisC)
         
     
     
