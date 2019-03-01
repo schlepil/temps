@@ -18,7 +18,7 @@ if __name__ == "__main__":
     
     # Get the polynomial representation which also decides on the maximal relaxation
     # Let use full here
-    thisRepr = poly.polynomialRepr(2, 4)
+    thisRepr = poly.polynomialRepr(2, 6)
     
     #Get the dynamical system
     pendSys = getSys(thisRepr, fileName=None)#"~/tmp/pendulumDict.pickle")
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     # Get a quadratic Lyapunov function, initialize it and perform some simulations
     lyapF = lyap.quadraticLyapunovFunction(pendSys)
     lyapF.P, K = lyapF.lqrP(np.identity(2), np.identity(1), refTraj.getX(0.))
-    lyapF.alpha = 1.
+    lyapF.alpha = 20.
 
     lyapF.P = myMath.normalizeEllip(lyapF.P)*5.
     
@@ -138,6 +138,8 @@ if __name__ == "__main__":
     xx,yy = plot.ax2Grid(aa[0], Ngrid)
     XX = np.vstack((xx.flatten(), yy.flatten()))
     DXX = XX-refTraj.getX(0.)
+
+
     
     ## Optimal control
     # Get the convergence values
