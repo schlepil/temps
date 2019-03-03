@@ -34,6 +34,7 @@ from numpy import cos as ncos
 from numpy import float_ as nfloat
 from numpy import int_ as nint
 from numpy import int_ as nintu
+from numpy import bool_ as nbool
 
 from scipy import sparse
 

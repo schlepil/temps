@@ -125,8 +125,8 @@ class convexProg():
             # It more that all optimal solutions lie
 
             #First get the cholesky decomp if all positive eigenvalues
-            ind = np.where(vRel>opts_['relTol'])
-            thisRank = np.sum(ind)
+            ind = np.where(vRel>opts_['relTol'])[0]
+            thisRank = ind.size
             v2 = v[ind]**.5
             e2 = e[:, ind]
             V = nmultiply(e2, v2)
@@ -134,38 +134,61 @@ class convexProg():
             # Get column echelon form
             # Scipy only provides row echelon form
             U, monomBase = sy.Matrix(V.T).rref()
-            U = narray(monomBase, dtype=nfloat).T
+            U = narray(U, dtype=nfloat).T
             monomBase = narray(monomBase, dtype=nintu).squeeze()
+            monomNotBase = nones((U.shape[0],), dtype=np.bool_)
+            monomNotBase[monomBase] = False
 
             #Get the multiplier matrices
-            NList = nempty((thisRank, thisRank, thisRank), nfloat)
+            NList = nempty((thisRank-1, thisRank, thisRank), nfloat)
+            ###NList = nempty((thisRank, thisRank, thisRank), nfloat)
 
-            for i, iMonom in enumerate(monomBase):
+            for i, iMonom in enumerate(monomBase[1:]): #The first one is allows the constant value
+            ###for i, iMonom in enumerate(monomBase):  # The first one is allows the constant value
                 for j, jMonom in enumerate(monomBase):
-                    Ni[i,j,:] = U[self.repr.idxMat[iMonom, jMonom],:]
+                    NList[i,j,:] = U[self.repr.idxMat[iMonom, jMonom],:]
 
             # Here comes the tricky part:
             # we need to get the common eigenvalues of all Ni -> get a "random" linear combination
             # Therefore all optimal solutions respect some constraints, but they are not unique...
-            N = nsum(NList,axis=0)
+            N = nsum(NList,axis=0)/NList.shape[0]
 
             T,Q = schur(N)
-
-
-
-
-
-
-
-
-
+            
+            #Now compute the actual solutions or better the representations of it
+            xSol = nempty((self.repr.nDims, NList.shape[0]), dtype=nfloat)
+            ##xSol = nempty((self.repr.nDims+1, NList.shape[0]), dtype=nfloat)
+            #Sum up
+            for i in range(NList.shape[0]):
+                for j in range(1,Q.shape[1]):
+                ###for j in range(Q.shape[1]):
+                    xSol[j-1,i] = neinsum('m,mn,n', Q[:,j], NList[i,:,:], Q[:,j])
+                    ###xSol[j, i] = neinsum('m,mn,n', Q[:, j], NList[i, :, :], Q[:, j])
+            
+            # Check if all constraints are respected (Here it can happen that they are not)
+            isValid = nones((xSol.shape[1],), dtype=np.bool_)
+            zSol = self.repr.evalAllMonoms(xSol)
+            #Check all constraints
+            for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
+                isValid = np.logical_and(isValid, aCstr.isValid(zSol))
+            
+            #Only return valid ones
+            xSol = xSol[:, isValid]
+            
+            #Finally construct the constraint polynomials
+            if U.shape[1] == 1:
+                optimalCstr = nzeros((0, self.repr.nMonoms))
+            else:
+                optimalCstr = nzeros((U.shape[0]-thisRank, self.repr.nMonoms))
+                # Fill up
+                optimalCstr[:, monomBase]=U[monomNotBase,:]
+                idxC = 0
+                for k, nBase in enumerate(monomNotBase):
+                    if nBase:
+                        optimalCstr[idxC,k] = -1. #Set the equality
+                        idxC += 1
+            
         return xSol, optimalCstr
-
-
-
-
-
-
 
 
     def checkSol(self, sol:Union[np.ndarray, dict], **kwargs):
