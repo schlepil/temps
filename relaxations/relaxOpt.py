@@ -3,6 +3,7 @@ from polynomial import *
 from relaxations.lasserre import *
 from relaxations.constraints import *
 from relaxations.optUtils import *
+from relaxations.rref import rref
 
 from scipy import optimize
 
@@ -133,8 +134,11 @@ class convexProg():
 
             # Get column echelon form
             # Scipy only provides row echelon form
-            U, monomBase = sy.Matrix(V.T).rref()
-            U = narray(U, dtype=nfloat).T
+            #U, monomBase = sy.Matrix(V.T).rref()# <- This is shit; U, monomBase = sy.Matrix(V.T).rref(simplify=True, iszerofunc=lambda x:x**2<1e-20) #is correct but slow
+            #U = narray(U, dtype=nfloat).T
+            cond_ = e[-1]/e[0]
+            U, monomBase = robustRREF(V.T, cond_, fullOut=False)
+
             monomBase = narray(monomBase, dtype=nintu).squeeze()
             monomNotBase = nones((U.shape[0],), dtype=np.bool_)
             monomNotBase[monomBase] = False

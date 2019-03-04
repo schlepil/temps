@@ -62,7 +62,7 @@ class polynomial():
             assert self.repr == other.repr
         self._coeffs+=other._coeffs
         self.maxDeg=self.getMaxDegree()
-        return None
+        return self
     
     def __sub__(self, other):
         if __debug__:
@@ -76,7 +76,7 @@ class polynomial():
             assert self.repr == other.repr
         self._coeffs-=other._coeffs
         self.maxDeg=self.getMaxDegree()
-        return None
+        return self
     
     def __neg__(self):
         return polynomial(self.repr, -self._coeffs, alwaysFull=self._alwaysFull)
@@ -106,9 +106,9 @@ class polynomial():
                 assert self.repr == other.repr
                 assert self.maxDeg+other.maxDeg <= self.repr.maxDeg
         
-            self._coeffs = polyMul(self._coeffs,other._coefs,self.repr.idxMat)
+            self._coeffs = polyMul(self._coeffs,other._coeffs,self.repr.idxMat)
             self.maxDeg = self.maxDeg+other.maxDeg
-        return None
+        return self
     
     def __pow__(self, power:int, modulo=None):
         if __debug__:
