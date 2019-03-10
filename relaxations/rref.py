@@ -1,5 +1,6 @@
+from coreUtils import nintu
 import numpy as np
-from numba import njit
+from numba import njit, jit
 
 from numpy import argmax, abs, ones, zeros, arange, outer, around, all
 
@@ -13,6 +14,11 @@ def rref(B, tol=1e-10, doCopy=True):
     n_piv_pos = 0
     pivots_pos = -ones((2,cols))
     row_exchanges = arange(rows)
+    
+    swaps = zeros((2,), nintu)
+    swapsR = zeros((2,), nintu)
+    
+    m = 0.
 
     for c in range(cols):
         if __debug__:
@@ -21,7 +27,7 @@ def rref(B, tol=1e-10, doCopy=True):
 
         ## Find the pivot row:
         pivot = argmax(abs(A[r:rows, c])) + r
-        m = abs(A[pivot, c])
+        m = float(abs(A[pivot, c]))
         if __debug__:
             print("Found pivot, ", m, " in row ", pivot)
         if m <= tol:
@@ -38,8 +44,11 @@ def rref(B, tol=1e-10, doCopy=True):
 
             if pivot != r:
                 ## Swap current row and pivot row
-                A[[pivot, r], c:cols] = A[[r, pivot], c:cols]
-                row_exchanges[[pivot, r]] = row_exchanges[[r, pivot]]
+                swaps[0] = pivot
+                swaps[1] = r
+                swapsR = swaps[::-1]
+                A[swaps, c:cols] = A[swapsR, c:cols]
+                row_exchanges[swaps] = row_exchanges[swapsR]
 
                 if __debug__:
                     print("Swap row", r, "with row", pivot, "Now:"); print(A)
@@ -68,20 +77,20 @@ def rref(B, tol=1e-10, doCopy=True):
     return (A, pivots_pos[:, :n_piv_pos], row_exchanges)
 
 
-@njit
+@jit
 def robustRREF(B, tolCalc_:float = 1e-6, tol0_:float = 1e-5, fullOut = False):
     U1, piv1, rows1 = rref(B, tol=tolCalc_, doCopy=True)
-    U2, piv2, rows2 = rref(B, tol=tolCalc_/50, doCopy=True)
+    U2, piv2, rows2 = rref(B, tol=tolCalc_/10, doCopy=True)
 
     # Round
-    dec = int(log10(tol0_))
-    around(U1, decimals=dec, out=U1)
-    around(U2, decimals=dec, out=U2)
+    dec = -int(log10(tol0_))
+    U1r = around(U1, decimals=dec)
+    U2r = around(U2, decimals=dec)
 
-    if not all(U1==U2):
+    if not all(U1r==U2r):
         raise RuntimeError
 
     if fullOut:
-        return U1, piv1, rows1
+        return U1r, piv1, rows1
     else:
-        return U1, piv1[1,:]
+        return U1r, piv1[1,:]

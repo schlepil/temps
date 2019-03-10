@@ -18,7 +18,7 @@ if __name__ == "__main__":
     
     # Get the polynomial representation which also decides on the maximal relaxation
     # Let use full here
-    thisRepr = poly.polynomialRepr(2, 4, digits=1)#Todo debug digits. there is an error somewhere
+    thisRepr = poly.polynomialRepr(2, 6, digits=1)#Todo debug digits. there is an error somewhere
     
     #Get the dynamical system
     pendSys = getSys(thisRepr, fileName=None)#"~/tmp/pendulumDict.pickle")

@@ -3,7 +3,7 @@ from polynomial import *
 from relaxations.lasserre import *
 from relaxations.constraints import *
 from relaxations.optUtils import *
-from relaxations.rref import rref
+from relaxations.rref import robustRREF
 
 from scipy import optimize
 
@@ -136,21 +136,76 @@ class convexProg():
             # Scipy only provides row echelon form
             #U, monomBase = sy.Matrix(V.T).rref()# <- This is shit; U, monomBase = sy.Matrix(V.T).rref(simplify=True, iszerofunc=lambda x:x**2<1e-20) #is correct but slow
             #U = narray(U, dtype=nfloat).T
-            cond_ = e[-1]/e[0]
-            U, monomBase = robustRREF(V.T, cond_, fullOut=False)
+            cond_ = (v2[0]/v2[-1])
+            U, varMonomBase = robustRREF(V.T, cond_/10., fullOut=False)
+            U = U.T.copy()
 
-            monomBase = narray(monomBase, dtype=nintu).squeeze()
-            monomNotBase = nones((U.shape[0],), dtype=np.bool_)
-            monomNotBase[monomBase] = False
-
+            varMonomBase = narray(varMonomBase, dtype=nintu).squeeze()
+            monomIsBase = nones((U.shape[0],), dtype=np.bool_)
+            monomIsBase[varMonomBase] = False
+            
+            allMonomsHalf = self.repr.listOfMonomials[:nMonomsH_]
+            
+            monomNotBaseNCoeffs = []
+            for k,aIsNotBase in enumerate(monomIsBase):
+                if not aIsNotBase:
+                    continue
+                newList = [allMonomsHalf[k], [[],[]], nzeros((self.repr.nMonoms,1))]
+                newList[2][varMonomBase,0] = U[k,:]
+                for i, aIdx in enumerate(U[k,:]):
+                    if abs(aIdx) == 0.:
+                        continue
+                    newList[1][0].append( allMonomsHalf[varMonomBase[i]] )
+                    newList[1][1].append( aIdx )
+                    
+                monomNotBaseNCoeffs.append(newList)
+            
+            firstDegMonoms = self.repr.varNumsPerDeg[1]
+            
             #Get the multiplier matrices
-            NList = nempty((thisRank-1, thisRank, thisRank), nfloat)
+            NList = nempty((self.repr.nDims, thisRank, thisRank), nfloat)
             ###NList = nempty((thisRank, thisRank, thisRank), nfloat)
 
-            for i, iMonom in enumerate(monomBase[1:]): #The first one is allows the constant value
+            for i, iMonom in enumerate(firstDegMonoms): #The first one is allows the constant value
             ###for i, iMonom in enumerate(monomBase):  # The first one is allows the constant value
-                for j, jMonom in enumerate(monomBase):
-                    NList[i,j,:] = U[self.repr.idxMat[iMonom, jMonom],:]
+                for j, jMonom in enumerate(varMonomBase):
+                    idxU = self.repr.idxMat[iMonom, jMonom]
+                    if idxU<nMonomsH_:
+                        NList[i,j,:] = U[idxU,:]
+                    else:
+                        # Recursively replace until all monomials are in the base
+                        xiwjMonomNCoeff = [[idxU],[self.repr.listOfMonomials[idxU]], [1.0]]
+                        while not all([aIdx<nMonomsH_ for aIdx in xiwjMonomNCoeff[0]]):
+                            for k, aIdx in enumerate(xiwjMonomNCoeff[0]):
+                                # Seek the monomial to simplify
+                                doBreak_ = False
+                                if aIdx>=nMonomsH_:
+                                    toReplace = [aaList.pop(k) for aaList in  xiwjMonomNCoeff]
+                                
+                                #Try relacing once and append
+                                replacement = [[],[],[]]
+                                for aMonomNBase in monomNotBaseNCoeffs:
+                                    nRMonom = toReplace[1]-aMonomNBase[0]
+                                    if all(nRMonom>=0):
+                                        for (rMonomAdd, rCoeff) in zip(*aMonomNBase[1]):
+                                            replacement[1].append(nRMonom+rMonomAdd)
+                                            replacement[0].append( self.repr.monom2num[list2int(replacement[1][-1], self.repr.digits)] )
+                                            replacement[2].append(rCoeff*toReplace[2])
+                                        for jj in range(3):
+                                            xiwjMonomNCoeff[jj].extend(replacement[jj])
+                                        doBreak_=True
+                                        break
+                                if doBreak_:
+                                    break
+                                else:
+                                    # The solution is not sufficient to generate the minimizer with this approach
+                                    return None,None,(varMonomBase, U)
+                                    
+                        #Apply
+                        NList[i, j, :] = 0.
+                        for thisIdxU,_,thisCoeff in zip(*xiwjMonomNCoeff):
+                            NList[i, j, :] += U[thisIdxU, :]*thisCoeff
+                        
 
             # Here comes the tricky part:
             # we need to get the common eigenvalues of all Ni -> get a "random" linear combination
@@ -185,14 +240,14 @@ class convexProg():
             else:
                 optimalCstr = nzeros((U.shape[0]-thisRank, self.repr.nMonoms))
                 # Fill up
-                optimalCstr[:, monomBase]=U[monomNotBase,:]
+                optimalCstr[:, varMonomBase]=U[monomIsBase,:]
                 idxC = 0
-                for k, nBase in enumerate(monomNotBase):
+                for k, nBase in enumerate(monomIsBase):
                     if nBase:
                         optimalCstr[idxC,k] = -1. #Set the equality
                         idxC += 1
             
-        return xSol, optimalCstr
+        return xSol, optimalCstr, (varMonomBase, U)
 
 
     def checkSol(self, sol:Union[np.ndarray, dict], **kwargs):
