@@ -137,74 +137,94 @@ class convexProg():
             #U, monomBase = sy.Matrix(V.T).rref()# <- This is shit; U, monomBase = sy.Matrix(V.T).rref(simplify=True, iszerofunc=lambda x:x**2<1e-20) #is correct but slow
             #U = narray(U, dtype=nfloat).T
             cond_ = (v2[0]/v2[-1])
-            U, varMonomBase = robustRREF(V.T, cond_/10., fullOut=False)
-            U = U.T.copy()
+            Ue, varMonomBase = robustRREF(V.T, cond_/10., tol0_=1e-9, fullOut=False) #"Exact" rref
+            Ue = Ue.T.copy()
 
             varMonomBase = narray(varMonomBase, dtype=nintu).squeeze()
-            monomIsBase = nones((U.shape[0],), dtype=np.bool_)
+            monomIsBase = nones((Ue.shape[0],), dtype=np.bool_)
             monomIsBase[varMonomBase] = False
-            
+
             allMonomsHalf = self.repr.listOfMonomials[:nMonomsH_]
-            
-            monomNotBaseNCoeffs = []
-            for k,aIsNotBase in enumerate(monomIsBase):
-                if not aIsNotBase:
-                    continue
-                newList = [allMonomsHalf[k], [[],[]], nzeros((self.repr.nMonoms,1))]
-                newList[2][varMonomBase,0] = U[k,:]
-                for i, aIdx in enumerate(U[k,:]):
-                    if abs(aIdx) == 0.:
-                        continue
-                    newList[1][0].append( allMonomsHalf[varMonomBase[i]] )
-                    newList[1][1].append( aIdx )
-                    
-                monomNotBaseNCoeffs.append(newList)
-            
+
             firstDegMonoms = self.repr.varNumsPerDeg[1]
             
-            #Get the multiplier matrices
-            NList = nempty((self.repr.nDims, thisRank, thisRank), nfloat)
-            ###NList = nempty((thisRank, thisRank, thisRank), nfloat)
+            relTol = 1e-5 #Set relative zero, increment if infeasible up to max
+            relTolMax = 1e-1
+            isNOk_ = 1
+            while ((relTol <= relTolMax) and (isNOk_!=0)):
+                U = Ue.copy()
+                #Set to relative zero
+                U[nabs(U) <= nmax(nabs(U), axis=1, keepdims=True)*relTol] = 0.
+            
+                monomNotBaseNCoeffs = []
+                for k,aIsNotBase in enumerate(monomIsBase):
+                    if not aIsNotBase:
+                        continue
+                    newList = [allMonomsHalf[k], [[],[]], nzeros((self.repr.nMonoms,1))]
+                    newList[2][varMonomBase,0] = U[k,:]
+                    for i, aIdx in enumerate(U[k,:]):
+                        if abs(aIdx) == 0.:
+                            continue
+                        newList[1][0].append( allMonomsHalf[varMonomBase[i]] )
+                        newList[1][1].append( aIdx )
+                        
+                    monomNotBaseNCoeffs.append(newList)
+            
+                #Get the multiplier matrices
+                NList = nempty((self.repr.nDims, thisRank, thisRank), nfloat)
+                ###NList = nempty((thisRank, thisRank, thisRank), nfloat)
 
-            for i, iMonom in enumerate(firstDegMonoms): #The first one is allows the constant value
-            ###for i, iMonom in enumerate(monomBase):  # The first one is allows the constant value
-                for j, jMonom in enumerate(varMonomBase):
-                    idxU = self.repr.idxMat[iMonom, jMonom]
-                    if idxU<nMonomsH_:
-                        NList[i,j,:] = U[idxU,:]
-                    else:
-                        # Recursively replace until all monomials are in the base
-                        xiwjMonomNCoeff = [[idxU],[self.repr.listOfMonomials[idxU]], [1.0]]
-                        while not all([aIdx<nMonomsH_ for aIdx in xiwjMonomNCoeff[0]]):
-                            for k, aIdx in enumerate(xiwjMonomNCoeff[0]):
-                                # Seek the monomial to simplify
-                                doBreak_ = False
-                                if aIdx>=nMonomsH_:
-                                    toReplace = [aaList.pop(k) for aaList in  xiwjMonomNCoeff]
-                                
-                                #Try relacing once and append
-                                replacement = [[],[],[]]
-                                for aMonomNBase in monomNotBaseNCoeffs:
-                                    nRMonom = toReplace[1]-aMonomNBase[0]
-                                    if all(nRMonom>=0):
-                                        for (rMonomAdd, rCoeff) in zip(*aMonomNBase[1]):
-                                            replacement[1].append(nRMonom+rMonomAdd)
-                                            replacement[0].append( self.repr.monom2num[list2int(replacement[1][-1], self.repr.digits)] )
-                                            replacement[2].append(rCoeff*toReplace[2])
-                                        for jj in range(3):
-                                            xiwjMonomNCoeff[jj].extend(replacement[jj])
-                                        doBreak_=True
-                                        break
-                                if doBreak_:
-                                    break
-                                else:
-                                    # The solution is not sufficient to generate the minimizer with this approach
-                                    return None,None,(varMonomBase, U)
+                isNOk_ = 1
+                for i, iMonom in enumerate(firstDegMonoms): #The first one is allows the constant value
+                    if isNOk_>=2:
+                        break
+                ###for i, iMonom in enumerate(monomBase):  # The first one is allows the constant value
+                    for j, jMonom in enumerate(varMonomBase):
+                        if isNOk_ >= 2:
+                            break
+                        idxU = self.repr.idxMat[iMonom, jMonom]
+                        if idxU<nMonomsH_:
+                            NList[i,j,:] = U[idxU,:]
+                        else:
+                            # Recursively replace until all monomials are in the base
+                            xiwjMonomNCoeff = [[idxU],[self.repr.listOfMonomials[idxU]], [1.0]]
+                            while ((not all([aIdx<nMonomsH_ for aIdx in xiwjMonomNCoeff[0]])) and (isNOk_<2)):
+                                for k, aIdx in enumerate(xiwjMonomNCoeff[0]):
+                                    # Seek the monomial to simplify
+                                    isNOk_ = 1
+                                    if aIdx>=nMonomsH_:
+                                        toReplace = [aaList.pop(k) for aaList in  xiwjMonomNCoeff]
                                     
-                        #Apply
-                        NList[i, j, :] = 0.
-                        for thisIdxU,_,thisCoeff in zip(*xiwjMonomNCoeff):
-                            NList[i, j, :] += U[thisIdxU, :]*thisCoeff
+                                    #Try relacing once and append
+                                    replacement = [[],[],[]]
+                                    for aMonomNBase in monomNotBaseNCoeffs:
+                                        nRMonom = toReplace[1]-aMonomNBase[0]
+                                        if all(nRMonom>=0):
+                                            for (rMonomAdd, rCoeff) in zip(*aMonomNBase[1]):
+                                                replacement[1].append(nRMonom+rMonomAdd)
+                                                replacement[0].append( self.repr.monom2num[list2int(replacement[1][-1], self.repr.digits)] )
+                                                replacement[2].append(rCoeff*toReplace[2])
+                                            for jj in range(3):
+                                                xiwjMonomNCoeff[jj].extend(replacement[jj])
+                                            isNOk_ = 0
+                                            break
+                                    if isNOk_==0:
+                                        break
+                                    else:
+                                        # The solution/tolerance combo is not sufficient to generate the minimizer with this approach
+                                        isNOk_=2
+                                        relTol *= 10.
+                                        break
+                                        
+                            #Apply
+                            if isNOk_ == 0:
+                                NList[i, j, :] = 0.
+                                for thisIdxU,_,thisCoeff in zip(*xiwjMonomNCoeff):
+                                    NList[i, j, :] += U[thisIdxU, :]*thisCoeff
+            if isNOk_ != 0:
+                #No solution can be extracted -> return exect constraints
+                return None, None, (varMonomBase, Ue, relTol)
+                    
                         
 
             # Here comes the tricky part:
@@ -247,7 +267,7 @@ class convexProg():
                         optimalCstr[idxC,k] = -1. #Set the equality
                         idxC += 1
             
-        return xSol, optimalCstr, (varMonomBase, U)
+        return xSol, optimalCstr, (varMonomBase, U, relTol)
 
 
     def checkSol(self, sol:Union[np.ndarray, dict], **kwargs):

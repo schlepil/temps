@@ -21,6 +21,7 @@ from numpy import einsum as neinsum
 
 from numpy import max as nmax
 from numpy import min as nmin
+from numpy import abs as nabs
 
 from numpy import maximum as nmaximum
 from numpy import minimum as nminimum
