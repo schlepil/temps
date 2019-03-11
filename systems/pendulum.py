@@ -11,7 +11,7 @@ from polynomial import polynomialRepr
 # Zero is stable
 
 def getUlims():
-    return -10.,10.
+    return -2.,2.
 
 def getSys(repr: polynomialRepr, fileName:str=None):
     ##Taken from Drake - RobotLocomotion @ CSAIL

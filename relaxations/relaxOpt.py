@@ -92,7 +92,7 @@ class convexProg():
         :return:
         """
 
-        opts_ = {'relTol': 1e-6}
+        opts_ = {'relTol': 1e-5, 'reOptimize':False}
         opts_.update(kwargs)
 
         if isinstance(sol, dict):
@@ -113,13 +113,15 @@ class convexProg():
         if __debug__:
             assert vRel[0] > -opts_['relTol']
 
-        if nall(v[:-1]<opts_['relTol']):
+        if (nall(vRel[:-1]<opts_['relTol'])):
             # There is only one optimal solution
             xSol = varMat[1:self.repr.varNumsUpToDeg[1].size,[0]]
             optimalCstr = nzeros((0,self.repr.nMonoms))
             if opts_['reOptimize']:
                 # Optimize the solution locally to reduce rounding errors
                 raise NotImplementedError
+            #The simple solution is exact enough
+            return xSol, None, (None, None, None)
         else:
             # Here it is more tricky
             # We will return optimal solutions, however they are not unique
@@ -140,7 +142,7 @@ class convexProg():
             Ue, varMonomBase = robustRREF(V.T, cond_/10., tol0_=1e-9, fullOut=False) #"Exact" rref
             Ue = Ue.T.copy()
 
-            varMonomBase = narray(varMonomBase, dtype=nintu).squeeze()
+            varMonomBase = narray(varMonomBase, dtype=nintu).reshape((-1,))
             monomIsBase = nones((Ue.shape[0],), dtype=np.bool_)
             monomIsBase[varMonomBase] = False
 
@@ -185,6 +187,7 @@ class convexProg():
                         idxU = self.repr.idxMat[iMonom, jMonom]
                         if idxU<nMonomsH_:
                             NList[i,j,:] = U[idxU,:]
+                            isNOk_ = 0
                         else:
                             # Recursively replace until all monomials are in the base
                             xiwjMonomNCoeff = [[idxU],[self.repr.listOfMonomials[idxU]], [1.0]]
@@ -235,13 +238,12 @@ class convexProg():
             T,Q = schur(N)
             
             #Now compute the actual solutions or better the representations of it
-            xSol = nempty((self.repr.nDims, NList.shape[0]), dtype=nfloat)
-            ##xSol = nempty((self.repr.nDims+1, NList.shape[0]), dtype=nfloat)
+            xSol = nempty((self.repr.nDims, thisRank), dtype=nfloat)
             #Sum up
             for i in range(NList.shape[0]):
-                for j in range(1,Q.shape[1]):
+                for j in range(Q.shape[1]):
                 ###for j in range(Q.shape[1]):
-                    xSol[j-1,i] = neinsum('m,mn,n', Q[:,j], NList[i,:,:], Q[:,j])
+                    xSol[i,j] = neinsum('m,mn,n', Q[:,j], NList[i,:,:], Q[:,j])
                     ###xSol[j, i] = neinsum('m,mn,n', Q[:, j], NList[i, :, :], Q[:, j])
             
             # Check if all constraints are respected (Here it can happen that they are not)
@@ -256,6 +258,7 @@ class convexProg():
             
             #Finally construct the constraint polynomials
             if U.shape[1] == 1:
+                # No need to compute them as the result is optimal -> no further search necessary
                 optimalCstr = nzeros((0, self.repr.nMonoms))
             else:
                 optimalCstr = nzeros((U.shape[0]-thisRank, self.repr.nMonoms))

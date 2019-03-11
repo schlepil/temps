@@ -48,7 +48,7 @@ def evalCstrMat(listOfMonomials, cstrMat, cstrRHS, x):
     
     dim = int(cstrMat.shape[0]**.5)
     
-    return nsum(nmultiply(cstrMat, monomVals),axis=1).reshape((dim,dim))-cstrRHS.reshape((dim,dim))
+    return nsum(nmultiply(cstrMat, monomVals.squeeze()),axis=1).reshape((dim,dim))-cstrRHS.reshape((dim,dim))
 
 class lasserreRelax:
     def __init__(self, repr:polynomialRepr, emptyClass=False):
@@ -140,7 +140,8 @@ class lasserreRelax:
         
         #Compute the smallest eigenvalue and check if positive (up to some tolerance
         for i in range(z.shape[1]):
-            res[i] = eigh(self.evalCstr(z[:,[i]]), eigvals_only=True, eigvals=(0,0), check_finite=False)>atol
+            # Attention, inverse sign for consistency
+            res[i] = eigh(-self.evalCstr(z[:,[i]]), eigvals_only=True, eigvals=(0,0), check_finite=False)>atol
         
         return res
         
@@ -243,16 +244,18 @@ class lasserreConstraint:
             thisC = polyListEval(self.listOfMonomials, x)
         return evalCstrMat(self.listOfMonomials, *self.getCstr(isSparse=False), thisC)
 
-    def isValid(self, z: np.ndarray, atol=-1e-6):
-    
-        z = z.reshape((self.repr.nMonoms, -1))
-    
-        res = nempty((z.shape[1],), dtype=nbool)
+    def isValid(self, z: np.ndarray, atol=-1e-6, simpleEval=True):
 
-        # Compute the smallest eigenvalue and check if positive (up to some tolerance
-        for i in range(z.shape[1]):
-            res[i] = eigh(self.evalCstr(z[:, [i]]), eigvals_only=True, eigvals=(0, 0), check_finite=False) > atol
-    
+        z = z.reshape((self.repr.nMonoms, -1))
+
+        if simpleEval:
+            res = (self.poly.eval2(z).reshape((-1,))>atol).astype(np.bool_)
+        else:
+            # Compute the smallest eigenvalue and check if positive (up to some tolerance
+            res = nempty((z.shape[1],), dtype=nbool)
+            for i in range(z.shape[1]):
+                res[i] = eigh(-self.evalCstr(z[:, [i]]), eigvals_only=True, eigvals=(0, 0), check_finite=False) > atol
+
         return res
         
     

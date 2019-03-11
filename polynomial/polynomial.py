@@ -98,6 +98,7 @@ class polynomial():
         return self.__mul__(other)
     
     def __imul__(self, other):
+        self._coeffs.setflags(write=True)
         if isinstance(other,(float,int)):
             self._coeffs *= float(other)
         else:
@@ -108,6 +109,7 @@ class polynomial():
         
             self._coeffs = polyMul(self._coeffs,other._coeffs,self.repr.idxMat)
             self.maxDeg = self.maxDeg+other.maxDeg
+        self._coeffs.setflags(write=False)
         return self
     
     def __pow__(self, power:int, modulo=None):
@@ -181,8 +183,11 @@ class polynomial():
     def eval2(self, x:np.array):
         assert self._coeffs.size == self.repr.nMonoms
 
-        coeffsEval = np.reshape(self._coeffs, (1,self.repr.nMonoms))[[0],:self.repr.varNumsUpToDeg[self.maxDeg].size]
+        nMonoms_ = self.repr.varNumsUpToDeg[self.maxDeg].size
+        coeffsEval = np.reshape(self._coeffs, (1,self.repr.nMonoms))[[0],:nMonoms_]
 
-        return ndot(coeffsEval, evalMonomsNumba(x, self.repr.varNum2varNumParents[:self.repr.varNumsUpToDeg[self.maxDeg].size,:]))
+        z = x[:nMonoms_,:] if (x.shape[0] == self.repr.nMonoms) \
+                                                             else evalMonomsNumba(x, self.repr.varNum2varNumParents[:nMonoms_,:])
+        return ndot(coeffsEval, z)
 
         

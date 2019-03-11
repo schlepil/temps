@@ -18,7 +18,7 @@ if __name__ == "__main__":
     
     # Get the polynomial representation which also decides on the maximal relaxation
     # Let use full here
-    thisRepr = poly.polynomialRepr(2, 4, digits=1)#Todo debug digits. there is an error somewhere
+    thisRepr = poly.polynomialRepr(2, 6, digits=1)#Todo debug digits. there is an error somewhere
     
     #Get the dynamical system
     pendSys = getSys(thisRepr, fileName=None)#"~/tmp/pendulumDict.pickle")
@@ -121,61 +121,72 @@ if __name__ == "__main__":
     probCVX.addCstr(baseRelax)
     probCVX.addCstr(cstrRelaxSep)
     probCVX.addCstr(cstrRelaxEllip)
-    probCVX.addCstr(cstrRelaxEllipInner)
+    #probCVX.addCstr(cstrRelaxEllipInner)
     
     #Get the objective
     #Solve for optimal input in the plus zone (negative input)
-    probCVX.objective = -(objectArrayStar[0,:]+(-10.)*objectArrayStar[1,:]) #Polynomial approximation of the convergence. The more negative the higher
+    probCVX.objective = -(objectArrayStar[0,:]+(getUlims()[0])*objectArrayStar[1,:]) #Polynomial approximation of the convergence. The more negative
+    # the higher
     # the convergence, if positive divergence -> inverse signs to get minimial convergence
     solPlusStar = probCVX.solve()
-    xStarOpt,_,_ = probCVX.extractOptSol(solPlusStar)
+    xStarPlusOpt,_,_ = probCVX.extractOptSol(solPlusStar)
     
     # Plot
-    ff,aa = plt.subplots(1,2, figsize=(1+2*4,4))
-    plot.plotEllipse(aa[0], refTraj.getX(0.), lyapF.P, 1., faceAlpha=0.)
-    plot.plotEllipse(aa[0], refTraj.getX(0.), lyapF.P, excludeInner*1., faceAlpha=0.)
-    aa[0].autoscale()
-    xx,yy = plot.ax2Grid(aa[0], Ngrid)
+    ff,aa = plt.subplots(1,1, figsize=(1+1*4,4))
+    plot.plotEllipse(aa, refTraj.getX(0.), lyapF.P, lyapF.alpha, faceAlpha=0.)
+    #plot.plotEllipse(aa, refTraj.getX(0.), lyapF.P, excludeInner*lyapF.alpha, faceAlpha=0.)
+    aa.autoscale()
+    xx,yy = plot.ax2Grid(aa, Ngrid)
     XX = np.vstack((xx.flatten(), yy.flatten()))
-    DXX = XX-refTraj.getX(0.)
+    X0 = refTraj.getX(0.)
+    DXX = XX-X0
+    #Compute separation
+    cstrVal = cstrRelaxSep.poly.eval2(DXX)
+    aa.contour(xx, yy, cstrVal.reshape((Ngrid, Ngrid)), [0.])
 
+    # Compute convergence for upper half
+    VDXX = lyapF.evalV(DXX)
+    dVDXX = probCVX.objective.eval2(DXX)
+    aa.plot(xStarPlusOpt[0,:]+X0[0,0], xStarPlusOpt[1,:]+X0[1,0], 'sb')
 
-    
-    ## Optimal control
-    # Get the convergence values
-    dVx = probCVX.objective.eval2(DXX).squeeze()
-    #Get the index for the constraints
-    idxFeasible = nones((XX.shape[1],), dtype=np.bool_)
-    idxFeasible = np.logical_and(idxFeasible, cstrPolySep.eval2(DXX).squeeze()>=0.)
-    idxFeasible = np.logical_and(idxFeasible, cstrPolyEllip.eval2(DXX).squeeze() >= 0.)
-    idxFeasible = np.logical_and(idxFeasible, cstrPolyEllipInner.eval2(DXX).squeeze() >= 0.)
+    #Do the same for the other half
+    cstrRelaxSep.poly*=-1. #Update seperating constraint
+    probCVX.objective = -(objectArrayStar[0, :] + (getUlims()[1]) * objectArrayStar[1, :])  # Update convergence / objective
+    solMinusStar = probCVX.solve()
+    xStarMinusOpt, _, _ = probCVX.extractOptSol(solMinusStar)
 
-    dVx[~idxFeasible] = nmin(dVx[idxFeasible])
+    dVDXXl = probCVX.objective.eval2(DXX)
+    idxL = cstrRelaxSep.poly.eval2(DXX)>0.
+    dVDXX[idxL] = dVDXXl[idxL]
+    #dVDXX /= (VDXX+0.05)
+    dVDXX = np.sign(dVDXX)*np.abs(dVDXX)**0.5#np.log(dVDXX - np.min(dVDXX)+0.01)
+    dVDXX[np.isnan(dVDXX)] = 0.
 
-    aa[0].contour(xx,yy,dVx.reshape((Ngrid,Ngrid)))
-    aa[0].plot(xStarOpt[0,:], xStarOpt[1,:], '*r')
+    aa.plot(xStarMinusOpt[0, :]+X0[0,0], xStarMinusOpt[1, :]+X0[1,0], 'sr')
+    CS = aa.contour(xx,yy,dVDXX.reshape((Ngrid,Ngrid)), cmap='jet')
+    plt.colorbar(CS)
+
     
     ##
     #For the linear control input
-    probCVX.objective = -(objectArrayLin[0,:]+objectArrayLin[1,:])
-    solPlusLin = probCVX.solve()
-    xLinOpt = probCVX.checkSol(solPlusLin)
+    ff, aa = plt.subplots(1, 1, figsize=(1 + 1 * 4, 4))
+    #Apply everywhere
+    probCVXLin = relax.convexProg(thisRepr)
+    probCVXLin.addCstr(baseRelax)
+    probCVXLin.addCstr(cstrRelaxEllip)
+
+    probCVXLin.objective = -(objectArrayLin[0,:]+objectArrayLin[1,:])
+    solLin = probCVXLin.solve()
+    xLinOpt,_,_ = probCVXLin.extractOptSol(solLin)
     
     # Get the convergence values
-    dVx = probCVX.objective.eval2(DXX).squeeze()
-    #Get the index for the constraints
-    idxFeasible = nones((XX.shape[1],), dtype=np.bool_)
-    idxFeasible = np.logical_and(idxFeasible, cstrPolySep.eval2(DXX).squeeze()>=0.)
-    idxFeasible = np.logical_and(idxFeasible, cstrPolyEllip.eval2(DXX).squeeze() >= 0.)
-    idxFeasible = np.logical_and(idxFeasible, cstrPolyEllipInner.eval2(DXX).squeeze() >= 0.)
-    dVx[~idxFeasible] = nmin(dVx[idxFeasible])
+    dVDXX = probCVXLin.objective.eval2(DXX).squeeze()
+    dVDXX = np.sign(dVDXX) * np.abs(dVDXX) ** 0.5
 
-    aa[1].contour(xx,yy,dVx.reshape((Ngrid,Ngrid)))
-    aa[1].plot(xLinOpt[0,:], xLinOpt[1,:], '*r')
-
-    plot.plotEllipse(aa[1], refTraj.getX(0.), lyapF.P, 1., faceAlpha=0.)
-    plot.plotEllipse(aa[1], refTraj.getX(0.), lyapF.P, excludeInner*1., faceAlpha=0.)
-    aa[0].autoscale()
+    plot.plotEllipse(aa, X0, lyapF.P, lyapF.alpha, faceAlpha=0.)
+    CS = aa.contour(xx,yy,dVDXX.reshape((Ngrid,Ngrid)), cmap='jet')
+    aa.plot(xLinOpt[0,:]+X0[0,0], xLinOpt[1,:]+X0[1,0], '*r')
+    plt.colorbar(CS)
 
     plot.plt.show()
 
