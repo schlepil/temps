@@ -149,10 +149,10 @@ class quadraticLyapunovFunction(LyapunovFunction):
             fTaylor, gTaylor = self.dynSys.getTaylorApprox(x0, taylorDeg)
 
         outCoeffs = nzeros((1+self.nu, self.nMonoms), nfloat)
-
+        # evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU, idxMat, coeffsOut, Pdot)
         outCoeffs = evalPolyLyapAsArray_Numba(self.P, self.repr.varNumsPerDeg[1], fTaylor, self.repr.varNumsUpToDeg[taylorDeg], gTaylor,
                                               self.repr.varNumsUpToDeg[taylorDeg], dx0, nrequire(np.tile(self.repr.varNumsPerDeg[0], (self.nq,)), dtype=nintu),
-                                              u, uMonom, self.idxMat, outCoeffs) #dx0 only depends on time, not on the position
+                                              u, uMonom, self.idxMat, outCoeffs, np.zeros_like(self.P)) #dx0 only depends on time, not on the position
 
         return outCoeffs
     

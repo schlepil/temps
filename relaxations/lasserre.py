@@ -67,6 +67,9 @@ class lasserreRelax:
         self.maxDeg = self.repr.maxDeg
         self.nMonoms = self.repr.nMonoms
 
+        # Sharing is caring
+        self.lasserreRelaxPrecomp = {}
+
 
         if not emptyClass:
             self.compute()
@@ -182,40 +185,45 @@ class lasserreConstraint:
 
         assert self.nRelax%2 == 0, "Relax must be even"
 
-        self.cstrMatDef = variableStruct(firstIdxPerK=[0], posInCMat=[], whichCoeff=[])
-
         maxIdxPoly = self.repr.varNumsUpToDeg[self.polyDeg].size
-
         maxIdxRelax = self.repr.varNumsUpToDeg[self.nRelax//2].size
 
-        cstrMonoms = self.listOfMonomialsAsInt[:maxIdxRelax]
-        cstrMatRelax = cstrMonoms.reshape((-1,1))+cstrMonoms.reshape((1,-1))
+        try:
+            self.cstrMatDef = self.baseRelax.lasserreRelaxPrecomp[(maxIdxPoly, maxIdxRelax)]
+        except KeyError:
+            cstrMonoms = self.listOfMonomialsAsInt[:maxIdxRelax]
+            cstrMatRelax = cstrMonoms.reshape((-1,1))+cstrMonoms.reshape((1,-1))
 
-        #Multiply each entry of the cstrMatrix with the polynomial and store the abstraction
-        k = -1
-        for i in range(cstrMatRelax.shape[0]):
-            for j in range(cstrMatRelax.shape[1]):
-                # Entry mat[i,j]
-                # New k -> Create or increment
-                k += 1
-                self.cstrMatDef.firstIdxPerK.append(0)
+            self.cstrMatDef = variableStruct(firstIdxPerK=[0], posInCMat=[], whichCoeff=[])
 
-                cMatMonom = cstrMatRelax[i,j]
-                # Multiply with polynomial
-                for idxC, monomP in enumerate(self.poly.repr.listOfMonomialsAsInt[:maxIdxPoly]):
-                    self.cstrMatDef.firstIdxPerK[-1] +=1
-                    self.cstrMatDef.whichCoeff.append(idxC) #Save this coefficient
-                    self.cstrMatDef.posInCMat.append(self.monom2num[monomP+cMatMonom]) #variable number associated to the product monomial
-        # Here again: Lasserre cstrMatRelax >= 0 -> inverse sign for cone prog
-        # This is done when constructing the constraint
-        
-        # Done, transform to array
-        self.cstrMatDef.firstIdxPerK, self.cstrMatDef.posInCMat, self.cstrMatDef.whichCoeff = narray(self.cstrMatDef.firstIdxPerK, dtype=nintu), narray(self.cstrMatDef.posInCMat, dtype=nintu), narray(self.cstrMatDef.whichCoeff, dtype=nintu)
-        self.cstrMatDef.firstIdxPerK = np.cumsum(self.cstrMatDef.firstIdxPerK)
-        self.cstrMatDef.cstrMatRelax = cstrMatRelax
-        self.cstrMatDef.shapeMatRelax = cstrMatRelax.shape
-        self.cstrMatDef.shapeCstr = (cstrMatRelax.size, self.repr.nMonoms)
-        self.cstrMatDef.rhs = np.zeros((cstrMatRelax.size,1),dtype=nfloat)
+            #Multiply each entry of the cstrMatrix with the polynomial and store the abstraction
+            k = -1
+            for i in range(cstrMatRelax.shape[0]):
+                for j in range(cstrMatRelax.shape[1]):
+                    # Entry mat[i,j]
+                    # New k -> Create or increment
+                    k += 1
+                    self.cstrMatDef.firstIdxPerK.append(0)
+
+                    cMatMonom = cstrMatRelax[i,j]
+                    # Multiply with polynomial
+                    for idxC, monomP in enumerate(self.poly.repr.listOfMonomialsAsInt[:maxIdxPoly]):
+                        self.cstrMatDef.firstIdxPerK[-1] +=1
+                        self.cstrMatDef.whichCoeff.append(idxC) #Save this coefficient
+                        self.cstrMatDef.posInCMat.append(self.monom2num[monomP+cMatMonom]) #variable number associated to the product monomial
+            # Here again: Lasserre cstrMatRelax >= 0 -> inverse sign for cone prog
+            # This is done when constructing the constraint
+
+            # Done, transform to array
+            self.cstrMatDef.firstIdxPerK, self.cstrMatDef.posInCMat, self.cstrMatDef.whichCoeff = narray(self.cstrMatDef.firstIdxPerK, dtype=nintu), narray(self.cstrMatDef.posInCMat, dtype=nintu), narray(self.cstrMatDef.whichCoeff, dtype=nintu)
+            self.cstrMatDef.firstIdxPerK = np.cumsum(self.cstrMatDef.firstIdxPerK)
+            self.cstrMatDef.cstrMatRelax = cstrMatRelax
+            self.cstrMatDef.shapeMatRelax = cstrMatRelax.shape
+            self.cstrMatDef.shapeCstr = (cstrMatRelax.size, self.repr.nMonoms)
+            self.cstrMatDef.rhs = np.zeros((cstrMatRelax.size,1),dtype=nfloat)
+
+            self.baseRelax.lasserreRelaxPrecomp[(maxIdxPoly, maxIdxRelax)] = self.cstrMatDef
+
         return None
     
     def getCstr(self, isSparse=False):

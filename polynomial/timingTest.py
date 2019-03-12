@@ -147,9 +147,6 @@ def evalRand(nDims, maxDegree):
             assert abs(thisPoly.eval(x)-thisPolyTrans.eval(y.squeeze())) < 1e-10
     
     return None
-    
-    
-    
 
 if __name__ == "__main__":
     T = time.time()

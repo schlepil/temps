@@ -177,7 +177,7 @@ if __name__ == "__main__":
 
     probCVXLin.objective = -(objectArrayLin[0,:]+objectArrayLin[1,:])
     solLin = probCVXLin.solve()
-    xLinOpt,_,_ = probCVXLin.extractOptSol(solLin)
+    xLinOpt, optimalCstrLinOpt, (varMonomBaseLinOpt, ULinOpt, relTolLinOpt) = probCVXLin.extractOptSol(solLin)
     
     # Get the convergence values
     dVDXX = probCVXLin.objective.eval2(DXX).squeeze()
@@ -187,6 +187,65 @@ if __name__ == "__main__":
     CS = aa.contour(xx,yy,dVDXX.reshape((Ngrid,Ngrid)), cmap='jet')
     aa.plot(xLinOpt[0,:]+X0[0,0], xLinOpt[1,:]+X0[1,0], '*r')
     plt.colorbar(CS)
+
+    ## Now project all onto unit circle
+    # Do only for linear
+    Pg = lyapF.P/lyapF.alpha
+    Cg = cholesky(Pg, lower=False, check_finite=False)
+    Cgi = inv(Cg, check_finite=False)
+
+    #One compare
+    xEllip = plot.getV(Pg, endPoint=False)
+    yCirc = ndot(Cg, xEllip)
+
+    xVals = probCVXLin.objective.eval2(xEllip)
+
+    probCVXLin.objective.coeffs = probCVXLin.repr.doLinCoordChange(probCVXLin.objective.coeffs, Cgi)
+    yVals = probCVXLin.objective.eval2(yCirc)
+
+    # Change coords for rest
+    for aCstr in probCVXLin.constraints.s.cstrList:
+        if isinstance(aCstr, relax.lasserreConstraint):
+            aCstr.poly.coeffs = aCstr.repr.doLinCoordChange(aCstr.poly.coeffs, Cgi)
+            aCstr.poly *= (1./nmax(nabs(aCstr.poly.coeffs)))
+
+    solLinY = probCVXLin.solve()
+    xLinOptY, optimalCstrLinOptY, (varMonomBaseLinOptY, ULinOptY, relTolLinOptY) = probCVXLin.extractOptSol(solLinY)
+
+    ff,aa = plt.subplots(1,1, figsize=(1+1*4,4))
+    plot.plotEllipse(aa, refTraj.getX(0.), np.identity(2), 1, faceAlpha=0.)
+    #plot.plotEllipse(aa, refTraj.getX(0.), lyapF.P, excludeInner*lyapF.alpha, faceAlpha=0.)
+    aa.autoscale()
+    xx,yy = plot.ax2Grid(aa, Ngrid)
+    XX = np.vstack((xx.flatten(), yy.flatten()))
+    X0 = refTraj.getX(0.)
+    DXX = XX-X0
+
+    dVDXX = probCVXLin.objective.eval2(DXX).squeeze()
+    dVDXX = np.sign(dVDXX) * np.abs(dVDXX) ** 0.5
+
+    CS = aa.contour(xx, yy, dVDXX.reshape((Ngrid, Ngrid)), cmap='jet')
+    aa.plot(xLinOptY[0, :] + X0[0, 0], xLinOptY[1, :] + X0[1, 0], '*r')
+    plt.colorbar(CS)
+
+    #Isolate one of them by hand
+    cstrPolyEllipExcl = poly.polynomial(thisRepr)
+    Qexcl = np.identity(2)
+    xExcl = xLinOptY[:,[0]]
+    cstrPolyEllipExcl.setQuadraticForm(Qexcl, thisRepr.varNumsPerDeg[1],
+                                       np.hstack([-.01 + float(mndot([xExcl.T, Qexcl, xExcl])), -2.*ndot(xExcl.T, Qexcl).squeeze()]).astype(nfloat),
+                                       thisRepr.varNumsUpToDeg[1])
+
+    cstrPolyEllipExcl *= (1./nmax(nabs(cstrPolyEllipExcl.coeffs)))
+
+    exclCstrVal = cstrPolyEllipExcl.eval2(DXX)
+    aa.contour(xx,yy,exclCstrVal.reshape((Ngrid,Ngrid)), [0.], cmap='jet')
+
+    cstrRelaxEllipExcl = relax.lasserreConstraint(baseRelax, cstrPolyEllipExcl)  # Here the 'plus' space is singled out -> negative input
+    probCVXLin.addCstr(cstrRelaxEllipExcl)
+    solLinYExcl = probCVXLin.solve()
+    xLinOptYExcl, optimalCstrLinOptYExcl, (varMonomBaseLinOptYExcl, ULinOptYExcl, relTolLinOptYExcl) = probCVXLin.extractOptSol(solLinYExcl)
+    aa.plot(xLinOptYExcl[0, :] + X0[0, 0], xLinOptYExcl[1, :] + X0[1, 0], 'og')
 
     plot.plt.show()
 

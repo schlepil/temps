@@ -170,9 +170,11 @@ class polynomial():
         if __debug__:
             assert ((qMonoms is None) and (h is None) and (hMonoms is None)) or ((qMonoms is not None) and (h is not None) and (hMonoms is not None))
             assert Q.shape[0] == Q.shape[1]
-        
+
         qMonoms = self.repr.varNums[:Q.shape[0]] if qMonoms is None else qMonoms
-        self.coeffs = quadraticForm_Numba(Q,qMonoms, h, hMonoms, self.repr.idxMat, np.zeros((self.repr.nMonoms,), dtype=nfloat))
+        self._coeffs = quadraticForm_Numba(Q,qMonoms, h, hMonoms, self.repr.idxMat, np.zeros((self.repr.nMonoms,), dtype=nfloat))
+        self.maxDeg = self.getMaxDegree()
+        return None
     
     def eval(self, x:np.array):
         if not self._isUpdate:

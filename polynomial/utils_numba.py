@@ -82,9 +82,9 @@ def getIdxAndParent(aMonom: int,aMonomList: narray,nVars: int,digits: int):
 
 
     # TODO change to additionally take varnum2varnumParents
-    if __debug__: #numba .43
-        assert isinstance(aMonom,(int, nint, nintu))
-        assert isinstance(aMonomList,np.ndarray)
+#    if __debug__: #numba .43
+#        assert isinstance(aMonom,(int, nint, nintu))
+#        assert isinstance(aMonomList,np.ndarray)
     
     found = False
     
@@ -162,7 +162,10 @@ def evalMonomsNumba1(x, varNum2varNumParents):
     z[0,0] = 1.
     z[1:1+x.shape[0],[0]] = x
     #Loop
-    for k, (p0, p1) in enumerate(varNum2varNumParents):
+    #for k, (p0, p1) in enumerate(varNum2varNumParents):
+    for k in range(varNum2varNumParents.shape[0]):
+        p0 = varNum2varNumParents[k, 0]
+        p1 = varNum2varNumParents[k, 1]
         if k < (+1 + x.shape[0]):
             continue
         z[k] = z[p0]*z[p1]
@@ -177,15 +180,19 @@ def evalMonomsNumbaN(x, varNum2varNumParents):
     z[0,:] = 1.
     z[1:1+x.shape[0],:] = x
     #Loop
-    for k, (p0,p1) in enumerate(varNum2varNumParents):
+    #for k, (p0,p1) in enumerate(varNum2varNumParents):
+    for k in range(varNum2varNumParents.shape[0]):
+        p0=varNum2varNumParents[k,0]
+        p1=varNum2varNumParents[k,1]
         if k<(+1+x.shape[0]):
             continue
         z[k,:] = z[p0,:]*z[p1,:]
     return z
 
-@njit
+#@njit
 def evalMonomsNumba(x, varNum2varNumParents):
     if(x.shape[1]==1):
-        return evalMonomsNumba1(x, varNum2varNumParents)
+        z =  evalMonomsNumba1(x, varNum2varNumParents)
     else:
-        return evalMonomsNumbaN(x, varNum2varNumParents)
+        z = evalMonomsNumbaN(x, varNum2varNumParents)
+    return z

@@ -97,7 +97,7 @@ def evalPolyLyap_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU
 
 
 @njit
-def evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU, idxMat, coeffsOut, Pdot=None):
+def evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU, idxMat, coeffsOut, Pdot):
     """
     Generates the polynomial corresponding to the derivative of the Lyapunov function
     V = z'.P.z
@@ -134,7 +134,7 @@ def evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u,
             tmpValPij = P[i, j]  # Avoid repeated access
             if tmpValPij != 0.0:
                 for l, amy in enumerate(monomF):
-                    if [j, l] != 0.0:
+                    if f[j, l] != 0.0:
                         coeffsOut[0,idxMat[amz, amy]] = tmpValPij * f[j, l]
 
     # Part two
@@ -180,14 +180,13 @@ def evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u,
     coeffsOut *= 2.
 
     # Add time-derivative (if necessary)
-    if Pdot is not None:
         # Use symmetry
-        for a, ampa in enumerate(monomP):
-            # Diagonal
-            coeffsOut[idxMat[ampa, ampa]] += Pdot[a, a]
-            for b, ampb in enumerate(monomP[a + 1:]):
-                # Strict Upper triang
-                coeffsOut[0,idxMat[ampa, ampb]] += Pdot[a, b]
+    for a, ampa in enumerate(monomP):
+        # Diagonal
+        coeffsOut[0,idxMat[ampa, ampa]] += Pdot[a, a]
+        for b, ampb in enumerate(monomP[a + 1:]):
+            # Strict Upper triang
+            coeffsOut[0,idxMat[ampa, ampb]] += Pdot[a, b]
 
     return coeffsOut
     
