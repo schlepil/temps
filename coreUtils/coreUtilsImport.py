@@ -40,6 +40,7 @@ from numpy import bool_ as nbool
 from scipy import sparse
 
 from scipy.linalg import eig,eigh,cholesky,lstsq,eigvals,eigvalsh,inv,det, svd, schur
+from scipy.linalg import expm, logm, ldl
 from scipy.linalg import norm
 from scipy.linalg import solve as ssolve
 
