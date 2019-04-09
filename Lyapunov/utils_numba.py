@@ -1,7 +1,7 @@
 from coreUtils import *
 
 @njit
-def evalPolyLyap_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU, idxMat, coeffsOut, Pdot=None):
+def evalPolyLyap_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU, idxMat, coeffsOut, Pdot):
     assert 0, "call and code needs debugging"
     """
     Generates the polynomial corresponding to the derivative of the Lyapunov function
@@ -83,15 +83,14 @@ def evalPolyLyap_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU
     # Multiply by two
     coeffsOut *= 2.
     
-    # Add time-derivative (if necessary)
-    if Pdot is not None:
-        # Use symmetry
-        for a,ampa in enumerate(monomP):
-            # Diagonal
-            coeffsOut[idxMat[ampa,ampa]] += Pdot[a,a]
-            for b,ampb in enumerate(monomP[a+1:]):
-                #Strict Upper triang
-                coeffsOut[idxMat[ampa,ampb]] += Pdot[a,b]
+    # Add time-derivative
+    # Use symmetry
+    for a,ampa in enumerate(monomP):
+        # Diagonal
+        coeffsOut[idxMat[ampa,ampa]] += Pdot[a,a]
+        for b,ampb in enumerate(monomP[a+1:]):
+            #Strict Upper triang
+            coeffsOut[idxMat[ampa,ampb]] += Pdot[a,b]
     
     return coeffsOut
 
