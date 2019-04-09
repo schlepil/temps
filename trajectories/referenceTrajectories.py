@@ -10,7 +10,8 @@ class referenceTrajectory:
         self.tLims = [tMin, tMax]
     
     def __call__(self, t:float, doRestrict:bool=True):
-        return self.getX(t, doRestrict),self.getDX(t, doRestrict),self.getU(t, doRestrict)
+        t = self.checkTime(t,doRestrict)
+        return self.getX(t, False),self.getDX(t, False),self.getU(t, False)
     def checkTime(self,t,restrict=True):
         if __debug__:
             if nany(t>self.tLims[1]):
@@ -57,4 +58,32 @@ class analyticTrajectory(referenceTrajectory):
         else:
             return self.fXd(t)
         
-        
+class omplTrajectory(referenceTrajectory):
+
+    def __init__(self, dynF:Callable, fileName:str, nx:int, nu:int, tMin:float=0., tMax:float=1.):
+
+        super(omplTrajectory, self).__init__(nx, nu, tMin, tMax)
+
+        self.X = np.load( f"{fileName}_X.npy" )
+        self.U = np.load( f"{fileName}_U.npy" )
+        self.t = np.load( f"{fileName}_T.npy" )
+
+        assert(self.tLims[0]>=self.t[0])
+        assert (self.tLims[1] <= self.t[1])
+
+        self.dynF = dynF # It is better to compute the derivative using the interpolated position and control input
+
+        self.xrefI = sp.interpolate.PchipInterpolator(self.t, self.X, axis=1)
+        self.urefI = sp.interpolate.PchipInterpolator(self.t, self.U, axis=1)
+
+    def getU(self,t:float, doRestrict:bool=True):
+        t=self.checkTime(t, doRestrict)
+        return self.urefI(t).reshape((self.nu,-1))
+    def getX(self,t:float, doRestrict:bool=True):
+        t = self.checkTime(t, doRestrict)
+        return self.fX(t).reshape((self.nx,-1))
+    def getDX(self,t:float, doRestrict:bool=True):
+        t = self.checkTime(t, doRestrict)
+        return self.dynF(self.getX(t,False), self.getU(t,False), t).reshape((self.nx,-1))
+
+

@@ -16,7 +16,7 @@ class quadraticLyapunovFunction(LyapunovFunction):
             else:
                 assert alpha is None
             
-        super(quadraticLyapunovFunction,self).__init__(dynSys)
+        super(quadraticLyapunovFunction,self).__init__(2, dynSys)
         
         self.P_=None
         self.alpha_=None

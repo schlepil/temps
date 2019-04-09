@@ -6,7 +6,7 @@ from itertools import product
 
 class LyapunovFunction():
     
-    def __init__(self, dynSys:dynamicalSystem):
+    def __init__(self, degLyap:int, dynSys:dynamicalSystem):
         
         self.dynSys = dynSys
         
@@ -20,6 +20,7 @@ class LyapunovFunction():
         self.num2monom = self.dynSys.repr.num2monom
         self.monom2num = self.dynSys.repr.monom2num
         self.refTraj = self.dynSys.ctrlInput.refTraj
+        self.degLyap = degLyap
     
     def getObjectivePoly(self,x0:np.ndarray=None,dx0:np.ndarray=None,fTaylor:np.ndarray=None, gTaylor:np.ndarray=None, uOpt:np.ndarray=None, idxCtrl:np.ndarray=None, t:float=0., taylorDeg:int=3):
         raise NotImplementedError
