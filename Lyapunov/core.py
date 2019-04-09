@@ -21,11 +21,17 @@ class LyapunovFunction():
         self.monom2num = self.dynSys.repr.monom2num
         self.refTraj = self.dynSys.ctrlInput.refTraj
         self.degLyap = degLyap
+
+    def getPnPdot(self, t: np.ndarray, returnPd = True):
+        raise NotImplementedError
     
     def getObjectivePoly(self,x0:np.ndarray=None,dx0:np.ndarray=None,fTaylor:np.ndarray=None, gTaylor:np.ndarray=None, uOpt:np.ndarray=None, idxCtrl:np.ndarray=None, t:float=0., taylorDeg:int=3):
         raise NotImplementedError
     
     def getCstrCoeffs(self,x0:np.ndarray,PG0:np.ndarray=None, cstrDegList:np.ndarray=None):
+        raise NotImplementedError
+
+    def getObjectiveAsArray(self, fTaylor: np.ndarray = None, gTaylor: np.ndarray = None, taylorDeg: int = 3, u: np.ndarray = None, uMonom: np.ndarray = None, x0: np.ndarray = None, dx0: np.ndarray = None, t: float = 0.):
         raise NotImplementedError
     
     

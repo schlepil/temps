@@ -13,8 +13,9 @@ class distributedFunnel:
         self.lyapFunc = lyapFunc
         self.traj = traj
         self.evolveLyap = evolveLyap
-
         self.branchingAlg = branchingAlg
+        
+        self.repr = self.lyapFunc.repr
 
         self.opts = {'convLim':1e-3, #Dichotomic
                      'minDistToSep':0.2,
@@ -48,15 +49,16 @@ class distributedFunnel:
             allTaylorApprox = [ self.dynSys.getTaylorApprox(self.traj.getX(aT)) for aT in tSteps ]
             allU = [ (self.dynSys.ctrlInput.getMinU(aT), self.traj.getU(aT), self.dynSys.ctrlInput.getMaxU(aT)) for aT in tSteps ]
 
-            objectiveStar = [ self.lyapFunc.getObjectiveAsArray(self.traj.getX(tSteps[k]), self.traj.getDX(tSteps[k]), allTaylorApprox[k][0],
-                                                             allTaylorApprox[k][1], np.ones((self.dynSys.nu,1)) )  for k in range(self.opts[
-                                                                                                                                                                    'interSteps'])]
+            objectiveStar = [ self.lyapFunc.getObjectiveAsArray(allTaylorApprox[k][0], allTaylorApprox[k][1], np.ones((self.dynSys.nu,1)),
+                                                                np.tile(self.repr.varNumsPerDeg[0], (self.dynSys.nu,1)), self.traj.getX(tSteps[k]), self.traj.getDX(tSteps[k]), tSteps[k]) for k in range(self.opts['interSteps']) ]
+            
+            
 
             lyapFunc_.register(tStop, nextZoneGuess)
 
-            stateDicts = [ [] ]
+            criticalPoints = [ [] for _ in range(self.opts['interSteps'])]
 
-            zonesToCheck = lyapFunc_.getLyapNDeriv(tSteps)
+            zonesToCheck = lyapFunc_.getPnPdot(tSteps)
 
             concreteProblems = self.ZonesNPoints2Problems(zonesToCheck, criticalPoints)
 

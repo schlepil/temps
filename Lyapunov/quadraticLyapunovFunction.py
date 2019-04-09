@@ -8,14 +8,21 @@ from control import lqr
 #Indexing
 
 # Interpolators
+# Common signature
+##  self.interpolate(tIn, P_, C, Plog, t_, returnPd) ##
+
+def getLowerNUpperInd(tIn, t):
+    tInd = np.interp(tIn, t, np.arange(0, t.size), left=0.01, right=t.size-1.01)
+    tIndL = nmaximum(0, np.floor(tInd))
+    tIndU = nminimum(np.ceil(tInd), t.size-1)
+    return tIndL, tIndU
+    
 
 # Cartesian interpolation
 def standardInterpol(tIn:np.ndarray, P:np.ndarray, C:np.ndarray, Plog:np.ndarray, t:np.ndarray, returnPd:bool):
     
     #interpolate the points
-    tInd = np.interp(tIn, t, np.arange(0,t.size), left=0.01, right= t.size-1.01)
-    tIndL = nmaximum(0,np.floor(tInd))
-    tIndU = np.minimum(np.ceil(tInd), t.size-1)
+    tIndL, tIndU = getLowerNUpperInd(tIn, t)
     
     alpha = (tIn-t[tIndL])/(t[tIndU]-t[tIndL])
     
@@ -27,7 +34,7 @@ def standardInterpol(tIn:np.ndarray, P:np.ndarray, C:np.ndarray, Plog:np.ndarray
 # Interpolation in cholesky factorization
 
 
-def geodesicInterpol(Pn, alphan, Pn1, alphan1, t, t0, t1):
+def geodesicInterpol(tIn:np.ndarray, P:np.ndarray, C:np.ndarray, Plog:np.ndarray, t:np.ndarray, returnPd:bool): #(Pn, alphan, Pn1, alphan1, t, t0, t1):
     # let dist(A,B) be the Frobenius norm of A-B, norm(A_B) then
     # P(t) = P_n.exp((Phi.Pn.Cni)*t).C_n is the geodesic minimizing
     # int ds with ds = norm(Cni.dP.Cni)
@@ -45,7 +52,7 @@ def geodesicInterpol(Pn, alphan, Pn1, alphan1, t, t0, t1):
     dT = (t1-t0)
     
     Pt = expm((1.-a)*PnL+a*Pn1L)
-    Pdt = dot((Pn1L-PnL)/dT, Pt)
+    Pdt = ndot((Pn1L-PnL)/dT, Pt)
     
     return Pt, Pdt
     
@@ -266,7 +273,6 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         self.Ci_ = None
         self.Plog_ = None
         self.Ps_ = None
-        self.tInterpolator_ = None
         
         if P is not None:
             self.alpha = alpha
@@ -313,8 +319,48 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             assert (t.size == self.alpha_.size) or (t.size == self.t_.size) or (self.t_ is None)
         self.t_ = t.reshape((-1,))
     
+    def reset(self):
+        self.P_ = None
+        self.alpha_ = None
+        self.C_ = None
+        self.Ci_ = None
+        self.Plog_ = None
+        self.Ps_ = None
+        
+        return None
+    
+    def register(self, t, PnAlpha):
+        
+        if self.P_ is None:
+            self.P_ = PnAlpha[0].reshape((1,self.dynSys.nq,self.dynSys.nq))
+            self.alpha_ = narray([PnAlpha[1]])
+            self.t_ = narray([t])
+        else:
+            if t in self.t_:
+                if __debug__:
+                    print(f"Replacing item at {t}")
+                ind = np.argwhere(t == self.t_)
+                self.t_[ind] = t
+                self.alpha_[ind] = PnAlpha[1]
+                self.P_[ind,:,:] = PnAlpha[0]
+            else:
+                if __debug__:
+                    print(f"RWInsertingeplacing item")
+                # Keep ordering
+                ind = np.where(self.t_ > t)[0][0]
+                self.t_ = np.hstack((self.t_[:ind], [t], self.t_[ind:]))
+                self.P_ = np.hstack((self.P_[:ind], [PnAlpha[0]], self.P_[ind:]))
+                self.alpha_ = np.hstack((self.alpha_[:ind], [PnAlpha[1]], self.alpha_[ind:]))
+        
+        # Take the update into account
+        self.compute_()
+    
     def compute_(self):
         if ((self.P_ is not None) and (self.alpha_ is not None)):
+            self.alpha_ = nrequire(self.alpha_, dtype=nfloat)
+            self.t_ = nrequire(self.t_, dtype=nfloat)
+            self.P_ = nrequire(self.P_, dtype=nfloat)
+            
             self.Ps_ = self.Ps
             self.Plog_ = nzeros(self.P_.shape, dtype=nfloat) if self.Plog_ is None else self.Plog_
             self.C_ = nzeros(self.P_.shape, dtype=nfloat) if self.C_ is None else self.C_
