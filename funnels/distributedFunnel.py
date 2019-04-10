@@ -48,17 +48,21 @@ class distributedFunnel:
             # Get the current taylor series
             allTaylorApprox = [ self.dynSys.getTaylorApprox(self.traj.getX(aT)) for aT in tSteps ]
             allU = [ (self.dynSys.ctrlInput.getMinU(aT), self.traj.getU(aT), self.dynSys.ctrlInput.getMaxU(aT)) for aT in tSteps ]
+            allDeltaU = [allU[0]-allU[1], allU[2]-allU[1]]
 
             objectiveStar = [ self.lyapFunc.getObjectiveAsArray(allTaylorApprox[k][0], allTaylorApprox[k][1], np.ones((self.dynSys.nu,1)),
                                                                 np.tile(self.repr.varNumsPerDeg[0], (self.dynSys.nu,1)), self.traj.getX(tSteps[k]), self.traj.getDX(tSteps[k]), tSteps[k]) for k in range(self.opts['interSteps']) ]
             
-            
+            # TODO this is too long and should be seperated
 
             lyapFunc_.register(tStop, nextZoneGuess)
-
             criticalPoints = [ [] for _ in range(self.opts['interSteps'])]
 
             zonesToCheck = lyapFunc_.getPnPdot(tSteps)
+
+            # Step 1 check if current is feasible
+
+            minConvList = self.solve1(zonesToCheck, criticalPoints, routingDict, probQueues, solQueues)
 
             concreteProblems = self.ZonesNPoints2Problems(zonesToCheck, criticalPoints)
 

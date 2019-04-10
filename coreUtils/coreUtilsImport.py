@@ -15,6 +15,7 @@ from numpy import empty as nempty
 
 from numpy import sum as nsum
 from numpy import multiply as nmultiply
+from numpy import divide as ndivide
 from numpy import power as npower
 from numpy import prod as nprod
 from numpy import einsum as neinsum
