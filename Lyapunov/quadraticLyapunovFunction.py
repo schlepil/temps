@@ -21,7 +21,7 @@ def getLowerNUpperInd(tIn, t):
 # Cartesian interpolation
 def standardInterpol(tIn:np.ndarray, P:np.ndarray, C:np.ndarray, Plog:np.ndarray, t:np.ndarray, returnPd:bool):
     
-    #interpolate the points
+    #interpolation bondaries
     tIndL, tIndU = getLowerNUpperInd(tIn, t)
     
     alpha = (tIn-t[tIndL])/(t[tIndU]-t[tIndL])
@@ -38,26 +38,27 @@ def geodesicInterpol(tIn:np.ndarray, P:np.ndarray, C:np.ndarray, Plog:np.ndarray
     # let dist(A,B) be the Frobenius norm of A-B, norm(A_B) then
     # P(t) = P_n.exp((Phi.Pn.Cni)*t).C_n is the geodesic minimizing
     # int ds with ds = norm(Cni.dP.Cni)
+
+    # interpolation bondaries
+    tIndL, tIndU = getLowerNUpperInd(tIn, t)
     
     # Following https://www.cv-foundation.org/openaccess/content_cvpr_2013/html/Jayasumana_Kernel_Methods_on_2013_CVPR_paper.html
     # and Serge Lang, Fundamentals of Differential Geometry, p 326
-    
-    Pn = Pn*alphan
-    Pn1 = Pn1*alphan1
-    
-    PnL = logm(Pn)
-    Pn1L = logm(Pn1)
-    
-    a = (t-t0)/(t1-t0)
-    dT = (t1-t0)
-    
-    Pt = expm((1.-a)*PnL+a*Pn1L)
-    Pdt = ndot((Pn1L-PnL)/dT, Pt)
-    
-    return Pt, Pdt
-    
 
-
+    alpha = (tIn-t[tIndL])/(t[tIndU]-t[tIndL])
+    dT = t[tIndU]-t[tIndL]
+    
+    Pt = np.zeros((tIn.size, P.shape[1], P.shape[2]), dtype=nfloat)
+    Pdt = np.zeros_like(Pt)
+    for k in range(tIn.size):
+        Pt[k,:,:] = expm((1.-alpha[k])*Plog[tIndL[k],:,:]+alpha[k]*Plog[tIndU[k],:,:])
+        # TODO vectorize
+        Pdt[k,:,:] = ndot((Plog[tIndU[k],:,:]-Plog[tIndL[k],:,:])/dT[k], Pt[k,:,:])
+    
+    if returnPd:
+        return Pt, Pdt
+    else:
+        return Pt
 
 
 class quadraticLyapunovFunction(LyapunovFunction):
