@@ -1,0 +1,2 @@
+from parallelChecker.parallelChecker import *
+import parallelChecker.parallelDefinitions as parallelDefinitions

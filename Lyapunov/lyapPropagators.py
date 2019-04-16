@@ -4,22 +4,21 @@ import Lyapunov.quadraticLyapunovFunction as quadLyap
 from dynamicalSystems import dynamicalSystem
 from trajectories import referenceTrajectory
 
+from scipy.integrate import solve_ivp
 
 class stopperFunction:
-    def __init__(self, tDeltaMax:float):
-        self.tDeltaMax = tDeltaMax
-        self.t0 = None
+    def __init__(self):
         self.terminal=True
 
     def reset(self, t0, P0):
-        self.t0 = t0
+        pass
 
     def __call__(self, t:float, z:np.ndarray):
-        return self.t0-t-self.tDeltaMax
+        return 1.
 
 class limitChangeStopper(stopperFunction):
-    def __init__(self, tDeltaMax:float, P0:np.ndarray, deltaPMax:float, diffType:'ev'):
-        super(type(self), self).__init__(tDeltaMax)
+    def __init__(self, P0:np.ndarray, deltaPMax:float, diffType:'ev'):
+        super(type(self), self).__init__()
 
         self.deltaPMax = deltaPMax
         self.diffType = diffType
@@ -28,20 +27,19 @@ class limitChangeStopper(stopperFunction):
         self.P0 = P0.reshape((dim,dim))
 
     def reset(self, t0, P0):
-        super(type(self), self).__reset__(t0)
+        super(type(self), self).__reset__(t0, P0)
         self.P0 = P0.reshape(self.P0.shape)
 
     def __call__(self, t: float, z: np.ndarray):
-        diffT = super(type(self), self).__call__(t,z)
 
         P = z.reshape(self.P0.shape)
 
         if (self.diffType == 'ev'):
-            diffE = nmax(nabs(eigvalsh(P-self.P0)))
+            diffE = nmax(nabs(eigvalsh(P-self.P0)))-self.deltaPMax
         else:
             raise RuntimeError
 
-        return min(self.deltaPMax, diffE)
+        return diffE
 
 ###########################
 
@@ -49,15 +47,17 @@ class lyapEvol():
 
     def __init__(self, dynSys:dynamicalSystem, refTraj:referenceTrajectory):
         self.dynSys=dynSys
+        self.refTraj = refTraj
 
     def __call__(self, tStart:float, tDeltaMax:float, initialShape):
+        pass
 
 ###########################
 
 class quadLyapTimeVaryingLQR(lyapEvol):
-    def __init__(self, dynSys:dynamicalSystem, Q:np.ndarray=None, R:np.ndarray=None, reshape=False, restart=False):
+    def __init__(self, dynSys:dynamicalSystem, refTraj:referenceTrajectory, Q:np.ndarray=None, R:np.ndarray=None, reshape=False, restart=False):
 
-        super(quadLyapTimeVaryingLQR, self).__init__(dynSys)
+        super(quadLyapTimeVaryingLQR, self).__init__(dynSys, refTraj)
 
         if Q is None:
             self.Q = np.identity(self.dynSys.nq)
@@ -71,15 +71,12 @@ class quadLyapTimeVaryingLQR(lyapEvol):
         self.reshape = reshape
         self.restart = restart
         self.interSteps = None
-        self.allZ = None
-        self.allT = None
 
         self.limK = True
-        self.refTraj = None
         self.ctrlSafeFac = 0.9
         self.retAll = False #Return all option for finer interpolation
 
-        self.stopFct = None # type: stopperFunction
+        self.stopFct = stopperFunction(0.1) # type: stopperFunction
 
     def dz(self, z, t, xx):
         # Current P matrix
@@ -144,39 +141,37 @@ class quadLyapTimeVaryingLQR(lyapEvol):
         if self.restart:
             z0 = z0 / lastShape[1]
             lastShape[1] = 1.
-
+        
+        # Reset the stopperFunction
+        self.stopFct.reset(tStart, z0.reshape((nq,nq)))
 
         if self.interSteps is None:
-            z = scipy.integrate.odeint(lambda thisZ, thisT: self.dz(thisZ, thisT, refTraj.xref(thisT)), z0, [tSpan[1], tSpan[0]])[-1, :]
+            #z = scipy.integrate.odeint(lambda thisZ, thisT: self.dz(thisZ, thisT, refTraj.xref(thisT)), z0, [tSpan[1], tSpan[0]])[-1, :]
+            sol = solve_ivp(lambda thisZ, thisT: self.dz(thisZ, thisT, self.refTraj.getX(thisT)), z0, [tStart, tStart-tDeltaMax], events=self.stopFct)
+            z = sol.y
+            tFinal = sol.t[-1]
+            allZ = z.reshape((-1,1))
         else:
-            allT = np.linspace(tSpan[1], tSpan[0], self.interSteps)
-            allZ = scipy.integrate.odeint(lambda thisZ, thisT: self.dz(thisZ, thisT, refTraj.xref(thisT)), z0, allT)
+            allT = np.linspace(tStart, tStart-tDeltaMax, self.interSteps)
+            sol = solve_ivp(lambda thisZ, thisT: self.dz(thisZ, thisT, self.refTraj.getX(thisT)), z0, [tStart, tStart-tDeltaMax], t_eval=allT, events=self.stopFct)
+            allZ = sol.y
+            tFinal = sol.t[-1]
 
-            z = allZ[-1, :]
             allZ = allZ.T
+            z = allZ[-1, :]
             # Flip to the time in order
             allT = np.flip(allT, 0)
             allZ = np.fliplr(allZ)
-            if not (self.allZ is None):
-                self.allZ = np.hstack((allZ, self.allZ))
-                self.allT = np.hstack((allT, self.allT))
-            else:
-                self.allZ = allZ
-                self.allT = allT
-
-        P = z.reshape((nq, nq))
-        P = (P + P.T) / 2
-        B = self.dynSys.gEval(refTraj.xref(tSpan[0]))
-        self.lastK = np.linalg.lstsq(self.R, ndot(B.T, P))
-        try:
-            assert np.all(np.isclose(P - P.T, 0.)), "non symmetric"
-            np.linalg.cholesky(P)
-        except:
-            print(P)
-            print(np.linalg.eigh(P)[0])
-            print(np.linalg.eigh(P)[1])
-            print(P - P.T)
-            assert 0
+        
+        if __debug__:
+            for k in range(allZ.shape[1]):
+                aP = allZ[:, k].reshape((nq, nq)).copy()
+                try:
+                    assert np.allclose(aP, aP.T)
+                    # Check positiveness
+                    cholesky(aP)
+                except:
+                    print(f"failed for {k} with \n {aP}")
 
         if self.restart:
             retVal = 1.
@@ -184,10 +179,8 @@ class quadLyapTimeVaryingLQR(lyapEvol):
             retVal = lastShape[1]
         if self.retAll:
             allDz = self.getDz(refTraj, allT, allZ)
-            allZM = [allZ[:, k].reshape((self.dynSys.nx, self.dynSys.nx)) for k in range(allZ.shape[1])]
+            allZM = [allZ[:, k].reshape((nq,nq)) for k in range(allZ.shape[1])]
             allDzM = [allDz[:, k].reshape((self.dynSys.nx, self.dynSys.nx)) for k in range(allZ.shape[1])]
-            return [[allZM, allDzM, allT], retVal]
+            return tFinal, [[allZM, allDzM, allT], retVal]
         else:
-            return [P, retVal]
-
-###########################
+            return tFinal, [P, retVal]

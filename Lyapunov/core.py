@@ -35,5 +35,5 @@ class LyapunovFunction():
         raise NotImplementedError
     
     
-    
+
         

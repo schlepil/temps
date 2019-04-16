@@ -16,6 +16,10 @@ cfloat = np.ctypeslib.as_ctypes_type(nfloat)
 quadraticLyapShared_ = [ mpRawArray(cfloat, lenBuffer_) for _ in range(nThreads_)] # Assuming x'.P.x <= 1.
 polyObjShared_ = [ mpRawArray(cfloat, lenBuffer_) for _ in range(nThreads_)]
 polyCstrShared_ = [ [mpRawArray(cfloat, lenBuffer_) for _ in nCstrMax_] for _ in range(nThreads_) ]
+# Easy access via np
+quadraticLyapSharedNP_ = [ np.frombuffer(aS, dtype=nfloat, count=lenBuffer_) for aS in quadraticLyapShared_ ]
+polyObjSharedNP_ = [ np.frombuffer(aS, dtype=nfloat, count=lenBuffer_) for aS in polyObjShared_ ]
+polyCstrSharedNP_ = [ [np.frombuffer(aS, dtype=nfloat, count=lenBuffer_) for aS in aSL]  for aSL in polyCstrShared_ ]
 
 
 # inputDict
@@ -116,7 +120,7 @@ def workerSolve(inQueue, outQueue):
         else:
             ySol = extraction[0]
 
-        outQueue.put({'xSol':extraction[0], 'ySol':ySol, 'sol':solution, 'ext':extraction})
+        outQueue.put({'probId':input['probId'], 'xSol':extraction[0], 'ySol':ySol, 'sol':solution, 'ext':extraction})
 
     return 0
 
@@ -130,7 +134,25 @@ for k in range(nThreads_):
     allWorkers[-1].start()
 
 
-
+def probSetter(problem:dict, probQueues:SimpleQueue, routingDict:dict = {}, workerId:int=None):
+    
+    if workerId is not None:
+        # First copy, then put into queue
+        # Necessary
+        polyObjSharedNP_[workerId][:problem['obj'].size] = problem['obj']
+        for k, aCstr in enumerate(problem['ctsr']):
+            polyCstrSharedNP_[workerId][k][:aCstr.size] = aCstr
+        # Optional
+        if 'quadLyapP' in problem.keys():
+            quadraticLyapSharedNP_[workerId][:problem['quadLyaP'].size] = problem['quadLyaP'].flatten()
+        
+        probQueues[k].put(problem['probDict'])
+    
+    else:
+        # TODO sth smart to assign a suitable worker
+        raise NotImplementedError
+    
+    return workerId
 
 
 
