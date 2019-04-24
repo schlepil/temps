@@ -31,9 +31,11 @@ class LyapunovFunction():
     def getCstrCoeffs(self,x0:np.ndarray,PG0:np.ndarray=None, cstrDegList:np.ndarray=None):
         raise NotImplementedError
 
-    def getObjectiveAsArray(self, fTaylor: np.ndarray = None, gTaylor: np.ndarray = None, taylorDeg: int = 3, u: np.ndarray = None, uMonom: np.ndarray = None, x0: np.ndarray = None, dx0: np.ndarray = None, t: float = 0.):
+    def getObjectiveAsArray(self, fTaylor: np.ndarray = None, gTaylor: np.ndarray = None, taylorDeg: int = 3, u: np.ndarray = None, uMonom: np.ndarray = None, x0: np.ndarray = None, dx0: np.ndarray = None, t: float = 0., P=None, Pdot=None):
         raise NotImplementedError
     
+    def getLyap(self, t):
+        raise NotImplementedError
     
 
         

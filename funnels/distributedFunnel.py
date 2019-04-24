@@ -1,7 +1,7 @@
 from coreUtils import *
 
 from parallelChecker import parallelDefinitions as paraDef
-from parallelChecker import probSetter
+from parallelChecker.parallelWorkers import distributor
 
 from dynamicalSystems import dynamicalSystem
 from Lyapunov import LyapunovFunction, lyapEvol
@@ -13,29 +13,31 @@ import relaxations as relax
 
 class distributedFunnel:
 
-    def __init__(self, dynSys:dynamicalSystem, lyapFunc:LyapunovFunction, traj:referenceTrajectory, evolveLyap:lyapEvol, branchingAlg, opts={}):
+    def __init__(self, dynSys:dynamicalSystem, lyapFunc:LyapunovFunction, traj:referenceTrajectory, evolveLyap:lyapEvol, opts={}):
         self.dynSys = dynSys
         self.lyapFunc = lyapFunc
         self.traj = traj
         self.evolveLyap = evolveLyap
-        self.branchingAlg = branchingAlg
         
         self.repr = self.lyapFunc.repr
 
         self.opts = {'convLim':1e-3, #Dichotomic
-                     'minDistToSep':0.2, #When to refine search
-                     'sphereBoundCritPoint':False, # Whether to use separation or spheric confinement
+                     'minDistToSep':0.2, #When to ude linear feedback and "ignore" separation
+                     'sphereBoundCritPoint':True, # Whether to use separation or spheric confinement
                      'interSteps':3, # How many points to check per interval
                      'projection':'sphere',
+                     'solver':'cvxopt',
+                     'numericEpsPos':-1e-6,
+                     'minFinalValue':1,
                      'optsEvol':{
-                         'tDeltaMax':.1
-                     }
+                                    'tDeltaMax':.1
+                                }
                      }
         self.opts.update(opts)
         
-        assert self.opts['sphereBoundCritPoint'] == False
+        assert self.opts['sphereBoundCritPoint'] == True #TODO
 
-    def doProjection(self, zonesToCheck, polyCoeffs:np.ndarray=None, criticalPoints:dict=None):
+    def doProjection(self, zone, criticalPoint:List[dict]=None, ctrlDict:dict=None):
         """
         Simplifying the problem using some projection.
         Currently only the mapping between ellipsoids and unit-spheres is implemented
@@ -45,75 +47,440 @@ class distributedFunnel:
         :return: directly work on input
         """
         
-        assert (polyCoeffs is None) or (len(zonesToCheck) == len(polyCoeffs))
-        assert (criticalPoints is None) or (len(zonesToCheck) == len(criticalPoints))
-        
         if self.opts['projection'] == "sphere":
-            if isinstance(self.lyapFunc, lyapunovFunctions.quadraticLyapunovFunction):
+            if isinstance(self.lyapFunc, (lyapunovFunctions.quadraticLyapunovFunction, lyapunovFunctions.quadraticLyapunovFunctionTimed)):
                 
-                for i, aZone in enumerate(zonesToCheck):
-                    Ci = cholesky(aZone[0]/aZone[1])
-                    Ci_inv = inv(Ci) #aZone=(P_i, alpha_i)
-                    if polyCoeffs is not None:
-                        for k in range(polyCoeffs[i].shape[0]):
-                            polyCoeffs[i][k,:] = self.repr.doLinCoordChange(polyCoeffs[i][k,:], Ci_inv)
-                    if criticalPoints is not None:
-                        for k in range(len(criticalPoints)):
-                            criticalPoints['y'] = ndot(Ci, criticalPoints['x'])
+                Ci = cholesky(zone[0]/zone[1])
+                Ci_inv = inv(Ci) #aZone=(P_i, alpha_i)
+                if ctrlDict is not None:
+                    ctrlDict['sphereProj'] = True
+                    for aKey, aVal in ctrlDict.items():
+                        try:
+                            for bKey, bVal in aVal.items():
+                                aVal[bKey] = self.repr.doLinCoordChange(bVal, Ci_inv)
+                        except:
+                            if aKey == 'PG0':
+                                # change y = P^{1/2}.x; P = P^{1/2}^T.P^{1/2}
+                                # x.T.P.G.x.u -> x.T.P^{1/2}^T.P^{1/2}.G.P^{-1/2}.y.u -> y.T.P^{-1/2}^T."PG0".P^{-1/2}.y.u
+                                # P.G = P^{1/2}^T.P^{1/2}.G
+                                ctrlDict['PG0'] = ndot(Ci_inv.T, ctrlDict['PG0'])
+                            else:
+                                print(f"key:{aKey} and val:{aVal} are not affected from projection")
+                if criticalPoint is not None:
+                    for k in range(len(criticalPoint)):
+                        criticalPoint[k]['y'] = ndot(Ci, criticalPoint[k]['x'])
             else:
                 raise NotImplementedError
-        elif self.opts['projection'] in (None, 'None'):
+        elif self.opts['projection'] in (None, 'None', False):
             pass
         else:
             raise NotImplementedError
         
         return None
     
-    def ZoneNPoints2Prob(self, aZone:"A Lyap Zone", aCritPList:List, objStarinput:np.ndarray):
-        """
+    def getCtrlDict(self, t, fTaylorApprox, gTaylorApprox, returnZone=True):
         
-        :param aZone: [[P_0, alpha_0], ...]
-        :param aCritPList: [{'x':np.ndarray, other}, ...]
-        :return:
-        """
+        ctrlDict = {} # Return value
+        
+        allU = [self.dynSys.ctrlInput.getMinU(t), self.traj.getU(t), self.dynSys.ctrlInput.getMaxU(t)]
+        allDeltaU = [allU[0]-allU[1], allU[2]-allU[1]]
+        
+        if isinstance(self.lyapFunc, (lyapunovFunctions.quadraticLyapunovFunction, lyapunovFunctions.quadraticLyapunovFunctionTimed)):
+            # Get the zone
+            zone = self.lyapFunc.getPnPdot(t, True)
+            # todo
+            zone = [zone[0], 1., zone[1]]
+            # Optimal control
+            objectiveStar = self.lyapFunc.getObjectiveAsArray(fTaylorApprox, gTaylorApprox, self.dynSys.maxTaylorDeg, np.ones((self.dynSys.nu, 1)), self.repr.varNumsPerDeg[0], dx0=self.traj.getDX(t), t=t, P=zone[0], Pdot=zone[2])
+        
+            # Parse
+            ctrlDict[-1] = {0:objectiveStar[0,:]}
+            
+            for k in range(self.dynSys.nu):
+                if __debug__:
+                    assert abs(objectiveStar[k+1,0]) <= 1e-9
+                ctrlDict[k] = { -1:objectiveStar[k+1,:]*allDeltaU[0][k,0], 1:objectiveStar[k+1,:]*allDeltaU[1][k,0] }  # Best is minimal or maximal
+                
+            # Linear control based on separating hyperplanes
+            ctrlDict['PG0'] = ndot(zone[0], gTaylorApprox[0, :, :])
+            uCtrlLin, uMonomLin = self.dynSys.ctrlInput.getU(2*np.ones((self.dynSys.nu, ), dtype=nint), 0., P=zone[0], PG0=ctrlDict['PG0'], alpha=zone[1], monomOut=True)
+            # Attention here the resulting polynomial coefficients are already scaled correctly (no multiplication with deltaU necessary)
+            objectivePolyCtrlLin = self.lyapFunc.getObjectiveAsArray(fTaylorApprox, gTaylorApprox, self.dynSys.maxTaylorDeg, uCtrlLin, uMonomLin, dx0=self.traj.getDX(t), t=t, P=zone[0], Pdot=zone[2])
+            
+            # Parse
+            for k in range(self.dynSys.nu):
+                ctrlDict[k][2] = objectivePolyCtrlLin[k+1,:] # set linear
+            
+            ctrlDict['sphereProj'] = False
+        
+        else:
+            raise NotImplementedError
         
         
+        if returnZone:
+            return ctrlDict, zone
+        else:
+            return  ctrlDict
+
+    def ZoneNPoints2Prob(self, zone:"A Lyap Zone", critPList:List[dict], ctrlDict:dict):
         
-        if isinstance(self.lyapFunc, lyapunovFunctions.quadraticLyapunovFunction):
+        nu_ = self.dynSys.nu
+        nq_ = self.dynSys.nq
+        
+    
+        if isinstance(self.lyapFunc, (lyapunovFunctions.quadraticLyapunovFunction, lyapunovFunctions.quadraticLyapunovFunctionTimed)):
+            
             if self.opts['sphereBoundCritPoint']:
-                raise NotImplementedError
-            else:
-                # Use optimal control for each critical point, that is use optimal control on the polytope
+                # Use optimal control for each critical point (except point is very close to separating hyperplane), inside a sphere (in transformed coords) surrounding it
                 # Exclude the largest sphere possible (in transformed space) for the linear control
-                
-                # 1 Get the linear control laws
-                
-                
-                helperPoly = [polynomial(self.repr, helperObj[k,:]) for k in range(helperObj.shape[0])]
-                
-                # 2 Extract separating hyperplanes
-                Lcstr = helperObj[:, self.repr.varNumsPerDeg[1]].copy()
-                
-                # 3 Create the problems
+    
+                if not ctrlDict['sphereProj']:
+                    raise NotImplementedError
+    
+                # 1 Create the problems
                 probList = []
-                # 3.1 The linear control approximation
-                probList.append()
+    
+                # 1.1 The linear control approximation
+                thisProbBase = {'probDict':{'nPt':-1, 'solver':self.opts['solver'], 'dimsNDeg':(self.dynSys.nq, self.repr.maxDeg), 'nCstrNDegType':[]}, 'cstr':[]}
+                thisProbLin = dp(thisProbBase)
+                thisProbLin['probDict']['isTerminal']=-1 # Base case, non-convergence is "treatable" via critPoints
+                probList.append([thisProbLin])
+    
+                # 1.1.1 Construct the objective
+                thisPoly = polynomial(self.repr) #Helper
+                thisCoeffs = nzeros((self.repr.nMonoms,), dtype=nfloat)
+                thisCoeffs += ctrlDict[-1][0] # Objective resulting from system dynamics
+                for k in range(nu_):
+                    thisCoeffs += ctrlDict[k][2]
+                thisProbLin['obj'] = -thisCoeffs # Inverse sign to maximize divergence <-> minimize convergence
+                # 1.2 Construct the constraints
+                # 1.2.1 Confine to hypersphere
+                thisPoly.setQuadraticForm(-nidentity((nq_), dtype=nfloat), self.repr.varNumsPerDeg[1]) # Attention sign!
+                thisProbLin['probDict']['nCstrNDegType'].append( (2,'s') )
+                thisProbLin['cstr'].append( thisPoly.coeffs )
                 
+                #Set information
+                thisProbLin['probDict']['u'] = 2*nones((nu_,), dtype=nint)
                 
+                # Now loop through the critical points
+                for nPt, aCritPoint in enumerate(critPList):
+                    thisProbBase['probDict']['nPt'] = nPt
+                    thisY = aCritPoint['y']  # transformed coords of the point
+                    # get the distance to all hyperplanes
+                    # TODO check sign of PG0 with respect to sign of objectives
+                    yPlaneDist = ndot(ctrlDict['PG0'], thisY).reshape((nu_,))
+    
+                    if aCritPoint['strictSep'] == 0:
+                        # Use the linear approximator to avoid splitting up
+                        thisProb = dp(thisProbBase)
+                        thisProb['probDict']['isTerminal'] = 0  # Convergence can be improved but only by increasing the computation load
+                        thisProb['strictSep'] = aCritPoint['strictSep']
+                        probList.append(thisProb)
+    
+                        thisCtrlType = [None for _ in range(nu_, 1)]
+    
+                        # Decide what to do
+                        minDist = np.Inf
+                        for i, iDist in enumerate(yPlaneDist):
+                            if iDist < -self.opts['minDistToSep']:
+                                # Negative -> use maximal control input
+                                thisCtrlType[i, 0] = 1
+                                minDist = min(minDist, abs(iDist))
+                            elif iDist < self.opts['minDistToSep']:
+                                # Linear control as iDist is self.opts['minDistToSep'] <= iDist < self.opts['minDistToSep']
+                                thisCtrlType[i, 0] = 2
+                            else:
+                                # Large positive -> use minimal control input
+                                thisCtrlType[i, 0] = -1
+                        #Remember
+                        thisProb['probDict']['u'] = narray(thisCtrlType, dtype=nint)
+                        thisProb['probDict']['minDist'] = minDist
+                        thisProb['probDict']['center'] = thisY
+    
+                        # Now we have the necessary information and we can construct the actual problem
+                        thisCoeffs = nzeros((self.repr.nMonoms,), dtype=nfloat)
+                        thisCoeffs += ctrlDict[-1][0]  # Objective resulting from system dynamics
+                        for i, type in enumerate(thisCtrlType.squeeze()):
+                            if type == 2:
+                                # Rescale due to the reduced size
+                                if __debug__:
+                                    assert abs(ctrlDict[i][type][0]) < 1e-10
+                                thisCoeffs[1, :] += ctrlDict[i][type][1, :]*(1./minDist)
+                            else:
+                                thisCoeffs += ctrlDict[i][type]
+                        thisProb['obj'] = -thisCoeffs # Inverse sign to maximize divergence <-> minimize convergence
+                        # get the sphere
+                        # (y-thisY).T.P.(y-thisY)<=mindDist**2
+                        # y.T.P.y - 2*thisY.T.P.y - minDist**2 <= 0
+                        # y.T.(-P).y + 2*thisY.T.P.y + minDist**2 >= 0
+                        # with P = Id
+                        thisPoly.setQuadraticForm(-nidentity((nq_), dtype=nfloat), self.repr.varNumsPerDeg[1], 2.*thisY.squeeze(), self.repr.varNumsPerDeg[1])  # Attention sign!
+                        thisPoly.coeffs[0] += minDist**2
+
+                        # Confine the current problem to the sphere
+                        thisProb['probDict']['nCstrNDegType'].append((2, 's'))
+                        thisProb['cstr'].append(thisPoly.coeffs.copy())
+    
+                        # Exclude the sphere from linear prob
+                        thisProbLin['probDict']['nCstrNDegType'].append((2, 's'))
+                        thisProbLin['cstr'].append(-thisPoly.coeffs.copy())
+                    else:
+                        # Use the separation hyerplane/surface ( degree of the separation polynomial given by aCritPoint['strictSep']
+                        # This increases modeling accuracy but at the expense of (exponentially) more optimization problems
+                        
+                        sepDeg_ = aCritPoint['strictSep']
+
+                        thisCtrlType = np.sign(yPlaneDist).astype(nint)
+                        thisCtrlType[thisCtrlType==0] = 1
+                        sepList = np.argwhere(nabs(yPlaneDist)<self.opts['minDistToSep'])
+                        
+                        minDist = nmin(nabs(yPlaneDist[nabs(yPlaneDist)>=self.opts['minDistToSep']]))
+                        
+                        # Get all possible "combinations"
+                        regionDefList = list(itertools.product([-1,1], repeat=len(sepList)))
+
+                        # Create all the problems
+                        thisProbBase_ = dp(thisProbBase)
+                        thisProbBase_['probDict']['isTerminal'] = aCritPoint['strictSep']
+                        thisProbBase_['probDict']['strictSep'] = aCritPoint['strictSep']
+
+                        thisProbBase_['probDict']['minDist'] = minDist
+                        thisProbBase_['probDict']['center'] = thisY
+                        
+                        # Confine the base problem to the hypersphere, exclude the hypersphere form the linear problem
+                        # Form the objective for all (discrete) control laws that do not change
+                        thisCoeffs = nzeros((self.repr.nMonoms,), dtype=nfloat)
+                        thisCoeffs += ctrlDict[-1][0]  # Objective resulting from system dynamics
+                        for i, type in enumerate(thisCtrlType.squeeze()):
+                            if i in sepList:
+                                #Will be treated later on
+                                continue
+                            thisCoeffs += ctrlDict[i][type]
+                        thisProbBase_['obj'] = -thisCoeffs # Inverse sign to maximize divergence <-> minimize convergence
+
+                        # get the sphere
+                        thisPoly.setQuadraticForm(-nidentity((nq_), dtype=nfloat), self.repr.varNumsPerDeg[1], 2.*thisY.squeeze(), self.repr.varNumsPerDeg[1])  # Attention sign!
+                        thisPoly.coeffs[0] += minDist**2
+                        
+                        # Confine the current problem to the sphere
+                        thisProbBase_['probDict']['nCstrNDegType'].append((2, 's'))
+                        thisProbBase_['cstr'].append(thisPoly.coeffs.copy())
+
+                        # Exclude the sphere from linear prob
+                        thisProbLin['probDict']['nCstrNDegType'].append((2, 's'))
+                        thisProbLin['cstr'].append(-thisPoly.coeffs.copy())
+                        
+                        ## Construction of base problem is done
+                        # -> specialise
+                        
+                        # All problems
+                        thisProbList = [ dp(thisProbBase_) for _ in range(len(sepList)) ]
+                        
+                        # Loop
+                        sepMonomNum_ = self.repr.varNumsUpToDeg[sepDeg_]
+                        for i, aSepList in enumerate(sepList):
+                            thisProb = thisProbList[i]
+                            for j, aSep in enumerate(aSepList):
+                                # if aSep is 1 -> "positive" side of the separating hyperplane
+                                # -> use minimal control input (indexed with -1)
+                                # if aSep is -1 -> "negative" side of the separating hyperplane
+                                # -> use maximal control input (indexed with 1)
+
+                                thisProb['obj'] -= ctrlDict[sepList[j]][-aSep]  # Inverse sign to maximize divergence <-> minimize convergence
+                                # Add the constraint
+                                thisCoeffs = nzero((self.repr.nMonoms,), dtype=nfloat)
+                                thisCoeffs[:sepMonomNum_] = ctrlDict[sepList[j]][aSep][:sepMonomNum_] #Will be automatically rescaled
+
+                                # Confine the current problem
+                                thisProb['probDict']['nCstrNDegType'].append((sepDeg_, 's'))
+                                thisProb['cstr'].append(thisCoeffs)
+                                
+                        #Done
+                        probList.append(thisProbList)
+            else:
+                raise NotImplementedError
                 
-                
-                
-                
-                
-                
-                
-        
         else:
             print("Others need to be implemented first")
             raise NotImplementedError
+        
+        return probList
+    
+    def analyzeSol(self, thisSol:dict, ctrlDict, critPoints):
+        
+        """
+        Analyze a solution and check if a better approximation can be found
+        :param thisSol:
+        :return:
+        """
+        
+        nq_ = self.dynSys.nq
+        nu_ = self.dynSys.nu
+        thisPoly = polynomial(self.repr)  # Helper
+        
+        probDict_ = thisSol['origProb']['probDict']
+        if probDict_['isTerminal'] >= self.opts['minFinalValue']:
+            # Thats it, this part of the state-space is proven to be non-stabilizable
+            return []
+        elif probDict_['isTerminal'] == -1:
+            # Using linear control everywhere
+            # We can simply put a new sphere around the minimal point
+            # TODO check if this needs to be specialized with respect to the Lyapunov function or other stuff
+            if isinstance(self.lyapFunc, (lyapunovFunctions.quadraticLyapunovFunction, lyapunovFunctions.quadraticLyapunovFunctionTimed)):
+                
+                assert self.opts['projection'] == 'sphere'
+                assert thisSol['probDict']['nPt'] == -1
+                
+                if self.opts['sphereBoundCritPoint']:
+                    probList = []
+                    thisProbLin = thisSol['origProb']
+                    probList.append(thisProbLin)
+                    
+                    # Create the subset to exclude
+                    # There might be multiple critical points, in this case they have the same value for the primal objective
+                    ally = thisSol['ySol']
+
+                    #Base prob
+                    thisProbBase = {'probDict':{'nPt':-1, 'solver':self.opts['solver'], 'dimsNDeg':(self.dynSys.nq, self.repr.maxDeg), 'nCstrNDegType':[]}, 'cstr':[]}
+                    # Copy the base constraint that confines to sphere
+                    thisProbBase['probDict']['nCstrNDegType'].append( probDict_['nCstrNDegType'][0] )
+                    thisProbBase['cstr'].append( thisProbLin['cstr'][0].copy() )
+                    
+                    thisProbBase['probDict']['resPlacement'] = thisSol['probDict']['resPlacement']
+                    for k in range(ally.shape[1]):
+                        thisY = ally[:, [k]]
+                        critPoints.append( {'y':thisY.copy(), 'strictSep':0} )
+                        
+                        thisProb = dp(thisProbBase)
+                        thisProb['probDict']['nPt'] = len(critPoints)-1
+                        
+                        #TODO Copied from above, unify
+                        thisProb['probDict']['isTerminal'] = 0  # Convergence can be improved but only by increasing the computation load
+                        thisProb['strictSep'] = 0
+                        probList.append(thisProb)
+
+                        thisCtrlType = [None for _ in range(nu_, 1)]
+
+                        # Decide what to do
+                        yPlaneDist = ndot(ctrlDict['PG0'], thisY).reshape((nu_,))
+                        
+                        minDist = np.Inf
+                        for i, iDist in enumerate(yPlaneDist):
+                            if iDist < -self.opts['minDistToSep']:
+                                # Negative -> use maximal control input
+                                thisCtrlType[i, 0] = 1
+                                minDist = min(minDist, abs(iDist))
+                            elif iDist < self.opts['minDistToSep']:
+                                # Linear control as iDist is self.opts['minDistToSep'] <= iDist < self.opts['minDistToSep']
+                                thisCtrlType[i, 0] = 2
+                            else:
+                                # Large positive -> use minimal control input
+                                thisCtrlType[i, 0] = -1
+                        # Remember
+                        thisProb['probDict']['u'] = narray(thisCtrlType, dtype=nint)
+                        thisProb['probDict']['minDist'] = minDist
+                        thisProb['probDict']['center'] = thisY
+
+                        # Now we have the necessary information and we can construct the actual problem
+                        thisCoeffs = nzeros((self.repr.nMonoms,), dtype=nfloat)
+                        thisCoeffs += ctrlDict[-1][0]  # Objective resulting from system dynamics
+                        for i, type in enumerate(thisCtrlType.squeeze()):
+                            if type == 2:
+                                # Rescale due to the reduced size
+                                if __debug__:
+                                    assert abs(ctrlDict[i][type][0]) < 1e-10
+                                thisCoeffs[1, :] += ctrlDict[i][type][1, :]*(1./minDist)
+                            else:
+                                thisCoeffs += ctrlDict[i][type]
+                        thisProb['obj'] = -thisCoeffs  # Inverse sign to maximize divergence <-> minimize convergence
+                        # get the sphere
+                        # (y-thisY).T.P.(y-thisY)<=mindDist**2
+                        # y.T.P.y - 2*thisY.T.P.y - minDist**2 <= 0
+                        # y.T.(-P).y + 2*thisY.T.P.y + minDist**2 >= 0
+                        # with P = Id
+                        thisPoly.setQuadraticForm(-nidentity((nq_), dtype=nfloat), self.repr.varNumsPerDeg[1], 2.*thisY.squeeze(), self.repr.varNumsPerDeg[1])  # Attention sign!
+                        thisPoly.coeffs[0] += minDist**2
+
+                        # Confine the current problem to the sphere
+                        thisProb['probDict']['nCstrNDegType'].append((2, 's'))
+                        thisProb['cstr'].append(thisPoly.coeffs.copy())
+
+                        # Exclude the sphere from linear prob
+                        thisProbLin['probDict']['nCstrNDegType'].append((2, 's'))
+                        thisProbLin['cstr'].append(-thisPoly.coeffs.copy())
+
+                elif probDict_['isTerminal'] == 0:
+                    # Here divergence was found within one of the hyperspheres
+                    # First we can check if the critical point converges for the optimal input
+                    #   -> If not : Terminal divergence is proven
+                    #   -> If so  : Set up new problems by splitting the zone
+                
+                    # Test if the solution can be improved
+                    if nall( np.logical_or( thisSol['probDict']['u']==-1, thisSol['probDict']['u']==1 ) ):
+                        # Optimal (discrete) control input was used for all inputs -> infeasible
+                        return []
+                    
+                    # Construct new problems
+                    # TODO here we could use a "recursive" scheme that computes convergence within a sphere centered at the currently
+                    # diverging point and exclude it from the rest -> Not compatible with current data-structure
+                    # Heuristic: Find an input combination that ensures convergence but minimizes the number of separations
+                    
+                    uLinCurrent = np.argwhere(thisSol['probDict']['u']==2)
+
+                    allY = thisSol['ySol']
+                    allYPlaneDist = [ndot(ctrlDict['PG0'], allY[:,k]).reshape((nu_,)) for k in range(allY.shape[1])]
+                    
+                    # check if convergence can be assured relying on the optimal input
+                    convDict = {}
+                    for aKey, aVal in ctrlDict.items():
+                        convDict[aKey] = {}
+                        try:
+                            for bKey, bVal in aVal.items():
+                                thisPoly.coeffs = bVal
+                                val = [ thisPoly.eval2(allY[:,k]) for k in range(allY.shape[1]) ]
+                                convDict[aKey].update( {bKey:val} )
+                        except:
+                            if __debug__:
+                                print(f"Unable to eval {aKey} with {aVal}")
+                    allRes = [None for _ in range(allY.shape[1])]
+                    for k in range(allY.shape[1]):
+                        thisRes = 0.
+                        for i in range(nu_):
+                        
+                     
+                    
+                    
+                    
+                    
+                        
+                        
+                        
+                        
+                        
+                    
+                    
+                    
+                    
+                
+                else:
+                    print("Currently only sphere bounded is supported")
+                    raise NotImplementedError
+                
+                
+            else:
+                print("Only quadratic Lyaps supported")
+                raise NotImplementedError
+        
+        return probList
+                
+    
+            
             
         
-    def solve1(self, zonesToCheck, critPoints, objStar, deltaU, routingDict, probQueus, solQueues):
+        
+        
+        
+    def solve1(self, timePoints, critPoints, allTaylorApprox):
         """
         Checks the feasibility of one concrete problem
         :param zonesToCheck:
@@ -126,40 +493,94 @@ class distributedFunnel:
         :return:
         """
         
-        probDict = dict( [(aId,[]) for aId in range(len(probQueus))] )
+        allSolutionsPerGroup = []
+        probDict = { 'workerRouting':{} }
         probIdC = 0
-        nQueues = len(probQueus)
         
+        # The corresponding zones
+        zones = [None for _ in range(len(critPoints))]
         
         # Set problems
-        for k, (aZone, aCritPList, aObjStar) in zip(zonesToCheck, critPoints):
+        for k, (at, aCritPList, aTaylorApprox) in enumerate(zip(timePoints, critPoints, allTaylorApprox)):
     
-            # Get the optimal linear control law
-            uCtrlLin, uMonomLin = pendSys.ctrlInput.getU(narray([2]), 0., P=lyapF.P, PG0=ndot(lyapF.P_, gTaylorX0[0, :, :]), alpha=lyapF.alpha,
-                                                         monomOut=True)
-            objectArrayLin = lyapF.getObjectiveAsArray(fTaylorX0, gTaylorX0, taylorDeg=3, u=uCtrlLin, uMonom=uMonomLin)
-            aObjLin =
+            # Get the control dict
+            aCtrlDict, aZone = self.getCtrlDict(at, aTaylorApprox[0], aTaylorApprox[1], returnZone=True)
+            zones.append(aZone)
+            # Project the problem if this reduced complexity
+            self.doProjection(aZone, aCritPList, aCtrlDict)
             
-            thisProbList = self.ZoneNPoints2Prob(aZone, aCritPList, aObjStar[1:,:])
+            aProbList = self.ZoneNPoints2Prob(aZone, aCritPList, aCtrlDict)
+            allSolutionsPerGroup.append([None for _ in range(len(aProbList))])
             
-            for aProb in thisProbList:
-                aProb['probId'] = probIdC
-                thisId = probSetter(aProb, probQueus, routingDict, divmod(probIdC, nQueues)[0])
-                probDict[thisId].append(probIdC)
+            for i, aProb in enumerate(aProbList):
+                aProb['probDict']['probId'] = probIdC
+                distributor.setProb(aProb)
+                probDict[probIdC] = (k,i)
+                
                 probIdC += 1
         
-        # Collect results
+        #Retrieve solutions and regroup them
+        for _ in range(probIdC):
+            thisSol = distributor.getSol()
+            allIdxSol = probDict[thisSol['probId']]
+            allSolutionsPerGroup[allIdxSol[0]][allIdxSol[1]] = thisSol
+
+        return allSolutionsPerGroup
+    
+    def verify1(self, timePoints, critPoints, allTaylorApprox):
         
-            
+        """
         
-            
-            
-            
-            
+        :param timePoints:
+        :param critPoints:
+        :param allTaylorApprox:
+        :return:
+        """
         
+        results = []
+        resultsLin = []
+        resIdLin = 0
+        
+        # Get all zones to be checked
+        allCtrlDictsNzones = [self.getCtrlDict(at, aTaylorApprox[0], aTaylorApprox[1], returnZone=True) for at, aTaylorApprox in zip(timePoints, allTaylorApprox)]
+        # Project
+        for at, aPointList, aCtrlNZone in zip(timePoints, critPoints, allCtrlDictsNzones):
+            self.doProjection(aCtrlNZone[1], critPoints, aCtrlNZone[0])
+        
+        
+        #Set initial problems
+        for k, aCritPList in enumerate(critPoints):
+            thisProbList = self.ZoneNPoints2Prob(aCtrlNZone[0], aCritPList, aCtrlNZone[1])
+            results.append([[None for _ in range(len(aSubProbList))] for aSubProbList in thisProbList ])
+            for i, aSubProbList in enumerate(thisProbList):
+                resultsLin.extend( [-np.Inf for _ in range(len(aSubProbList))] )
+                for j, aProb in enumerate(aSubProbList):
+                    aProb['probDict']['resPlacement'] = (k,i,j)
+                    aProb['probDict']['resPlacementLin'] = resIdLin
+                    resIdLin += 1
+                    distributor.setProb(aProb)
+            
+        while any(resultsLin<self.opts['numericEpsPos']):
+            thisSol = distributor.getSol()
+            assert thisSol['sol']['status'] == 'optimal' #TODO make compatible with other solvers
+            k, i, j = thisSol['probDict']['resPlacement']
+            results[k, i, j] = thisSol
+            resultsLin[thisSol['probDict']['resPlacementLin']] = thisSol['sol']['primal objective']
+            if thisSol['sol']['primal objective']>=self.opts['numericEpsPos']:
+                # Proves convergence for the sub region treated
+                pass
+            else:
+                k = thisSol['probDict']['resPlacement']
+                newProbList = self.analyzeSol(thisSol, allCtrlDictsNzones[k], critPoints[k])
+                if not len(newProbList):
+                    # this region is a proof for non-convergence
+                    if self.opts['earlyExit']:
+                        return False, critPoints, results, resultsLin
+
+        return False, critPoints, results, resultsLin
         
 
-    def compute(self, routingDict, probQueues, solQueues, tStart:float, tStop:float, initZone):
+    def compute(self, tStart:float, tStop:float, initZone):
         
         """
         Backpropagates the funnel
@@ -191,34 +612,19 @@ class distributedFunnel:
 
             # Get the current taylor series
             allTaylorApprox = [ self.dynSys.getTaylorApprox(self.traj.getX(aT)) for aT in tSteps ]
-            allU = [ [self.dynSys.ctrlInput.getMinU(aT), self.traj.getU(aT), self.dynSys.ctrlInput.getMaxU(aT)] for aT in tSteps ]
-            allDeltaU = [ [aU[0]-aU[1], aU[2]-aU[1]] for aU in allU ]
-
-            objectiveStar = [ self.lyapFunc.getObjectiveAsArray(allTaylorApprox[k][0], allTaylorApprox[k][1], np.ones((self.dynSys.nu,1)),
-                                                                np.tile(self.repr.varNumsPerDeg[0], (self.dynSys.nu,1)), self.traj.getX(tSteps[k]), self.traj.getDX(tSteps[k]), tSteps[k]) for k in range(self.opts['interSteps']) ]
             
             # TODO this is too long and should be seperated
             
             lyapFunc_.register(tC, nextZoneGuess)
-
-            zonesToCheck = lyapFunc_.getPnPdot(tSteps)
             
             # Step 1 - critical points
             # TODO forward calculate the trajectory of the current crit points
             criticalPoints = [[] for _ in range(self.opts['interSteps'])]
 
-            # Perform problem projection if demanded
-            self.doProjection(zonesToCheck, objectiveStar, criticalPoints)
-            
-
             # Step 2 check if current is feasible
-
-            minConvList = self.solve1(zonesToCheck, criticalPoints, objectiveStar, allDeltaU, routingDict, probQueues, solQueues)
-
-
-
-
-
+            minConvList = self.solve1(tSteps, criticalPoints, allTaylorApprox)
+            #minConvList = self.verify1(tSteps, criticalPoints, allTaylorApprox, routingDict, probQueues, solQueues)
+            
             tL=tC #Reset
 
 

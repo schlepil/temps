@@ -13,23 +13,40 @@ from control import lqr
 
 def getLowerNUpperInd(tIn, t):
     tInd = np.interp(tIn, t, np.arange(0, t.size), left=0.01, right=t.size-1.01)
-    tIndL = nmaximum(0, np.floor(tInd))
-    tIndU = nminimum(np.ceil(tInd), t.size-1)
+    tIndL = narray(nmaximum(0, np.floor(tInd)), dtype=nint, ndmin=1)
+    tIndU = narray(nminimum(np.ceil(tInd), t.size-1), dtype=nint, ndmin=1)
+    
+    if t.size > 1:
+        for i in np.argwhere(tIndL==tIndU):
+            if tIndL[i]>0:
+                tIndL[i]-=1
+            elif tIndU[i]<t.size-1:
+                tIndU[i] += 1
+            else:
+                print(f"{t}\n{tIn}\n{tIndL}\n{tIndU}")
+                raise RuntimeError
     return tIndL, tIndU
     
 
 # Cartesian interpolation
 def standardInterpol(tIn:np.ndarray, P:np.ndarray, C:np.ndarray, Plog:np.ndarray, t:np.ndarray, returnPd:bool):
-    
+    tIn = narray(tIn)
     #interpolation bondaries
     tIndL, tIndU = getLowerNUpperInd(tIn, t)
     
-    alpha = (tIn-t[tIndL])/(t[tIndU]-t[tIndL])
+    if t.size == 1:
+        if __debug__:
+            assert nall(tIn.squeeze() == t[0])
+        alpha = nzeros((1,), dtype=nfloat)
+    else:
+        alpha = (tIn-t[tIndL])/(t[tIndU]-t[tIndL])
+    
+    alpha = np.transpose(np.broadcast_to(alpha, (P.shape[1], P.shape[2], tIn.size)), (2,1,0))
     
     if not returnPd:
         return (P[tIndU,:,:]*alpha + P[tIndL,:,:]*(1.-alpha)).squeeze()
     else:
-        return (P[tIndU, :, :]*alpha+P[tIndL, :, :]*(1.-alpha)).squeeze(), (P[tIndU, :, :]-P[tIndL, :, :])/(np.transpose(np.broadcast_to(t[tIndU]-t[tIndL], (P.shape[1],P.shape[2], tIn.size)), (2,1,0)))
+        return (P[tIndU, :, :]*alpha+P[tIndL, :, :]*(1.-alpha)).squeeze(), ((P[tIndU, :, :]-P[tIndL, :, :])/(np.transpose(np.broadcast_to(t[tIndU]-t[tIndL], (P.shape[1],P.shape[2], tIn.size)), (2,1,0)))).squeeze()
 
 # Interpolation in cholesky factorization
 
@@ -39,14 +56,22 @@ def geodesicInterpol(tIn:np.ndarray, P:np.ndarray, C:np.ndarray, Plog:np.ndarray
     # P(t) = P_n.exp((Phi.Pn.Cni)*t).C_n is the geodesic minimizing
     # int ds with ds = norm(Cni.dP.Cni)
 
+    tIn = narray(tIn)
+
     # interpolation bondaries
     tIndL, tIndU = getLowerNUpperInd(tIn, t)
     
     # Following https://www.cv-foundation.org/openaccess/content_cvpr_2013/html/Jayasumana_Kernel_Methods_on_2013_CVPR_paper.html
     # and Serge Lang, Fundamentals of Differential Geometry, p 326
 
-    alpha = (tIn-t[tIndL])/(t[tIndU]-t[tIndL])
-    dT = t[tIndU]-t[tIndL]
+    if t.size == 1:
+        if __debug__:
+            assert nall(tIn.squeeze() == t[0])
+        alpha = nzeros((1,), dtype=nfloat)
+        dT = 1.
+    else:
+        alpha = (tIn-t[tIndL])/(t[tIndU]-t[tIndL])
+    
     
     Pt = np.zeros((tIn.size, P.shape[1], P.shape[2]), dtype=nfloat)
     Pdt = np.zeros_like(Pt)
@@ -56,6 +81,8 @@ def geodesicInterpol(tIn:np.ndarray, P:np.ndarray, C:np.ndarray, Plog:np.ndarray
         Pdt[k,:,:] = ndot((Plog[tIndU[k],:,:]-Plog[tIndL[k],:,:])/dT[k], Pt[k,:,:])
     
     if returnPd:
+        if t.size == 1:
+            raise UserWarning('Cannot compute derivative based on one point')
         return Pt, Pdt
     else:
         return Pt
@@ -110,6 +137,23 @@ class quadraticLyapunovFunction(LyapunovFunction):
         if self.P_ is not None:
             self.C_ = cholesky(self.P_/self.alpha_)
             self.Ci_ = inv(self.C_)
+    
+    def getPnPdot(self, t: np.ndarray, returnPd = True):
+        P = self.Ps
+        try:
+            t = float(t)
+        except:
+            if __debug__:
+                assert isinstance(t, np.ndarray)
+            P = np.tile(P, (t.size, P.shape[0], P.shape[1]))
+        if returnPd:
+            return P, np.zeros_like(P)
+        else:
+            return P
+        
+    def getLyap(self, t):
+        P = self.getPnPdot(t, False)
+        return (P,1.)
     
     def evalV(self, x:np.ndarray, kd:bool=True):
         x = x.reshape((self.n,-1))
@@ -176,8 +220,8 @@ class quadraticLyapunovFunction(LyapunovFunction):
         return objPoly
 
     def getObjectiveAsArray(self, fTaylor: np.ndarray = None, gTaylor: np.ndarray = None, taylorDeg: int = 3,
-                         u: np.ndarray = None, uMonom: np.ndarray = None, x0: np.ndarray = None, dx0: np.ndarray = None, t: float = 0.):
-
+                         u: np.ndarray = None, uMonom: np.ndarray = None, x0: np.ndarray = None, dx0: np.ndarray = None, t: float = 0., P=None, Pdot=None):
+        
         """
         Unified call, returns an array of polynomial coefficients
         First line : Coeffs of system dynamics and (possibly) time-dependent shape [everything besides control]
@@ -208,9 +252,14 @@ class quadraticLyapunovFunction(LyapunovFunction):
 
         outCoeffs = nzeros((1+self.nu, self.nMonoms), nfloat)
         # evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU, idxMat, coeffsOut, Pdot)
-        outCoeffs = evalPolyLyapAsArray_Numba(self.P, self.repr.varNumsPerDeg[1], fTaylor, self.repr.varNumsUpToDeg[taylorDeg], gTaylor,
+        P = self.P if P is None else P
+        if Pdot is not None:
+            raise UserWarning
+        Pdot = np.zeros_like(self.P) if Pdot is None else Pdot
+        
+        outCoeffs = evalPolyLyapAsArray_Numba(P, self.repr.varNumsPerDeg[1], fTaylor, self.repr.varNumsUpToDeg[taylorDeg], gTaylor,
                                               self.repr.varNumsUpToDeg[taylorDeg], dx0, nrequire(np.tile(self.repr.varNumsPerDeg[0], (self.nq,)), dtype=nintu),
-                                              u, uMonom, self.idxMat, outCoeffs, np.zeros_like(self.P)) #dx0 only depends on time, not on the position
+                                              u, uMonom, self.idxMat, outCoeffs, Pdot) #dx0 only depends on time, not on the position
 
         return outCoeffs
     
@@ -266,7 +315,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             else:
                 assert alpha is None
         
-        super(quadraticLyapunovFunction, self).__init__(dynSys)
+        super(quadraticLyapunovFunctionTimed, self).__init__(2, dynSys)
         
         self.P_ = None
         self.alpha_ = None
@@ -346,12 +395,14 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 self.P_[ind,:,:] = PnAlpha[0]
             else:
                 if __debug__:
-                    print(f"RWInsertingeplacing item")
+                    print(f"RWInserting item")
                 # Keep ordering
                 ind = np.where(self.t_ > t)[0][0]
-                self.t_ = np.hstack((self.t_[:ind], [t], self.t_[ind:]))
-                self.P_ = np.hstack((self.P_[:ind], [PnAlpha[0]], self.P_[ind:]))
-                self.alpha_ = np.hstack((self.alpha_[:ind], [PnAlpha[1]], self.alpha_[ind:]))
+                self.t_ = np.hstack((self.t_[:ind], t, self.t_[ind:]))
+                self.P_ = np.vstack((self.P_[:ind,:,:], PnAlpha[0].reshape((1,self.P_.shape[1],self.P_.shape[2])), self.P_[ind:,:,:]))
+                self.alpha_ = np.hstack((self.alpha_[:ind], PnAlpha[1], self.alpha_[ind:]))
+                # Set to None to force reallocate
+                self.Plog_ = self.C_ = self.Ci_ = None
         
         # Take the update into account
         self.compute_()
@@ -374,6 +425,10 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
     def getPnPdot(self, t:np.ndarray, returnPd=True):
         return self.interpolate(t, self.Ps_, self.C_, self.Plog_, self.t_, returnPd)
+    
+    def getLyap(self, t):
+        P = self.getPnPdot(t, False)
+        return (P,1.)
     
     def evalV(self, x: np.ndarray, t:np.ndarray, kd: bool = True):
         x = x.reshape((self.n, -1))
@@ -425,7 +480,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             assert (x0 is None) != (fTaylor is None)
             assert taylorDeg is not None
             assert uOpt is not None
-        
+        raise RuntimeError
         if dx0 is None:
             dx0 = self.refTraj.getDX(t)
         if fTaylor is None:
@@ -439,7 +494,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         return objPoly
     
     def getObjectiveAsArray(self, fTaylor: np.ndarray = None, gTaylor: np.ndarray = None, taylorDeg: int = 3,
-                            u: np.ndarray = None, uMonom: np.ndarray = None, x0: np.ndarray = None, dx0: np.ndarray = None, t: float = 0.):
+                            u: np.ndarray = None, uMonom: np.ndarray = None, x0: np.ndarray = None, dx0: np.ndarray = None, t: float = 0., P=None, Pdot=None):
         
         """
         Unified call, returns an array of polynomial coefficients
@@ -463,6 +518,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             assert (x0 is None) != (fTaylor is None)
             assert taylorDeg is not None
             assert u is not None
+            assert ((P is None) and (Pdot is None)) or ((P is not None) and (Pdot is not None))
         
         if dx0 is None:
             dx0 = self.refTraj.getDX(t)
@@ -470,10 +526,14 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             fTaylor, gTaylor = self.dynSys.getTaylorApprox(x0, taylorDeg)
         
         outCoeffs = nzeros((1+self.nu, self.nMonoms), nfloat)
+        
+        
+        if ((P is None) or (Pdot is None)):
+            P, Pdot = self.getPnPdot(t, True)
         # evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU, idxMat, coeffsOut, Pdot)
-        outCoeffs = evalPolyLyapAsArray_Numba(self.P, self.repr.varNumsPerDeg[1], fTaylor, self.repr.varNumsUpToDeg[taylorDeg], gTaylor,
+        outCoeffs = evalPolyLyapAsArray_Numba(P, self.repr.varNumsPerDeg[1], fTaylor, self.repr.varNumsUpToDeg[taylorDeg], gTaylor,
                                               self.repr.varNumsUpToDeg[taylorDeg], dx0, nrequire(np.tile(self.repr.varNumsPerDeg[0], (self.nq,)), dtype=nintu),
-                                              u, uMonom, self.idxMat, outCoeffs, np.zeros_like(self.P))  # dx0 only depends on time, not on the position
+                                              u, uMonom, self.idxMat, outCoeffs, Pdot)  # dx0 only depends on time, not on the position
         
         return outCoeffs
     

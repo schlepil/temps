@@ -1,1 +1,1 @@
-from Lyapunov.quadraticLyapunovFunction import quadraticLyapunovFunction
+from Lyapunov.quadraticLyapunovFunction import quadraticLyapunovFunction, quadraticLyapunovFunctionTimed

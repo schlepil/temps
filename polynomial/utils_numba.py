@@ -143,8 +143,8 @@ def quadraticForm_Numba(Q,qMonoms, h, hMonom, idxMat, coeffsOut):
     :param coeffsOut:
     :return:
     """
-    
-    coeffsOut[hMonom] += h
+    for aHMonom, aH in zip(hMonom, h):
+        coeffsOut[aHMonom] += aH
     
     for i,imonom in enumerate(qMonoms):
         for j, jmonom in enumerate(qMonoms):

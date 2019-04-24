@@ -76,7 +76,7 @@ class quadLyapTimeVaryingLQR(lyapEvol):
         self.ctrlSafeFac = 0.9
         self.retAll = False #Return all option for finer interpolation
 
-        self.stopFct = stopperFunction(0.1) # type: stopperFunction
+        self.stopFct = stopperFunction() # type: stopperFunction
 
     def dz(self, z, t, xx):
         # Current P matrix
@@ -84,10 +84,12 @@ class quadLyapTimeVaryingLQR(lyapEvol):
         # Current linearised system
         #A = self.dynSys.getLinAFast(xx)
         #B = self.dynSys.gEval(xx)
-        A = self.dynSys.getTaylorApprox(xx, 1)[0][1:,:] #First line is the constant term
+        A = self.dynSys.getTaylorApprox(xx, 1)[0][:,1:] #First column is the constant term
         B = self.dynSys.getTaylorApprox(xx, 1)[1][0,:,:] # extract matrix
 
-        K = np.linalg.lstsq(self.R, ndot(B.T, P))[0] #TODO check and comment this line
+        #K = np.linalg.lstsq(self.R, ndot(B.T, P))[0] #TODO check and comment this line
+        #Wrong in general case
+        K = mndot([inv(self.R), B.T, P])
 
         if self.limK:
             Cpi = inv(cholesky(P, lower=True))
@@ -99,7 +101,7 @@ class quadLyapTimeVaryingLQR(lyapEvol):
             Kstar = nmultiply(ndivide(Kstar, KscaleNorm), uLim) * self.ctrlSafeFac
             K = Kstar
         if 1:
-            dP = -(ndot(A.T, P) + ndot(P, A) - 2. * ndot(P, B, K) + self.Q)
+            dP = -(ndot(A.T, P) + ndot(P, A) - 2. * mndot([P, B, K]) + self.Q)
         else:
             # TODO legacy; clean up
             # Project Q into the principal axis of dP and check if Q not too large
@@ -110,7 +112,7 @@ class quadLyapTimeVaryingLQR(lyapEvol):
             dP = dP - np.diag(ndot(v, np.diag(Qe), v.T))
 
         dP = (dP + dP.T) / 2. #Make symmetric
-        return dP.reshape((self.dynSys.nx ** 2))
+        return dP.reshape((dP.size,))
 
     def getDz(self, refTraj, allT, allZ):
         allXX = refTraj.xref(allT)
@@ -147,18 +149,17 @@ class quadLyapTimeVaryingLQR(lyapEvol):
 
         if self.interSteps is None:
             #z = scipy.integrate.odeint(lambda thisZ, thisT: self.dz(thisZ, thisT, refTraj.xref(thisT)), z0, [tSpan[1], tSpan[0]])[-1, :]
-            sol = solve_ivp(lambda thisZ, thisT: self.dz(thisZ, thisT, self.refTraj.getX(thisT)), z0, [tStart, tStart-tDeltaMax], events=self.stopFct)
-            z = sol.y
+            sol = solve_ivp(lambda thisT, thisZ: self.dz(thisZ, thisT, self.refTraj.getX(thisT)), [tStart, tStart-tDeltaMax], z0, events=self.stopFct)
+            z = sol.y[:,-1]
             tFinal = sol.t[-1]
             allZ = z.reshape((-1,1))
         else:
             allT = np.linspace(tStart, tStart-tDeltaMax, self.interSteps)
-            sol = solve_ivp(lambda thisZ, thisT: self.dz(thisZ, thisT, self.refTraj.getX(thisT)), z0, [tStart, tStart-tDeltaMax], t_eval=allT, events=self.stopFct)
+            sol = solve_ivp(lambda thisT, thisZ: self.dz(thisZ, thisT, self.refTraj.getX(thisT)), [tStart, tStart-tDeltaMax], z0, t_eval=allT, events=self.stopFct)
             allZ = sol.y
             tFinal = sol.t[-1]
 
-            allZ = allZ.T
-            z = allZ[-1, :]
+            z = allZ[:,-1]
             # Flip to the time in order
             allT = np.flip(allT, 0)
             allZ = np.fliplr(allZ)
@@ -183,4 +184,4 @@ class quadLyapTimeVaryingLQR(lyapEvol):
             allDzM = [allDz[:, k].reshape((self.dynSys.nx, self.dynSys.nx)) for k in range(allZ.shape[1])]
             return tFinal, [[allZM, allDzM, allT], retVal]
         else:
-            return tFinal, [P, retVal]
+            return tFinal, [z.reshape((nq,nq)), retVal]

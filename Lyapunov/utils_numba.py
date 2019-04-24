@@ -164,8 +164,7 @@ def evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u,
                         tmpValUde = u[d, e]
                         if tmpValUde == 0.0:
                             continue
-                        coeffsOut[1+d,idxMat[tmpVarNumXBYC, amw]] += tmpValPbaGcad * tmpValUde # TODO this causes a lot of jumping around in the
-                        # array..
+                        coeffsOut[1+d,idxMat[tmpVarNumXBYC, amw]] += (tmpValPbaGcad * tmpValUde) # TODO this causes a lot of jumping around in the array..
 
     # Part three
     # Contribution of reference velocity

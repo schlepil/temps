@@ -28,7 +28,7 @@ class dynamicalSystem:
         self.nq = int(q.shape[0])
         self.nu = int(u.shape[0])
         
-        self.ctrlInput = ctrlInput
+        self.ctrlInput = ctrlInput #type: ctrlInput
         
         self.maxTaylorDeg=maxTaylorDegree
         

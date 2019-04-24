@@ -168,10 +168,15 @@ class polynomial():
         
     def setQuadraticForm(self, Q:np.ndarray, qMonoms:np.ndarray=None, h=None, hMonoms=None):
         if __debug__:
-            assert ((qMonoms is None) and (h is None) and (hMonoms is None)) or ((qMonoms is not None) and (h is not None) and (hMonoms is not None))
             assert Q.shape[0] == Q.shape[1]
 
-        qMonoms = self.repr.varNums[:Q.shape[0]] if qMonoms is None else qMonoms
+        qMonoms = self.repr.varNumsPerDeg[1] if qMonoms is None else qMonoms
+        hMonoms = self.repr.varNumsUpToDeg[1] if ((h is not None) and (hMonoms is None)) else hMonoms
+        
+        if ((h is None) and (hMonoms is None)):
+            h=nzeros((1,), dtype=nfloat)
+            hMonoms = self.repr.varNumsPerDeg[0]
+        
         self._coeffs = quadraticForm_Numba(Q,qMonoms, h, hMonoms, self.repr.idxMat, np.zeros((self.repr.nMonoms,), dtype=nfloat))
         self.maxDeg = self.getMaxDegree()
         return None
