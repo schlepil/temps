@@ -22,7 +22,7 @@ class distributedFunnel:
         self.repr = self.lyapFunc.repr
 
         self.opts = {'convLim':1e-3, #Dichotomic
-                     'minDistToSep':0.2, #When to ude linear feedback and "ignore" separation
+                     'minDistToSep':0.3, #When to ude linear feedback and "ignore" separation
                      'sphereBoundCritPoint':True, # Whether to use separation or spheric confinement
                      'interSteps':3, # How many points to check per interval
                      'projection':'sphere',
@@ -425,12 +425,28 @@ class distributedFunnel:
                     # diverging point and exclude it from the rest -> Not compatible with current data-structure
                     # Heuristic: Find an input combination that ensures convergence but minimizes the number of separations
                     
-                    uLinCurrent = np.argwhere(thisSol['probDict']['u']==2)
+                    uLinCurrent = np.argwhere(thisSol['probDict']['u']==2).reshape((-1,))
 
+                    # Distance to separating hyperplanes
                     allY = thisSol['ySol']
                     allYPlaneDist = [ndot(ctrlDict['PG0'], allY[:,k]).reshape((nu_,)) for k in range(allY.shape[1])]
+                    allYPlaneSign = [np.sign(a) for a in allYPlaneDist]
+                    # Distance to separating hypersurface
+                    allYSurfaceDist = [nzeros((nu_,), dtype=nfloat) for _ in range(nu_)]
+                    for k in range(allY.shape[1]):
+                        for i in range(nu_):
+                            thisPoly.coeffs = ctrlDict[i][1] # Only the sign counts,
+                            allYSurfaceDist[k][i] = thisPoly.eval2(allY[:,[k]])
+                    allYSurfaceSign = [np.sign(a) for a in allYSurfaceDist]
+                    for a,b in zip(allYPlaneSign, allYSurfaceSign):
+                        # No zeros allowed
+                        a[a==0] = 1
+                        b[b==0] = 1
+
+                    allChangeSign = [ a!=b for a,b in zip(allYPlaneSign, allYSurfaceSign) ]
                     
-                    # check if convergence can be assured relying on the optimal input
+                    ## check if convergence can be assured relying on the optimal input
+                    # Compute the convergence portion for system dynamics and each control input
                     convDict = {}
                     for aKey, aVal in ctrlDict.items():
                         convDict[aKey] = {}
@@ -442,10 +458,109 @@ class distributedFunnel:
                         except:
                             if __debug__:
                                 print(f"Unable to eval {aKey} with {aVal}")
-                    allRes = [None for _ in range(allY.shape[1])]
+                    # Compute convergence
+                    allRes = nzeros((allY.shape[1],), dtype=nfloat)
                     for k in range(allY.shape[1]):
-                        thisRes = 0.
+                        thisRes = convDict[-1][0]
                         for i in range(nu_):
+                            thisRes += convDict[i][-allYSurfaceSign[k][i]][k]
+                        allRes[k] = thisRes
+
+                    # If any of allRes are positive -> proof for divergence (Attention sign!), return
+                    if np.any(allRes>-self.opts['numericEpsPos']):
+                        return []
+
+                    # Now check which input control can be kept linear feedback
+                    # Ensure that all points stay convergent, maximize number of linear controls
+                    linInputRanking = -np.Inf*nones(uLinCurrent.shape, dtype=nfloat)
+
+                    for i,ui in enumerate(uLinCurrent):
+                        for k in range(allY.shape[1]):
+                            thisDelta = convDict[ui][2][k] - convDict[ui][-allYSurfaceSign[k][ui]][k] # This term is always positive
+                            if allRes[k]+thisDelta>-self.opts['numericEpsPos']:
+                                linInputRanking[i] = -np.Inf
+                            # TODO check if this is really the best sol
+                            linInputRanking[i] = min(linInputRanking[i], -abs(thisDelta/allRes[k]))
+
+                    linInputRankingIdx = np.argsort(linInputRanking)
+
+                    keepOptCtrl = np.ones(uLinCurrent.shape, dtype=np.bool_)
+
+                    # Now take away as many seperations as possible
+                    #for i,ui in enumerate(uCurrent):
+                    for i, idxi in enumerate(linInputRankingIdx):
+                        ui = uLinCurrent[idxi]
+                        # Update the convergence
+                        for k in range(allY.shape[1]):
+                            allRes[k] += (convDict[ui][2][k] - convDict[ui][-allYSurfaceSign[k][ui]][k])
+                        # Check if still ok
+                        if np.any(allRes>-self.opts['numericEpsPos']):
+                            # Nope
+                            break
+                        else:
+                            keepOptCtrl[idxi] = False
+
+                    # Now we can assemble the new problems
+                    thisProbBase = dp(thisSol['origProb'])
+                    thisProbBase['probDict']['isTerminal'] = 0
+                    probList = []
+
+                    # Assemble all possible input
+                    inputProduct = [[aU] for aU in thisProbBase['probDict']['u']]
+                    inputSepDeg = nzeros((nu_,),dtype=nint)
+
+                    for aUi, aKeep in zip(uLinCurrent, keepOptCtrl):
+                        if aKeep:
+                            # Split the regions based on this input
+                            inputSepDeg[aUi] = self.dynSys.maxTaylorDeg if any(aC[aUi] for aC in allChangeSign) else 1 # If the sign does not
+                            # change ->
+                            # use hyperplane else use hypersphere
+                            inputProduct[aUi] = [-1, 1]
+                        else:
+                            # Nothing to do here
+                            pass
+
+                    inputs = itertools.product(*inputProduct)
+
+                    for input in inputs:
+                        thisProb = dp(thisProbBase)
+                        probList.append(thisProb)
+                        thisCoeffs = ctrlDict[-1][0].copy()
+
+                        for k in range(nu_):
+                            thisCoeffs += ctrlDict[k][input[k]]
+
+                            idx = np.argwhere(uLinCurrent == k)
+                            if ((idx.size) and (keepOptCtrl[idx])):
+                                # Split
+                                thisPoly[:] = 0.
+                                thisPoly.coeffs[:self.repr.varNumsUpToDeg[inputSepDeg[k]]] = -ctrlDict[k][input[k]][:self.repr.varNumsUpToDeg[
+                                    inputSepDeg[k]]] #Will be automatically rescaled
+
+                                thisProb['probDict']['nCstrNDegType'].append((inputSepDeg[k], 's'))
+                                thisProb['cstr'].append( thisPoly.coeffs.copy() )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                         
                      
                     
