@@ -115,7 +115,7 @@ class workDistributor:
         
         if self.doStoreOrig:
             while True:
-                id = np.random.randint(np.core.getlimits.iinfo(np.int_)['min']+1, np.core.getlimits.iinfo(np.int_)['max']-1 )
+                id = np.random.randint(np.core.getlimits.iinfo(np.int_).min+1, np.core.getlimits.iinfo(np.int_).max-1 )
                 if not (id in self.probStore_.keys()):
                     break
             problem['probDict']['probIdStore__'] = id
@@ -154,6 +154,63 @@ class workDistributor:
         
         return sol
 
+# No threading
+class workDistributorNoThread:
+    def __init__(self, probQueues: List[Queue], solQueues: List[Queue]):
+        self.waitingList = []
+        
+        self.probQ = probQueues
+        self.solQ = solQueues
+        
+        self.nbrOfUnreturnedPbr = 0
+        
+        self.probStore_ = {}
+        self.doStoreOrig = True
+    
+    def reset(self):
+        self.waitingList = []
+        self.nbrOfUnreturnedPbr = 0
+        
+        return None
+    
+    def spin(self):
+        
+        thisProb = self.waitingList.pop()
+        thisWorkerId = 0
+        probSetter(thisProb, self.probQ[thisWorkerId], thisWorkerId)
+        #probSetter({"probDict":""}, self.probQ[thisWorkerId], thisWorkerId)
+        self.probQ[thisWorkerId].put("")
+        workerSolve(self.probQ[0], self.solQ[0])
+        
+        return None
+    
+    def setProb(self, problem: dict):
+        self.nbrOfUnreturnedPbr += 1
+        
+        if self.doStoreOrig:
+            while True:
+                id = np.random.randint(np.core.getlimits.iinfo(np.int_).min+1, np.core.getlimits.iinfo(np.int_).max-1)
+                if not (id in self.probStore_.keys()):
+                    break
+            problem['probDict']['probIdStore__'] = id
+            self.probStore_[id] = dp(problem)
+        
+        self.waitingList.append(problem)
+        return None
+    
+    def getSol(self, workerId=None, block=None, timeout=None):
+        # No threading always uses zero worker
+        self.spin()
+        sol = solGetter(self.solQ, 0, True, timeout=100.)
+        
+        self.nbrOfUnreturnedPbr -= 1
+        
+        if self.doStoreOrig:
+            sol['origProb'] = self.probStore_[sol['probDict']['probIdStore__']]
+            del self.probStore_[sol['probDict']['probIdStore__']]
+        
+        return sol
+
 # inputDict
 # {'dimsNDeg':(nDims,nDeg)
 # {'nCstrNDegType':(nCstr,deg0,deg1,...)
@@ -176,13 +233,13 @@ def workerSolve(inQueue, outQueue):
     while True:
 
         input = inQueue.get()
-        
-        selfNr = input['workerId']
-        selfSolver = input['solver']
 
         if input == "":
             print(f"Worker {selfNr} is terminating")
             break
+        
+        selfNr = input['workerId']
+        selfSolver = input['solver']
 
         try:
             thisRepr = reprDict[input['dimsNDeg']]
@@ -253,7 +310,11 @@ def workerSolve(inQueue, outQueue):
 
         # Actually solve
         solution = thisProb.solve()
-        assert solution['status'] == 'optimal'
+        if doThreading_:
+            assert solution['status'] == 'optimal'
+        else:
+            if not (solution['status'] == 'optimal'):
+                print("Error in solving")
         extraction = thisProb.extractOptSol(solution)
 
         if ('toUnitCircle' in input.keys()) and (input['toUnitCircle']):
@@ -262,8 +323,12 @@ def workerSolve(inQueue, outQueue):
 
         else:
             ySol = extraction[0]
+        
+        if __debug__:
+            if extraction[0].size == 0:
+                thisProb.extractOptSol(solution)
 
-        outQueue.put({'probDict':input, 'probId':input['probId'], 'xSol':extraction[0], 'ySol':ySol, 'sol':solution, 'ext':extraction})
+        outQueue.put({'probDict':input, 'xSol':extraction[0], 'ySol':ySol, 'sol':solution, 'ext':extraction})
 
     return 0
 

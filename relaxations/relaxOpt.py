@@ -92,7 +92,7 @@ class convexProg():
         :return:
         """
 
-        opts_ = {'relTol': 1e-5, 'reOptimize':False}
+        opts_ = {'relTol': 1e-2, 'reOptimize':False}
         opts_.update(kwargs)
 
         if isinstance(sol, dict):
@@ -250,8 +250,16 @@ class convexProg():
             isValid = nones((xSol.shape[1],), dtype=np.bool_)
             zSol = self.repr.evalAllMonoms(xSol)
             #Check all constraints
-            for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
-                isValid = np.logical_and(isValid, aCstr.isValid(zSol))
+            atol = -1e-6
+            while True:
+                for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
+                    isValid = np.logical_and(isValid, aCstr.isValid(zSol, atol=atol))
+                # TODO check if this is a proper solution
+                if nany(isValid) and atol > -1.e-1:
+                    break
+                else:
+                    atol *= 2.
+                    isValid[:] = True
             
             #Only return valid ones
             xSol = xSol[:, isValid]

@@ -1,5 +1,5 @@
 from coreUtils import *
-from polynomial import polynomialRepr
+from polynomial import polynomialRepr, polynomial, polyFunction
 from dynamicalSystems.inputs import boxInputCstr
 
 from polynomial.utils_numba import getIdxAndParent
@@ -410,19 +410,154 @@ class secondOrderSys(dynamicalSystem):
             self.ctrlInput(uStar,t)
     
         return uStar
+
+
+class polynomialSys(dynamicalSystem):
+    
+    def __init__(self, repr: polynomialRepr, fCoeffs:np.ndarray, gCoeffs:np.ndarray, q: "symbols", u: "symbols", maxTaylorDegree: int = 3, ctrlInput: boxInputCstr = None, file: str = None):
+        """
+        represents a system of the form
+        q is composed of (position,velocity) -> (q_p,q_v)
+        dq -> (dq_p,dq_v) = (q_v,q_a)
+        q_v = dq_p
+        massMat(q_p).q_a = f(q) + g(q).u
+        :param repr:
+        :param massMat:
+        :param f:
+        :param g:
+        :param q:
+        :param u:
+        """
         
-
-
+        super(type(self), self).__init__(repr, q, u, maxTaylorDegree, ctrlInput)
                     
+        self.fCoeffs_ = fCoeffs.copy()
+        self.gCoeffs_ = gCoeffs.copy()
         
+        self.fTaylorCoeffs_ = np.zeros_like(self.fCoeffs_)
+        self.gTaylorCoeffs_ = np.zeros_like(self.gCoeffs_)
         
+        self.f = polyFunction(self.repr, (self.nq,1))
+        self.g = polyFunction(self.repr, (self.nq,self.nu))
         
+        for i in range(self.nq):
+            self.f[i,0] = polynomial(self.repr, self.fCoeffs_[i,:])
         
+        for i in range(self.nq):
+            for j in range(self.nu):
+                self.g[i, j] = polynomial(self.repr, self.gCoeffs_[:, i, j])
+        
+        self.fSym = sy.Matrix(nzeros((self.nq,1)))
+        self.gSym = sy.Matrix(nzeros((self.nq,self.nu)))
+        
+        self.precompute()
     
+    def fEval(self, x:np.ndarray):
+        return self.f.eval(x)
     
+    def gEval(self, x:np.ndarray):
+        return self.g.eval(x)
     
+    def precompute(self):
+        """
+        Naive Taylor
+        :return:
+        """
+        
+        zList = [ sy.prod( [xx**ee for xx,ee in zip(self.q, eList) ] ) for eList in self.repr.listOfMonomials ]
+        
+        # Compute for f
+        for i in range(self.nq):
+            self.fSym[i,0] = sum( [ az*aCoef for az,aCoef in zip(zList, self.fCoeffs_[i,:]) ] )
+        
+        for i in range(self.nq):
+            for j in range(self.nu):
+                self.gSym[i, j] = sum([az*aCoef for az, aCoef in zip(zList, self.gCoeffs_[:, i, j])])
+        
+        self.compPderivAndTaylor()
+                
+                
+    def compPderivAndTaylor(self):
+        from math import factorial
+
+        self.compPDerivFG()
+        
+        self.taylorExp = variableStruct()
+        # Add an array with the weighting coefficient of the Taylor expansion
+        self.taylorExp.weightingMonoms = []
+        for k in range(self.maxTaylorDeg+1):
+            self.taylorExp.weightingMonoms.extend(len(self.repr.listOfMonomialsPerDeg[k])*[1./float(factorial(k))])
+        self.taylorExp.weightingMonoms = narray(self.taylorExp.weightingMonoms, dtype=nfloat)
+        self.taylorExp.weightingMonoms3d = np.transpose(np.broadcast_to(self.taylorExp.weightingMonoms, (self.nu, self.nq, self.taylorExp.weightingMonoms.size)), (2, 1, 0))
+
+        return None
+
+    def compPDerivFG(self):
+
+        pDerivFD = compParDerivs(self.fSym, 'f', self.q, False, self.maxTaylorDeg, self.repr)
+        self.pDerivF = variableStruct(**pDerivFD)
+
+        pDerivGD = compParDerivs(self.gSym, 'g', self.q, True, self.maxTaylorDeg, self.repr)
+        self.pDerivG = variableStruct(**pDerivGD)
+
+        return None
+
+    def getTaylorApprox(self, x: np.ndarray, maxDeg: int = None, minDeg: int = 0):
+        # TODO this is a naive implementation
     
+        if __debug__:
+            assert (maxDeg is None) or (maxDeg <= self.maxTaylorDeg)
     
+        maxDeg = self.maxTaylorDeg if maxDeg is None else maxDeg
+        
+        idxDemand = np.hstack( self.repr.varNumsPerDeg[minDeg:maxDeg+1] )
+        
+        # Setup the inputs
+        xList = x.squeeze()  # [float(ax) for ax in x]
+        
+        indexKey = f"PDeriv_to_{maxDeg:d}_eval"
+        fPDeriv = narray(self.pDerivF.__dict__["f"+indexKey](*xList))  # Pure np.matrix #TODO search for ways to vectorize
+        gPDeriv = np.stack([narray(aFunc(*xList)) for aFunc in self.pDerivG.__dict__["g"+indexKey]])  # List of matrices #TODO search for ways to vectorize
     
+        # Do the weighting to go from partial derivs to taylor
+        nmultiply(fPDeriv, self.taylorExp.weightingMonoms[self.repr.varNumsUpToDeg[maxDeg]], out=fPDeriv)
+        nmultiply(gPDeriv, self.taylorExp.weightingMonoms3d[self.repr.varNumsUpToDeg[maxDeg],:,:], out=gPDeriv)
+        # Done
+        return fPDeriv[:, idxDemand], gPDeriv[idxDemand,:,:]
+
+    def getUopt(self, x: np.ndarray, dx: np.ndarray, respectCstr: bool = False, t: float = 0.):
+        """
+        Computes the necessary control input to achieve the desired velocity
+        Seek uStar such that dx = f(x)+g(x).uStar
+        :param x:
+        :param dx:
+        :param respectCstr:
+        :param t:
+        :return:
+        """
     
+        x = x.reshape((self.nq, -1))
+        dx = dx.reshape((self.nq, -1))
+    
+        m = x.shape[1]
+    
+        if __debug__:
+            assert x.shape[1] == dx.shape[1]
+    
+        uStar = np.zeros((self.nu, m), dtype=nfloat)
+        
+        F = self.fEval(x)
+        G = self.gEval(x)
+        if m==1:
+            uStar, res, _, _ = lstsq(G, dx-F)
+        else:
+            for k in range(m):
+                # We need to solve
+                # g(x).uStar = ddx - f(x)
+                uStar[:, [k]], res, _, _ = lstsq(G[k,:,:], dx[:, [k]]-F[:,[k]])
+    
+        if respectCstr:
+            self.ctrlInput(uStar, t)
+    
+        return uStar
     

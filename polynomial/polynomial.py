@@ -197,4 +197,45 @@ class polynomial():
                                                              else evalMonomsNumba(x, self.repr.varNum2varNumParents[:nMonoms_,:])
         return ndot(coeffsEval, z)
 
+
+class polyFunction():
+    
+    def __init__(self,repr:polynomialRepr, shape):
+        self.repr = repr
+        self.shape_ = narray(shape, ndmin=1)
+        self.f = np.ndarray(self.shape_, dtype=object)
         
+    def setVal(self, new:np.ndarray):
+        assert self.f.shape == new.shape
+        
+        self.f = new
+        return None
+    
+    def __getitem__(self, key):
+        return self.f[key]
+    
+    def __setitem__(self, key, item):
+        self.f[key] = item
+        return None
+        
+    def eval(self, x:np.ndarray):
+        """
+        if x is 2d -> append an axis
+        :param x:
+        :return:
+        """
+        
+        xs1 = x.shape[1]
+        prodSpace = [[slice(0,xs1)]] + [range(a) for a in self.shape_]
+
+        z = x if (x.shape[0] == self.repr.nMonoms) else evalMonomsNumba(x, self.repr.varNum2varNumParents)
+        
+        y = nzeros([xs1]+list(self.shape_), dtype=nfloat)
+        
+        for aIdxL in itertools.product(*prodSpace):
+            y[aIdxL]= self.f[aIdxL[1:]].eval2(z) # TODO check if this is standard
+        
+        if xs1==1:
+            y = y[0,:,:]
+        
+        return y

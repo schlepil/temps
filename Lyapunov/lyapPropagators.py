@@ -54,6 +54,14 @@ class lyapEvol():
 
 ###########################
 
+class noChangeLyap(lyapEvol):
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __call__(self, tStart: float, tDeltaMax: float, lastShape):
+        return tStart-tDeltaMax, lastShape
+
+###########################
 class quadLyapTimeVaryingLQR(lyapEvol):
     def __init__(self, dynSys:dynamicalSystem, refTraj:referenceTrajectory, Q:np.ndarray=None, R:np.ndarray=None, reshape=False, restart=False):
 
