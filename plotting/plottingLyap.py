@@ -14,6 +14,8 @@ import matplotlib.collections as mcoll
 from mpl_toolkits.mplot3d import Axes3D
 from numpy.f2py.auxfuncs import isdouble
 
+import funnels as fn
+
 dynStringDict = {0:{'Q':'QP-ctrl', 'C':'SMC'}, 1:{'L':'Lin-Sys_dyn', 'P':'Poly-Sys_dyn', 'O':'NL-Sys_dyn'}, 2:{'L':'Lin-Ipt_dyn', 'P':'Poly-Ipt_dyn', 'O':'NL-Ipt_dyn', 'R':'Lin-Ipt_dyn_zoned'}}
 
 # Unit vector in "x" direction
@@ -121,4 +123,28 @@ def plotEllipse(ax, pos, P, alpha, plotAx=np.array([0, 1]), deltaPos=None, color
     e.set_facecolor(color)
     e.set_linewidth(linewidth)
     e.set_linestyle(linestyle)
+    
     return e
+
+
+def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
+    opts_ = {'plotStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
+             'faceAlpha':0.0, 'linestyle':'-',
+             'plotAx':np.array([0, 1]),
+             'cmap':'viridis', 'colorStreams':'conv', 'nPt':200}
+    opts_.update(opts)
+    
+    assert opts_['colorStreams'] in ('conv', 'mag', 'dir')
+    
+    ff,aa = plt.subplots(1,1)
+    
+    # Plot the region
+    funnel.lyapFunc.plot(aa, t, opts_=opts_)
+    aa.autoscale()
+    
+    # Plot the streamlines
+    
+    # Get the veloctiy
+    XX = ax2Grid(aa, opts_['nPt'])
+    
+    

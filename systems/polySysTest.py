@@ -4,15 +4,24 @@ from dynamicalSystems.inputs import boxInputCstrLFBG
 from polynomial import polynomialRepr, polynomial, polyFunction
 from polynomial import list2int
 
-def getUlims():
-    return -1e-6,1e-6
+limL_ = -1.
+limU_ =  1.
+nu_ = None
 
-def getSys(repr: polynomialRepr):
+def getUlims():
+    return nu_*[limL_],nu_*[limU_]
+
+def getSys(repr: polynomialRepr, P=None, G=None):
+    
+    global nu_
     
     nDim = repr.nDims
     
     fCoeffs = nzeros((nDim, repr.nMonoms), dtype=nfloat)
-    gCoeffs = nzeros((repr.nMonoms, nDim, 1), dtype=nfloat)
+    if G is None:
+        gCoeffs = nzeros((repr.nMonoms, nDim, 1), dtype=nfloat)
+    else:
+        gCoeffs = nzeros((repr.nMonoms, nDim, G.shape[1]), dtype=nfloat)
     
     #Populate
     expAsList = nzeros((nDim,), nintu)
@@ -25,29 +34,44 @@ def getSys(repr: polynomialRepr):
         idx = repr.monom2num[list2int(expAsList)]
         fCoeffs[i, idx] = 1.
     
-    gCoeffs[0,nDim-1,0] = 1.
+    if G is None:
+        gCoeffs[0,nDim-1,0] = 1.
+    else:
+        gCoeffs[0,:,:] = G
+    
+    if P is not None:
+        Ci = inv(cholesky(P))
+        
+        for i in range(nDim):
+            fCoeffs[i,:] = repr.doLinCoordChange(fCoeffs[i,:].copy(), Ci)
+
+        for i in range(nDim):
+            for j in range(gCoeffs.shape[2]):
+                gCoeffs[:,i,j] = repr.doLinCoordChange(gCoeffs[:,i,j].copy(), Ci)
     
     qS = sy.symbols(f"q:{nDim}")
     qM =sy.Matrix(nzeros((nDim,1)))
     for i in range(nDim):
         qM[i,0] = qS[i]
-    uS = sy.symbols(f"u:1")
-    uM = sy.Matrix(nzeros((1, 1)))
-    uM[0,0] = uS[0]
+    uS = sy.symbols(f"u:{gCoeffs.shape[2]}")
+    uM = sy.Matrix(nzeros((1, gCoeffs.shape[2])))
+    for i in range(gCoeffs.shape[2]):
+        uM[i,0] = uS[i]
+    nu_ = gCoeffs.shape[2]
     
     pSys = polynomialSys(repr, fCoeffs, gCoeffs, qM, uM, 3)
     
     return pSys
 
 
-def getSysStablePos(nDims:int, deg:int):
+def getSysStablePos(nDims:int, deg:int, P=None, G=None):
     import polynomial as poly
     import trajectories as traj
 
     repr = poly.polynomialRepr(nDims, deg)
 
     # Get the dynamical system
-    pSys = getSys(repr)
+    pSys = getSys(repr, P, G)
 
     # Get the trajectory
     xTraj = lambda t: nzeros((nDims,1), dtype=nfloat)

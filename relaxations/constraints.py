@@ -7,6 +7,14 @@ class constraint:
     def getCstr(self):
         raise NotImplementedError
 
+    def evalCstr(self, x:np.array):
+        # Evaluates the error at given points
+        raise NotImplementedError
+
+    def isValid(self, z: np.ndarray, atol=-1e-6):
+        # Checks if constraint is verified for a certain points
+        raise NotImplementedError
+
 class linearConstraint(constraint):
     def __init__(self,Gl,hl):
 

@@ -1,6 +1,6 @@
 from coreUtils import *
 
-@njit
+@njit(cache=True)
 def evalPolyLyap_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU, idxMat, coeffsOut, Pdot):
     assert 0, "call and code needs debugging"
     """
@@ -95,7 +95,7 @@ def evalPolyLyap_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU
     return coeffsOut
 
 
-@njit
+@njit(cache=True)
 def evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU, idxMat, coeffsOut, Pdot):
     """
     Generates the polynomial corresponding to the derivative of the Lyapunov function
@@ -190,7 +190,7 @@ def evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u,
     
     
     
-@njit
+@njit(cache=True)
 def compPolyCstr_Numba(monomsP:np.ndarray, PG:np.ndarray, monomsG:np.ndarray, which:np.ndarray, idxMat:np.ndarray, coeffsOut:np.ndarray):
     """
     Computes the coefficients of the polynomial constraints defining the optimal input regions

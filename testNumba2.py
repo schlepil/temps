@@ -6,51 +6,51 @@ def matmul0(A,B):
 @jit
 def matmul1(A,B):
     return A*B*B*A*B*B*B*A
-@njit
+@njit(cache=True)
 def matmul2(A,B):
     return A*B*B*A*B*B*B*A
 
-@njit
+@njit(cache=True)
 def funca(anArray):
     tmp=0.
     for k in range(anArray.size):
         tmp += (float(k)+anArray[k])
     return tmp
 
-@njit
+@njit(cache=True)
 def funcb(anArray):
     tmp=0.
     for k,val in enumerate(anArray):
         tmp += (float(k)+val)
     return tmp
 
-@njit
+@njit(cache=True)
 def funAcc0(A):
     for i in range(A.shape[0]):
             A[i]*=1.35641687
     return A
 
-@njit
+@njit(cache=True)
 def funAcc(A):
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):
             A[i,j]
     return A
 
-@njit
+@njit(cache=True)
 def funAcc1(A):
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):
             A[i, j]*=1.35641687
     return A
 
-@njit
+@njit(cache=True)
 def funAcc2(A):
     for i in range(A.shape[0]):
             A[i, :]
     return A
 
-@njit
+@njit(cache=True)
 def funAcc3(A):
     for i in range(A.shape[0]):
             A[i, :]*=1.356416876

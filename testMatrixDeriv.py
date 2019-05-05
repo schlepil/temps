@@ -32,7 +32,7 @@ def int2listPy(aint,len,out=None):
     return out
 
 
-@njit
+@njit(cache=True)
 def list2intNumba(anArr):
     out = 0
     len = anArr.size
@@ -43,7 +43,7 @@ def list2intNumba(anArr):
     return out
 
 
-@njit
+@njit(cache=True)
 def int2listNumba(aInt,len,out=None):
     if out is None:
         out = np.empty((len,),dtype=np.int_)

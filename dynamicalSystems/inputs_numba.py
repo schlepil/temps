@@ -1,7 +1,7 @@
 from coreUtils import *
 
 #setIdxNumba(idx, idxU, self.thisLimL, self.thisLimU, uRef)
-@njit
+@njit(cache=True)
 def setIdxNumba(idx, u, limL, limU, uRef):
     
     for k, aIdx in enumerate(idx):

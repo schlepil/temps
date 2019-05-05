@@ -8,23 +8,31 @@ from parallelChecker.parallelDefinitions import *
 from multiprocessing import Process, Queue
 from multiprocessing.sharedctypes import RawArray as mpRawArray
 
-import ctypes
+
 import queue
 import time
 
-cfloat = np.ctypeslib.as_ctypes_type(nfloat)
+import os
 
-# The shared variables for faster com
-quadraticLyapShared_ = [ mpRawArray(cfloat, lenBuffer_) for _ in range(nThreads_)] # Assuming x'.P.x <= 1.
-polyObjShared_ = [ mpRawArray(cfloat, lenBuffer_) for _ in range(nThreads_)]
-polyCstrShared_ = [ [mpRawArray(cfloat, lenBuffer_) for _ in range(nCstrMax_)] for _ in range(nThreads_) ]
-# Easy access via np
-quadraticLyapSharedNP_ = [ np.frombuffer(aS, dtype=nfloat, count=lenBuffer_) for aS in quadraticLyapShared_ ]
-polyObjSharedNP_ = [ np.frombuffer(aS, dtype=nfloat, count=lenBuffer_) for aS in polyObjShared_ ]
-polyCstrSharedNP_ = [ [np.frombuffer(aS, dtype=nfloat, count=lenBuffer_) for aS in aSL]  for aSL in polyCstrShared_ ]
+if useSharedMem_:
+    import ctypes
+    
+    cfloat = np.ctypeslib.as_ctypes_type(nfloat)
+    # The shared variables for faster com
+    quadraticLyapShared_ = [ mpRawArray(cfloat, lenBuffer_) for _ in range(nThreads_)] # Assuming x'.P.x <= 1.
+    polyObjShared_ = [ mpRawArray(cfloat, lenBuffer_) for _ in range(nThreads_)]
+    polyCstrShared_ = [ [mpRawArray(cfloat, lenBuffer_) for _ in range(nCstrMax_)] for _ in range(nThreads_) ]
+    # Easy access via np
+    quadraticLyapSharedNP_ = [ np.frombuffer(aS, dtype=nfloat, count=lenBuffer_) for aS in quadraticLyapShared_ ]
+    polyObjSharedNP_ = [ np.frombuffer(aS, dtype=nfloat, count=lenBuffer_) for aS in polyObjShared_ ]
+    polyCstrSharedNP_ = [ [np.frombuffer(aS, dtype=nfloat, count=lenBuffer_) for aS in aSL]  for aSL in polyCstrShared_ ]
 
+# Dict to store representations and others to avoid recomputation
+reprDict_ = {}
+relaxationDict_ = {}
+problemDict_ = {}
 
-def probSetter(problem: dict, probQueue: Queue, workerId: int):
+def probSetterShared_(problem: dict, probQueue: Queue, workerId: int):
     # First copy, then put into queue
     # Necessary
     polyObjSharedNP_[workerId][:problem['obj'].size] = problem['obj']
@@ -41,6 +49,19 @@ def probSetter(problem: dict, probQueue: Queue, workerId: int):
     return workerId
 
 
+def probSetterBare_(problem: dict, probQueue: Queue, workerId: int):
+    # Put all into the queue
+    problem['probDict']['workerId'] = workerId
+    probQueue.put(problem)
+    
+    return workerId
+
+if useSharedMem_:
+    probSetter = probSetterShared_
+else:
+    probSetter = probSetterBare_
+
+
 def solGetter(solQueues: List[Queue], workerId: int = None, block=True, timeout=0.0001):
     if workerId is None:
         if block:
@@ -50,7 +71,7 @@ def solGetter(solQueues: List[Queue], workerId: int = None, block=True, timeout=
                         return aQueue.get(block=block, timeout=timeout)
                     except queue.Empty:
                         pass
-                time.sleep(0.001)
+                time.sleep(0.0001)
         else:
             sol = None
             for aQueue in solQueues:
@@ -85,6 +106,12 @@ class workDistributor:
         self.probStore_ = {}
         self.doStoreOrig = True
     
+    def terminate(self):
+        self.reset()
+        for aQ in self.probQ:
+            aQ.put("")
+        return None
+    
     def reset(self):
         self.waitingList = []
         self.nbrOfUnreturnedPbr = 0
@@ -96,6 +123,9 @@ class workDistributor:
                 self.solQ[k].get()
                 self.inUse[k] = False
         
+        if self.doStoreOrig:
+            self.probStore_ = {}
+        
         return None
     
     def spin(self):
@@ -104,9 +134,6 @@ class workDistributor:
             thisWorkerId = np.argwhere(np.logical_not(self.inUse))[0,0] #TODO check why argwhere is always 2d
             probSetter(thisProb, self.probQ[thisWorkerId], thisWorkerId)
             self.inUse[thisWorkerId] = True
-            
-            # Test
-            #workerSolve(self.probQ[thisWorkerId], self.solQ[thisWorkerId])
             
         return None
     
@@ -132,6 +159,8 @@ class workDistributor:
             while True:
                 try:
                     sol = solGetter(self.solQ, workerId, False, timeout)
+                    if sol == "":
+                        raise RuntimeError
                     self.inUse[sol['probDict']['workerId']] = False
                     self.spin()
                     break
@@ -144,6 +173,8 @@ class workDistributor:
                     break
         else:
             sol = solGetter(self.solQ, workerId, block, timeout)
+            if sol == "":
+                raise RuntimeError
             self.inUse[sol['probDict']['workerId']] = False
             self.spin()
         self.nbrOfUnreturnedPbr -= 1
@@ -167,9 +198,15 @@ class workDistributorNoThread:
         self.probStore_ = {}
         self.doStoreOrig = True
     
+    def terminate(self):
+        pass
+    
     def reset(self):
         self.waitingList = []
         self.nbrOfUnreturnedPbr = 0
+        
+        if self.doStoreOrig:
+            self.probStore_ = {}
         
         return None
     
@@ -202,6 +239,8 @@ class workDistributorNoThread:
         # No threading always uses zero worker
         self.spin()
         sol = solGetter(self.solQ, 0, True, timeout=100.)
+        if sol == "":
+            raise RuntimeError
         
         self.nbrOfUnreturnedPbr -= 1
         
@@ -217,10 +256,6 @@ class workDistributorNoThread:
 
 def workerSolve(inQueue, outQueue):
 
-    reprDict = {}
-    relaxationDict = {}
-    problemDict = {}
-
     #input = inQueue.get()
 
     #assert 'initial' in input.keys()
@@ -229,6 +264,11 @@ def workerSolve(inQueue, outQueue):
 
     #selfNr = input['nr']
     #selfSolver = input['solver']
+    
+    global reprDict_
+    global relaxationDict_
+    global problemDict_
+
 
     while True:
 
@@ -238,16 +278,32 @@ def workerSolve(inQueue, outQueue):
             print(f"Worker {selfNr} is terminating")
             break
         
-        selfNr = input['workerId']
-        selfSolver = input['solver']
-
+        if not useSharedMem_:
+            inputAll = input
+            input = input['probDict']
+            
         try:
-            thisRepr = reprDict[input['dimsNDeg']]
-            thisRelax = relaxationDict[input['dimsNDeg']]
-            thisProb = problemDict[input['dimsNDeg']][input['nCstrNDegType']] # TODO reduce memory footprint by making it order invariant
-
+            selfNr = input['workerId']
+        except KeyError:
+            selfNr = input['workerId'] = os.getpid()
+        selfSolver = input['solver']
+        
+        if __debug__:
+            print(f"Worker {selfNr} recieved new input")
+        
+        try:
+            thisRepr = reprDict_[input['dimsNDeg']]
+            thisRelax = relaxationDict_[input['dimsNDeg']]
+            thisProb = problemDict_[input['dimsNDeg']][tuple(input['nCstrNDegType'])] # TODO reduce memory footprint by making it order invariant
+            
+            if __debug__:
+                print(f"Worker {selfNr} found corresponding representation, relaxation and problem")
+            
             #thisProb.objective = np.frombuffer(polyObjShared_[selfNr], nfloat, thisRepr.nMonoms)
-            thisProb.objective = polyObjSharedNP_[selfNr][:thisRepr.nMonoms].copy()
+            if useSharedMem_:
+                thisProb.objective = polyObjSharedNP_[selfNr][:thisRepr.nMonoms].copy()
+            else:
+                thisProb.objective = inputAll['obj']
 
             counters = {'l':0, 'q':0, 's':1 }
             for k, (nDeg, cstrType) in enumerate(input['nCstrNDegType']):
@@ -259,8 +315,10 @@ def workerSolve(inQueue, outQueue):
                 else:
                     thisCstr = thisProb.constraints.s.cstrList[counters[cstrType]]
                     assert thisCstr.polyDeg == nDeg
-                    #thisCstr.coeffs = np.frombuffer(polyCstrShared_[selfNr][k], nfloat, thisRepr.nMonoms)
-                    thisCstr.coeffs = polyCstrSharedNP_[selfNr][k][:thisRepr.nMonoms].copy()
+                    if useSharedMem_:
+                        thisCstr.coeffs = polyCstrSharedNP_[selfNr][k][:thisRepr.nMonoms].copy()
+                    else:
+                        thisCstr.coeffs = inputAll['cstr'][k]
                     assert thisCstr.polyDeg == nDeg
                     counters[cstrType] += 1
 
@@ -268,17 +326,31 @@ def workerSolve(inQueue, outQueue):
             nDims, maxDeg = input['dimsNDeg']
 
             try:
-                thisRepr = reprDict[input['dimsNDeg']]
-                thisRelax = relaxationDict[input['dimsNDeg']]
+                thisRepr = reprDict_[input['dimsNDeg']]
+                if __debug__:
+                    print(f"Worker {selfNr} found representation")
             except KeyError:
                 thisRepr = poly.polynomialRepr(nDims, maxDeg)
+                reprDict_[input['dimsNDeg']] = thisRepr
+                if __debug__:
+                    print(f"Worker {selfNr} created representation")
+            
+            try:
+                thisRelax = relaxationDict_[input['dimsNDeg']]
+                if __debug__:
+                    print(f"Worker {selfNr} found relaxation")
+            except KeyError:
                 thisRelax = rel.lasserreRelax(thisRepr)
-                relaxationDict[input['dimsNDeg']] = thisRepr
+                relaxationDict_[input['dimsNDeg']] = thisRelax
+                if __debug__:
+                    print(f"Worker {selfNr} created relaxation")
 
             # Get all polynomials
             # objective
-            #polyObj = poly.polynomial(thisRepr, coeffs=np.frombuffer(polyObjShared_[selfNr], nfloat, thisRepr.nMonoms), alwaysFull=True)
-            polyObj = poly.polynomial(thisRepr, coeffs=polyObjSharedNP_[selfNr][:thisRepr.nMonoms].copy(), alwaysFull=True)
+            if useSharedMem_:
+                polyObj = poly.polynomial(thisRepr, coeffs=polyObjSharedNP_[selfNr][:thisRepr.nMonoms].copy(), alwaysFull=True)
+            else:
+                polyObj = poly.polynomial(thisRepr, coeffs=inputAll['obj'], alwaysFull=True)
 
             # Add the objective
             thisProb = rel.convexProg(thisRepr, selfSolver, objective=polyObj)
@@ -286,11 +358,20 @@ def workerSolve(inQueue, outQueue):
             # constraints
             thisProb.addCstr( thisRelax )
             for k, (nDeg, cstrType) in enumerate(input['nCstrNDegType']):
-                #thisCstr = rel.lasserreConstraint(thisRepr, poly.polynomial(thisRepr, coeffs=np.frombuffer(polyCstrShared_[selfNr][k], nfloat, thisRepr.nMonoms), alwaysFull=True))
-                thisCstr = rel.lasserreConstraint(thisRelax, poly.polynomial(thisRepr, coeffs=polyCstrSharedNP_[selfNr][k][:thisRepr.nMonoms].copy(), alwaysFull=True))
+                if useSharedMem_:
+                    thisCstr = rel.lasserreConstraint(thisRelax, poly.polynomial(thisRepr, coeffs=polyCstrSharedNP_[selfNr][k][:thisRepr.nMonoms].copy(), alwaysFull=True))
+                else:
+                    thisCstr = rel.lasserreConstraint(thisRelax, poly.polynomial(thisRepr, coeffs=inputAll['cstr'][k], alwaysFull=True))
                 assert (nDeg == thisCstr.poly.maxDeg), "Incompatible degrees"
                 # Add the constraints
                 thisProb.addCstr(thisCstr)
+            
+            # Save the problem
+            if not input['dimsNDeg'] in problemDict_.keys():
+                problemDict_[input['dimsNDeg']] = {}
+            problemDict_[input['dimsNDeg']][tuple(input['nCstrNDegType'])] = thisProb
+            if __debug__:
+                print(f"Worker {selfNr} created the problem structure for {input['dimsNDeg']} and {input['nCstrNDegType']}")
 
 
         # Check if need to transform
@@ -311,11 +392,24 @@ def workerSolve(inQueue, outQueue):
         # Actually solve
         solution = thisProb.solve()
         if doThreading_:
-            assert solution['status'] == 'optimal'
+            if not solution['status'] == 'optimal':
+                if useSharedMem_:
+                    print(f"Failed on \n {input} \n\n with \n {solution}")
+                else:
+                    print(f"Failed on \n {inputAll} \n\n with \n {solution}")
+                outQueue.put("")
         else:
             if not (solution['status'] == 'optimal'):
                 print("Error in solving")
-        extraction = thisProb.extractOptSol(solution)
+                import plotting as plt
+                ff,aa = plt.plt.subplots(1,1)
+                aa.set_xlim(-2,2)
+                aa.set_ylim(-2,2)
+                plt.plot2dCstr(thisProb, aa, {'binaryPlot':True}, fig=ff)
+        try:
+            extraction = thisProb.extractOptSol(solution)
+        except:
+            print('a')
 
         if ('toUnitCircle' in input.keys()) and (input['toUnitCircle']):
             # Add the unscaled solution
@@ -325,6 +419,9 @@ def workerSolve(inQueue, outQueue):
             ySol = extraction[0]
         
         if __debug__:
+            if solution['primal objective'] < -1.e-6:
+                print(f"Found critical point with {solution['primal objective']} at \n {ySol}")
+            print(f"Optimal value is ")
             if extraction[0].size == 0:
                 thisProb.extractOptSol(solution)
 

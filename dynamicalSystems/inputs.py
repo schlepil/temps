@@ -153,7 +153,7 @@ class boxInputCstrLFBG(boxInputCstr):
     """
     
     def __init__(self, repr:polynomialRepr, refTraj:referenceTrajectory, nu:int, limL=None, limU=None):
-        super(boxInputCstrLFBG, self).__init__(repr, refTraj, nu,limL,limU)
+        super(type(self), self).__init__(repr, refTraj, nu,limL,limU)
     
     
     def getU(self,idx:np.ndarray,t=0.,uRef:np.ndarray=None,uOut:np.ndarray=None, P:np.ndarray=None, PG0:np.ndarray=None, alpha:float=None,

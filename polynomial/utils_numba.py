@@ -30,7 +30,7 @@ def linChangeNumba(firstIdxPerMonom,cIdx,cpIdx,multiplier,numElem,idxList,c,cp,A
     return cp
 
 
-@njit
+@njit(cache=True)
 def list2int(anArr: np.ndarray,digits: int = 1):
     """
     Computes an integer corresponding to the list of exponents.
@@ -57,7 +57,7 @@ def list2int(anArr: np.ndarray,digits: int = 1):
     return out
 
 
-@njit
+@njit(cache=True)
 def int2list(aInt: int,nVars: int,digits: int = 1,out: np.ndarray = None) -> np.ndarray:
     """
     Inverse operation of list2int
@@ -77,7 +77,7 @@ def int2list(aInt: int,nVars: int,digits: int = 1,out: np.ndarray = None) -> np.
 
 
 # idxParent, idxVar = getIdxAndParent(aMonom, self.repr.listOfMonomialsPerDeg[k-1], digits)
-@njit
+@njit(cache=True)
 def getIdxAndParent(aMonom: int,aMonomList: narray,nVars: int,digits: int):
 
 
@@ -104,7 +104,7 @@ def getIdxAndParent(aMonom: int,aMonomList: narray,nVars: int,digits: int):
     
     return idxVar, idxParent
     
-@njit
+@njit(cache=True)
 def polyMul(c0,c1,idxMat):
     cp = np.zeros(c0.shape, dtype=nfloat)
     
@@ -118,7 +118,7 @@ def polyMul(c0,c1,idxMat):
     return cp
 
 
-@njit
+@njit(cache=True)
 def polyMulExp(c0,c1,cout,idxMat,idxMax0,idxMax1):
     
     # Loop
@@ -131,7 +131,7 @@ def polyMulExp(c0,c1,cout,idxMat,idxMax0,idxMax1):
     return cp
 
 # self.coeffs = quadraticForm_Numba(Q,qMonoms, h, hMonom, self.repr.idxMat, np.zeros((self.repr.nMonoms,), dtype=nfloat))
-@njit
+@njit(cache=True)
 def quadraticForm_Numba(Q,qMonoms, h, hMonom, idxMat, coeffsOut):
     """
     Here no special form is assumed for Q
@@ -153,7 +153,7 @@ def quadraticForm_Numba(Q,qMonoms, h, hMonom, idxMat, coeffsOut):
     return coeffsOut
 
 
-@njit
+@njit(cache=True)
 def evalMonomsNumba1(x, varNum2varNumParents):
 
     z = nempty((varNum2varNumParents.shape[0],1))
@@ -171,7 +171,7 @@ def evalMonomsNumba1(x, varNum2varNumParents):
         z[k,0] = z[p0,0]*z[p1,0]
     return z
 
-@njit
+@njit(cache=True)
 def evalMonomsNumbaN(x, varNum2varNumParents):
 
     z = nempty((varNum2varNumParents.shape[0],x.shape[1]))

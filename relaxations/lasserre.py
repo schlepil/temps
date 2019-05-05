@@ -1,5 +1,6 @@
 from coreUtils import *
 from polynomial import *
+from relaxations.constraints import constraint
 
 # Implements base relaxations and constraints
 
@@ -150,7 +151,7 @@ class lasserreRelax:
         
 
 
-class lasserreConstraint:
+class lasserreConstraint(constraint):
     def __init__(self, baseRelax:lasserreRelax, poly:polynomial, nRelax:int=None):
         """
         This constraint relaxes the actual constraint

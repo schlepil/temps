@@ -3,6 +3,7 @@ from Lyapunov.utils_numba import *
 
 from control import lqr
 
+import plotting as plot
 
 
 #Indexing
@@ -671,7 +672,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             # Decide what to do
             yPlaneDist = ndot(thisY.T, ctrlDict['PG0']).reshape((nu_,))
         
-            minDist = 1.  # np.Inf
+            minDist =.9  # np.Inf
         
             for i, iDist in enumerate(yPlaneDist):
                 if iDist < -opts['minDistToSep']:
@@ -703,10 +704,10 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             # get the sphere
             # (y-thisY).T.P.(y-thisY)<=mindDist**2
             # thisY.T.P.thisY - 2*thisY.T.P.y + y.T.P.y - minDist**2 <= 0
-            # thisY.T.(-P).thisY + 2*thisY.T.P.y + y.T.P.y + minDist**2 >= 0
+            # thisY.T.(-P).thisY + 2*thisY.T.P.y + y.T.(-P).y + minDist**2 >= 0
             # with P = Id
             thisPoly.setQuadraticForm(-nidentity((nq_), dtype=nfloat), self.repr.varNumsPerDeg[1], 2.*thisY.squeeze(), self.repr.varNumsPerDeg[1])  # Attention sign!
-            thisPoly.coeffs[0] += minDist**2+mndot([thisY.T, -nidentity((nq_), dtype=nfloat), thisY])
+            thisPoly.coeffs[0] +=( minDist**2+mndot([thisY.T, -nidentity((nq_), dtype=nfloat), thisY]))
         
             # Confine the current problem to the sphere
             thisProb['probDict']['nCstrNDegType'].append((2, 's'))
@@ -731,8 +732,8 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
         probList = []
     
-        thisProbLin = thisSol['origProb']
-        probList.append(thisProbLin)
+        #thisProbLin = thisSol['origProb'] # Replaced by all (suitable) combinations
+        #probList.append(thisProbLin)
     
         # Create the subset to exclude
         # There might be multiple critical points, in this case they have the same value for the primal objective
@@ -747,14 +748,15 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         # TODO here we could use a "recursive" scheme that computes convergence within a sphere centered at the currently
         # diverging point and exclude it from the rest -> Not compatible with current data-structure
         # Heuristic: Find an input combination that ensures convergence but minimizes the number of separations
-    
-        uLinCurrent = np.argwhere(probDict_['u'] == 2).reshape((-1,))
+        # easier to work on 1d
+        probDict_['u'] = probDict_['u'].reshape((-1,))
+        uLinCurrent = np.flatnonzero(probDict_['u'] == 2)
     
         # Distance to separating hyperplanes
-        allYPlaneDist = [ndot(ctrlDict['PG0'], allY[:, k]).reshape((nu_,)) for k in range(allY.shape[1])]
+        allYPlaneDist = [ndot(allY[:, [k]].T, ctrlDict['PG0']).reshape((nu_,)) for k in range(allY.shape[1])]
         allYPlaneSign = [np.sign(a) for a in allYPlaneDist]
         # Distance to separating hypersurface
-        allYSurfaceDist = [nzeros((nu_,), dtype=nfloat) for _ in range(nu_)]
+        allYSurfaceDist = [nzeros((nu_,), dtype=nfloat) for _ in range(allY.shape[1])]
         for k in range(allY.shape[1]):
             for i in range(nu_):
                 thisPoly.coeffs = ctrlDict[i][1]  # Only the sign counts,
@@ -775,7 +777,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             try:
                 for bKey, bVal in aVal.items():
                     thisPoly.coeffs = bVal
-                    val = [thisPoly.eval2(allY[:, k]) for k in range(allY.shape[1])]
+                    val = [float(thisPoly.eval2(allY[:, [k]])) for k in range(allY.shape[1])]
                     convDict[aKey].update({bKey:val})
             except:
                 if __debug__:
@@ -783,7 +785,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         # Compute convergence
         allRes = nzeros((allY.shape[1],), dtype=nfloat)
         for k in range(allY.shape[1]):
-            thisRes = convDict[-1][0]
+            thisRes = convDict[-1][0][k]
             for i in range(nu_):
                 thisRes += convDict[i][-allYSurfaceSign[k][i]][k]
             allRes[k] = thisRes
@@ -857,15 +859,20 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                     # Minimal or maximal input
                     thisCoeffs += ctrlDict[k][input[k]]
             
-                idx = np.argwhere(uLinCurrent == k)
-                if ((idx.size) and (keepOptCtrl[idx])):
-                    # Split
-                    thisPoly.coeffs = np.zeros_like(thisPoly.coeffs)
-                    thisPoly.coeffs[:self.repr.varNumsUpToDeg[inputSepDeg[k]]] = -ctrlDict[k][input[k]][:self.repr.varNumsUpToDeg[
-                        inputSepDeg[k]]]  # Will be automatically rescaled
-                    # Now we have split up the hypersphere into smaller parts
-                    thisProb['probDict']['nCstrNDegType'].append((inputSepDeg[k], 's'))  # TODO adjust degree of relaxation if increasing degree of separating surface
-                    thisProb['cstr'].append(thisPoly.coeffs.copy())
+                try:
+                    idx = np.flatnonzero(uLinCurrent == k)[0]
+                    if keepOptCtrl[idx]:
+                        # Split
+                        thisCoeffsSep = np.zeros_like(thisCoeffs)
+                        thisCoeffsSep[self.repr.varNumsUpToDeg[inputSepDeg[k]]] = -ctrlDict[k][input[k]][self.repr.varNumsUpToDeg[inputSepDeg[k]]]  # Will be automatically rescaled
+                        # Now we have split up the hypersphere into smaller parts
+                        thisProb['probDict']['nCstrNDegType'].append((inputSepDeg[k], 's'))  # TODO adjust degree of relaxation if increasing degree of separating surface
+                        thisProb['cstr'].append(thisCoeffsSep)
+                except IndexError:
+                    # Was already linear
+                    pass
+            thisProb['obj'] = thisCoeffs
+            thisProb['probDict']['u'] = narray(input, dtype=nint).reshape((-1,1))
             # Done
         return probList
 
@@ -1000,6 +1007,18 @@ class piecewiseQuadraticLyapunovFunction(LyapunovFunction):
                 x[:, thisIdx] = self.lyapVList[akey].Ellip2Sphere(x[:, thisIdx])
 
         return x
+    
+    def plot(self, ax:"plot.plt.axes", t:float=0.0, opts={}):
+        
+        opts_ = {'plotStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
+                 'faceAlpha':0.5, 'linestyle':'-',
+                 'plotAx':np.array([0, 1])}
+        opts_.update(opts)
+        
+        P = self.getPnPdot(t, False)
+        x = self.dynSys.refTraj.getX(t)
+        
+        return plot.plotEllipse(ax, x, P, 1. **opts_)
 
 
 

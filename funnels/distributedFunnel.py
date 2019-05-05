@@ -156,8 +156,8 @@ class distributedFunnel:
     
                 # 1.1.1 Construct the objective
                 thisPoly = polynomial(self.repr) #Helper
-                thisCoeffs = nzeros((self.repr.nMonoms,), dtype=nfloat)
-                thisCoeffs += ctrlDict[-1][0] # Objective resulting from system dynamics
+                #thisCoeffs = nzeros((self.repr.nMonoms,), dtype=nfloat)
+                thisCoeffs = ctrlDict[-1][0].copy() # Objective resulting from system dynamics
                 for k in range(nu_):
                     thisCoeffs += ctrlDict[k][2]
                 thisProbLin['obj'] = -thisCoeffs # Inverse sign to maximize divergence <-> minimize convergence
@@ -177,19 +177,19 @@ class distributedFunnel:
                     thisY = aCritPoint['y']  # transformed coords of the point
                     # get the distance to all hyperplanes
                     # TODO check sign of PG0 with respect to sign of objectives
-                    yPlaneDist = ndot(ctrlDict['PG0'], thisY).reshape((nu_,))
+                    yPlaneDist = ndot(thisY.T, ctrlDict['PG0']).reshape((nu_,))
     
                     if aCritPoint['strictSep'] == 0:
                         # Use the linear approximator to avoid splitting up
                         thisProb = dp(thisProbBase)
                         thisProb['probDict']['isTerminal'] = 0  # Convergence can be improved but only by increasing the computation load
                         thisProb['strictSep'] = aCritPoint['strictSep']
-                        probList.append(thisProb)
+                        probList.append([thisProb]) # Use sublist for each point
     
-                        thisCtrlType = [None for _ in range(nu_, 1)]
+                        thisCtrlType = nzeros((nu_,1), dtype=nint)#None for _ in range(nu_, 1)]
     
                         # Decide what to do
-                        minDist = np.Inf
+                        minDist = .9 #np.Inf # Reasonable bound for sphere
                         for i, iDist in enumerate(yPlaneDist):
                             if iDist < -self.opts['minDistToSep']:
                                 # Negative -> use maximal control input
@@ -202,19 +202,18 @@ class distributedFunnel:
                                 # Large positive -> use minimal control input
                                 thisCtrlType[i, 0] = -1
                         #Remember
-                        thisProb['probDict']['u'] = narray(thisCtrlType, dtype=nint)
+                        thisProb['probDict']['u'] = thisCtrlType.copy()
                         thisProb['probDict']['minDist'] = minDist
-                        thisProb['probDict']['center'] = thisY
+                        thisProb['probDict']['center'] = thisY.copy()
     
                         # Now we have the necessary information and we can construct the actual problem
-                        thisCoeffs = nzeros((self.repr.nMonoms,), dtype=nfloat)
-                        thisCoeffs += ctrlDict[-1][0]  # Objective resulting from system dynamics
-                        for i, type in enumerate(thisCtrlType.squeeze()):
+                        thisCoeffs = ctrlDict[-1][0].copy()  # Objective resulting from system dynamics
+                        for i, type in enumerate(thisCtrlType.reshape((-1,))):
                             if type == 2:
                                 # Rescale due to the reduced size
                                 if __debug__:
                                     assert abs(ctrlDict[i][type][0]) < 1e-10
-                                thisCoeffs[1, :] += ctrlDict[i][type][1, :]*(1./minDist)
+                                thisCoeffs[1:] += ctrlDict[i][type][1:]*(1./minDist)
                             else:
                                 thisCoeffs += ctrlDict[i][type]
                         thisProb['obj'] = -thisCoeffs # Inverse sign to maximize divergence <-> minimize convergence
@@ -386,9 +385,12 @@ class distributedFunnel:
         :return:
         """
         
+        critPoints = [[] for _ in range(len(timePoints))] if critPoints is None else critPoints
+        
         results = []
         resultsLin = -np.Inf*nones((0,), dtype=nfloat)
         resIdLin = 0
+        doesConverge = None
         
         # Get all zones to be checked
         allCtrlDictsNzones = [self.getCtrlDict(at, aTaylorApprox[0], aTaylorApprox[1], returnZone=True) for at, aTaylorApprox in zip(timePoints, allTaylorApprox)]
@@ -399,12 +401,15 @@ class distributedFunnel:
         
         #Set initial problems
         for k, (aCtrlNZone, aCritPList) in enumerate(zip(allCtrlDictsNzones, critPoints)):
+            results.append([])
             thisProbList = self.ZoneNPoints2Prob(aCtrlNZone[1], aCritPList, aCtrlNZone[0])
-            results.append([[None for _ in range(len(aSubProbList))] for aSubProbList in thisProbList ])
+            #results.append([[None for _ in range(len(aSubProbList))] for aSubProbList in thisProbList ])
             for i, aSubProbList in enumerate(thisProbList):
+                results[-1].append([])
                 #resultsLin.extend( [-np.Inf for _ in range(len(aSubProbList))] )
                 resultsLin = np.hstack( [resultsLin, -np.Inf*nones((len(aSubProbList),), dtype=nfloat)] )
                 for j, aProb in enumerate(aSubProbList):
+                    results[-1][-1].append(None)
                     aProb['probDict']['resPlacement'] = (k,i,j)
                     aProb['probDict']['resPlacementLin'] = resIdLin
                     resIdLin += 1
@@ -424,7 +429,7 @@ class distributedFunnel:
                 if not len(newProbList):
                     # this region is a proof for non-convergence
                     if self.opts['earlyExit']:
-                        return False, critPoints, results, resultsLin
+                        break
                 # New (less conservative) problems could be derived
                 # "Accept" this solution and place the new problems
                 resultsLin[thisSol['probDict']['resPlacementLin']] = np.Inf
@@ -432,17 +437,21 @@ class distributedFunnel:
                 lMax = len(resultsLin)
                 #resultsLin.extend( [None for _ in range(len(newProbList))] )
                 resultsLin = np.hstack([resultsLin, -np.Inf*nones((len(newProbList),), dtype=nfloat)])
-                results[k][i].extend( [None for _ in range(len(newProbList))] )
-                jMax -= 1
-                lMax -= 1
+                #results[k][i].extend( [None for _ in range(len(newProbList))] )
+
                 for aProb in newProbList:
+                    results[k][i].append(None)
                     aProb['probDict']['resPlacement'] = (k,i,jMax)
                     aProb['probDict']['resPlacementLin'] = lMax
                     distributor.setProb(aProb)
                     jMax+=1
                     lMax+=1
+        
+        doesConverge = nall(resultsLin>=self.opts['numericEpsPos'])
+        
+        distributor.reset()
 
-        return True, critPoints, results, resultsLin
+        return doesConverge, critPoints, results, resultsLin
         
 
     def compute(self, tStart:float, tStop:float, initZone):
@@ -483,7 +492,8 @@ class distributedFunnel:
             
             # Step 1 - critical points
             # TODO forward calculate the trajectory of the current crit points
-            criticalPoints = [[] for _ in range(self.opts['interSteps'])]
+            #criticalPoints = [[] for _ in range(self.opts['interSteps'])]
+            criticalPoints = None
 
             # Step 2 check if current is feasible
             #minConvList = self.solve1(tSteps, criticalPoints, allTaylorApprox)
@@ -500,7 +510,7 @@ class distributedFunnel:
                 
                 while self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                     alphaL = alphaU
-                    alphaU *= 2
+                    alphaU *= 2.
                     lyapFunc_.setAlpha(alphaU, 0)
             
             else:
@@ -511,7 +521,7 @@ class distributedFunnel:
 
                 while self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                     alphaU = alphaL
-                    alphaL /= 2
+                    alphaL /= 2.
                     lyapFunc_.setAlpha(alphaL, 0)
             
             # Now we can perform dichotomic search

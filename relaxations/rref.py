@@ -6,8 +6,14 @@ from numpy import argmax, abs, ones, zeros, arange, outer, around, all
 
 from math import log10
 
-@njit
+# Options
+doPrint__ = False
+
+@njit(cache=True)
 def rref(B, tol=1e-10, doCopy=True):
+    
+    doPrint_ = doPrint__
+    
     A = B.copy() if doCopy else B
     rows, cols = A.shape
     r = 0
@@ -21,20 +27,20 @@ def rref(B, tol=1e-10, doCopy=True):
     m = 0.
 
     for c in range(cols):
-        if __debug__:
+        if doPrint_:
             print("Now at row", r, "and col", c, "with matrix:");
             print(A)
 
         ## Find the pivot row:
         pivot = argmax(abs(A[r:rows, c])) + r
         m = float(abs(A[pivot, c]))
-        if __debug__:
+        if doPrint_:
             print("Found pivot, ", m, " in row ", pivot)
         if m <= tol:
             ## Skip column c, making sure the approximately zero terms are
             ## actually zero.
             A[r:rows, c] = zeros(rows - r)
-            if __debug__:
+            if doPrint_:
                 print("All elements at and below (", r, ",", c, ") are zero.. moving on..")
         else:
             ## keep track of bound variables
@@ -50,7 +56,7 @@ def rref(B, tol=1e-10, doCopy=True):
                 A[swaps, c:cols] = A[swapsR, c:cols]
                 row_exchanges[swaps] = row_exchanges[swapsR]
 
-                if __debug__:
+                if doPrint_:
                     print("Swap row", r, "with row", pivot, "Now:"); print(A)
 
             ## Normalize pivot row
@@ -62,13 +68,13 @@ def rref(B, tol=1e-10, doCopy=True):
             if r > 0:
                 ridx_above = arange(r)
                 A[ridx_above, c:cols] = A[ridx_above, c:cols] - outer(v, A[ridx_above, c]).T
-                if __debug__:
+                if doPrint_:
                     print("Elimination above performed:"); print(A)
             ## Below (after row r):
             if r < rows - 1:
                 ridx_below = arange(r + 1, rows)
                 A[ridx_below, c:cols] = A[ridx_below, c:cols] - np.outer(v, A[ridx_below, c]).T
-                if __debug__:
+                if doPrint_:
                     print("Elimination below performed:"); print(A)
             r += 1
         ## Check if done

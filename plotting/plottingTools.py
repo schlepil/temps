@@ -1,5 +1,6 @@
 from coreUtils import *
 from matplotlib import pyplot as plt
+import matplotlib
 
 def myQuiver(ax, X, V, c=None, otherPlotOptDict={}):
     dim = X.shape[0]
