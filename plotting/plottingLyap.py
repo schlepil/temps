@@ -131,10 +131,12 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
     opts_ = {'plotStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
              'faceAlpha':0.0, 'linestyle':'-',
              'plotAx':np.array([0, 1]),
-             'cmap':'viridis', 'colorStreams':'conv', 'nPt':200}
+             'cmap':'viridis', 'colorStreams':'conv', 'nPt':200,
+             'dynMode':'PP', 'ctrlMode':None}
     opts_.update(opts)
     
     assert opts_['colorStreams'] in ('conv', 'mag', 'dir')
+    assert (opts_['ctrlMode'] is None) or ((opts_['ctrlMode'] is np.ndarray) and (opts_['ctrlMode'].size == funnel.dynSys.nu))
     
     ff,aa = plt.subplots(1,1)
     
@@ -145,6 +147,19 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
     # Plot the streamlines
     
     # Get the veloctiy
-    XX = ax2Grid(aa, opts_['nPt'])
+    xx, yy = ax2Grid(aa, opts_['nPt'])
+    XX = np.vstack((xx.flatten(), yy.flatten()))
+
+    x0 = funnel.dynSys.ctrlInput.refTraj.getX(t)
+    dx0 = funnel.dynSys.ctrlInput.refTraj.getDX(t)
+
+    UU = funnel.dynSys.ctrlInput.computeCtrl(t, XX, opts_['ctrlMode'])
+
+    UU = funnel.dynSys.ctrlInput()
+    # __call__(self, x:np.ndarray, u:np.ndarray, mode:str='OO', x0:np.ndarray=None):
+    VV = funnel.dynSys(XX, )
+
+
+
     
     

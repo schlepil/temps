@@ -21,6 +21,9 @@ class inputConstraints:
     def getBounds(self, *args, **kwargs):
         return self.getMinU(*args, **kwargs), self.getMaxU(*args, **kwargs)
 
+    def computeCtrl(self, t:float, XX:np.ndarray, mode:int, isOffset:bool):
+        raise NotImplementedError
+
     def __call__(self,*args,**kwargs):
         raise NotImplementedError
     
@@ -117,6 +120,16 @@ class boxInputCstr(inputConstraints):
                 inputNonCstr = np.maximum(self.thisLimL,np.minimum(self.thisLimU,inputNonCstr))
         
         return inputNonCstr
+
+    #######################
+    def computeCtrl(self, t:float, XX:np.ndarray, mode:int, isOffset:bool):
+        """
+        Compute the (bounded) control input for the given position
+        :param t:
+        :param XX:
+        :param mode:
+        :return:
+        """
     
 
 
