@@ -65,8 +65,8 @@ class boxInputCstr(inputConstraints):
         if self.limUCall:
             self.thisLimU = self.limU(t)
         return self.thisLimU
-    #######################
     
+    #######################
     def getU(self,idx:np.ndarray,t=0.,uRef=None,uOut=None, monomOut=False, *args, **kwargs):
         # Get optimal input encoded by index vector idx
         # 1 is maximum input
@@ -120,16 +120,6 @@ class boxInputCstr(inputConstraints):
                 inputNonCstr = np.maximum(self.thisLimL,np.minimum(self.thisLimU,inputNonCstr))
         
         return inputNonCstr
-
-    #######################
-    def computeCtrl(self, t:float, XX:np.ndarray, mode:int, isOffset:bool):
-        """
-        Compute the (bounded) control input for the given position
-        :param t:
-        :param XX:
-        :param mode:
-        :return:
-        """
     
 
 
@@ -167,7 +157,6 @@ class boxInputCstrLFBG(boxInputCstr):
     
     def __init__(self, repr:polynomialRepr, refTraj:referenceTrajectory, nu:int, limL=None, limU=None):
         super(type(self), self).__init__(repr, refTraj, nu,limL,limU)
-    
     
     def getU(self,idx:np.ndarray,t=0.,uRef:np.ndarray=None,uOut:np.ndarray=None, P:np.ndarray=None, PG0:np.ndarray=None, alpha:float=None,
              monomOut=False, scale:float=1., *args, **kwargs):
@@ -233,8 +222,58 @@ class boxInputCstrLFBG(boxInputCstr):
         else:
             return uOut, self.repr.varNumsUpToDeg[0 if nq==0 else 1]
 
-
+    #######################
+    def getPolyCtrl(self, aDeg, t, x0, gTaylor, zone, alwaysfull=True, scale=1., limitEqual=False):
+        
+        #Test if quadratic zone
+        try:
+            P,alpha,Pd = zone
+            assert (P.shape == (x0.size, x0.size)) and (Pd.shape == (x0.size, x0.size))
+            P=P/alpha
+            zoneType = 'q'
+        except:
+            print("Could not determine zone")
+            raise NotImplementedError
+        
+        # Get the input control limits
+        uRef = self.refTraj.getU(t)
+        deltaUMaxAbs = nmin(uRef-self.getMinU(t), self.getMaxU(t)-uRef)
+        
+        
+        
+        if zoneType == 'q':
+            if aDeg == 2:
+                K = -ndot(P,gTaylor[0,:,:]).T.copy()
+                #Normalize
+                K /= norm(K, ord=2, axis=1, keepdims=True)
+                # Limit
+                # scale such that uOut[k] never exceeds limits
+                minScale = np.Inf
+                for i in range(self.nu):
+                    scaleI = float(mndot([K[[i],:],P,K[[i],:].T])**.5)
+                    if limitEqual:
+                        minScale = min(minScale, scaleI)
+                    else:
+                        K[i,:] *= scaleI
+                K *= scale
+                if limitEqual:
+                    K *= minScale
                 
+                if alwaysfull:
+                    ctrlCoeffs = nzeros((self.nu, self.repr.nMonoms), dtype=nfloat)
+                    ctrlCoeffs[:, self.repr.varNumsPerDeg[1]] = K
+                else:
+                    ctrlCoeffs = K
+                
+            else:
+                raise NotImplementedError
+        else:
+            raise NotImplementedError
+            
+        return ctrlCoeffs
+            
+        
+            
         
     
     

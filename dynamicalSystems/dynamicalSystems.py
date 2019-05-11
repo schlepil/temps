@@ -39,6 +39,12 @@ class dynamicalSystem:
     def precompute(self):
         raise NotImplementedError
     
+    def gEval(self, X:np.ndarray):
+        raise NotImplementedError
+    
+    def fEval (self, X:np.ndarray):
+        raise NotImplementedError
+    
     def __call__(self, x:np.ndarray, u:np.ndarray, mode:str='OO', x0:np.ndarray=None):
         raise NotImplementedError
     
@@ -278,7 +284,7 @@ class secondOrderSys(dynamicalSystem):
         #Done
         return MifTaylor, MiGTaylor
     
-    def __call__(self, x:np.ndarray, u_:Union[np.ndarray,Callable], t:float=0., restrictInput:bool=True, mode:List[int]=[0,0], x0:np.ndarray=None):
+    def __call__(self, x:np.ndarray, u_:Union[np.ndarray,Callable], t:float=0., restrictInput:bool=True, mode:List[int]=[0,0], x0:np.ndarray=None, dx0:np.ndarray=None):
         """
         Evaluate dynamics for current position and control input
         :param x:
@@ -287,6 +293,7 @@ class secondOrderSys(dynamicalSystem):
         :param restrictInput:
         :param mode: First letter -> sys dyn; second: sym dyn; Zero is nonlinear dyn, int means taylor approx
         :param x0:
+        :param dx0: reference velocity. If given, only the velocity difference will be returned
         :return:
         """
         if __debug__:
@@ -297,9 +304,10 @@ class secondOrderSys(dynamicalSystem):
         if hasattr(u_, "__call__"):
             # General function used for optimized input later on
             u = u_(x,t)
-        elif u_.shape == (self.nu, self.nq):
-            #This is actually a feedback matrix
-            u = ndot(u_,x-x0)
+        #elif u_.shape == (self.nu, self.nq):
+        #    #This is actually a feedback matrix
+        #    u = ndot(u_,x-x0)
+        # Can no longer be supported to avoid ambiguity
         else:
             # Its an actual control input
             u=u_
@@ -311,64 +319,63 @@ class secondOrderSys(dynamicalSystem):
             assert x.shape[1] == u.shape[1]
             assert u.shape[0] == self.nu
         
-        if x.shape[1] == 1:
-            #Always
-            # Integrative part
-            xd = nzeros((self.nq, 1), dtype=nfloat)
-            xd[:self.nqp, 0] = x[self.nqp:, 0]
-
-            xL = x.squeeze()
-            if mode[0] == 0:
-                # This is a bit inconvenient as we have to solve twice with different approx of the mass matrix
-                # System dynamics
-                Mi = self.pDerivM.M0_eval[0](*xL)
-                F = self.pDerivF.f0_eval(*xL)
-            elif mode[0] <= self.maxTaylorDeg:
-                # Get partial derivs
-                indexKey = f"PDeriv_to_{mode[0]:d}_eval"
-                fPDeriv = self.pDerivF.__dict__[f"f{indexKey}"](*xL)  # Pure np.matrix #TODO search for ways to vectorize
-                MPDeriv = self.pDerivM.__dict__[f"M{indexKey}"](*xL)
-
-                # Partial derivs to evaluated Taylor
-                z = self.repr.evalAllMonoms(x, mode[0])
-                # multiply with weights
-                z *= self.inversionTaylor.weightingMonoms[:z.size]
-                # (broadcast) multiply and sum up and contract
-                F = nsum(nmultiply(fPDeriv, z), axis=1, keepdims=True)
-                Mi = nsum(nmultiply(MPDeriv, np.transpose(np.broadcast_to(z, (self.nqv, self.nqv, z.size)), (2, 1, 0))), axis=0)
-
-            else:
-                # todo write a efficient function to evaluate all monomials
-                raise NotImplementedError
-
-            # Get the velocity induced by the system dynamics
-            xd[self.nqp:, 0] = ssolve(Mi, F, assume_a='pos')  # Mass matrix is positive definite
-
-
-            if mode[1] == 0:
-                Mi = self.pDerivM.M0_eval[0](*xL)
-                G = self.pDerivG.G0_eval[0](*xL)
-            elif mode[1] <= self.maxTaylorDeg:
-                # Get partial derivs
-                indexKey = f"PDeriv_to_{mode[1]:d}_MAT_eval"
-                GPDeriv = self.pDerivG.__dict__[f"G{indexKey}"](*xL)  # Pure np.matrix #TODO search for ways to vectorize
-                MPDeriv = self.pDerivM.__dict__[f"M{indexKey}"](*xL)
-
-                # Partial derivs to evaluated Taylor
-                z = self.repr.evalAllMonoms(x, mode[1])
-                # multiply with weights
-                z *= self.inversionTaylor.weightingMonoms[:z.size]
-                # (broadcast) multiply and sum up and contract
-                Mi = nsum(nmultiply(MPDeriv, np.transpose(np.broadcast_to(z, (self.nqv, self.nqv, z.size)), (2, 1, 0))), axis=0)
-                G = nsum(nmultiply(GPDeriv, np.transpose(np.broadcast_to(z, (self.nu, self.nq, z.size)), (2, 1, 0))), axis=0)
-            else:
-                raise NotImplementedError
-
-            # Add input dependent part
-            xd[self.nqp:, [0]] += ssolve(Mi, ndot(G, u), assume_a='pos')  # Mass matrix is positive definite
-                
+        xd = np.zeros_like(x)
+        xd[:self.nqp, :] = x[self.nqp:, :]
+        
+        # system dynamics
+        if mode[0] == 0:
+            xLi = [x[i,:] for i in range(self.nq)]
+            M = self.pDerivM.M0_eval[0](*xLi) # [nq,nq,nPt] or [nq,nq]
+            f = self.pDerivF.f0_eval(*xLi) # [nq,nPt] or [nq,1]
+            # Ensure dimensions
+            M.resize((self.nq, self.nq, x.shape[1])) [nq,nq,nPt]
+        elif mode[0] <= self.maxTaylorDeg:
+            # Get partial derivs
+            indexKey = f"PDeriv_to_{mode[0]:d}_eval"
+            fPDeriv = self.pDerivF.__dict__[f"f{indexKey}"](*x0.squeeze())  # [nq,nMonoms]
+            MPDeriv = self.pDerivM.__dict__[f"M{indexKey}"](*x0.squeeze())  # [nq,nq,nMonoms]
+    
+            # Partial derivs to evaluated Taylor
+            z = self.repr.evalAllMonoms(x, mode[0])
+            # multiply with weights
+            z *= self.inversionTaylor.weightingMonoms[:z.size]
+            # (broadcast) multiply and sum up and contract
+            f = ndot(fPDeriv, z)
+            M = neinsum("ijk,kn->ijn", MPDeriv, z)# [nq,nq,nMonoms] . [nMonoms,nPt] -> [nq,nq,nPt] Mass matrices stacked along third axis as above
+        
+        # Compute - system dynamics
+        for i in range(x.shape[1]):
+            xd[self.nq:,[i]] = ssolve(M[:,:,i], f[:,[i]], assume_a='pos')
+        
+        # input dynamics
+        if mode[1] == 0:
+            xLi = [x[i,:] for i in range(self.nq)]
+            M = self.pDerivM.M0_eval[0](*xLi)  # [nq,nq,nPt] or [nq,nq]
+            G = self.pDerivG.G0_eval[0](*xLi)  # [nq,nu,nPt] or [nq,nu]
+            # Ensure dimensions
+            M.resize((self.nq, self.nq, x.shape[1]))
+            G.resize((self.nq, self.nu, x.shape[1]))
         else:
-            raise NotImplementedError
+            # Get partial derivs
+            indexKey = f"PDeriv_to_{mode[1]:d}_eval"
+            GPDeriv = self.pDerivG.__dict__[f"f{indexKey}"](*x0.squeeze())  # [nq,nu,nMonoms]
+            MPDeriv = self.pDerivM.__dict__[f"M{indexKey}"](*x0.squeeze())  # [nq,nq,nMonoms]
+
+            # Partial derivs to evaluated Taylor
+            z = self.repr.evalAllMonoms(x, mode[1])
+            # multiply with weights
+            z *= self.inversionTaylor.weightingMonoms[:z.size]
+            # (broadcast) multiply and sum up and contract
+            g = neinsum("ijk,kn,jn->in", GPDeriv, z,u)  # ([nq,nu,nMonoms] . [nMonoms,nPt]) . (nu,nPt) -> [nq,nPt] Compute input
+            M = neinsum("ijk,kn->ijn", MPDeriv, z)  # [nq,nq,nMonoms] . [nMonoms,nPt] -> [nq,nq,nPt] Mass matrices stacked along third axis as above
+
+        # Compute - input dynamics
+        for i in range(x.shape[1]):
+            xd[self.nq:, [i]] += ssolve(M[:, :, i], g[:, [i]], assume_a='pos')
+
+        if dx0 is not None:
+            # Adjust for reference
+            xd -= dx0
 
         return xd
 
@@ -434,8 +441,8 @@ class polynomialSys(dynamicalSystem):
         self.fCoeffs_ = fCoeffs.copy()
         self.gCoeffs_ = gCoeffs.copy()
         
-        self.fTaylorCoeffs_ = np.zeros_like(self.fCoeffs_)
-        self.gTaylorCoeffs_ = np.zeros_like(self.gCoeffs_)
+        self.fTaylorCoeffs_ = None
+        self.gTaylorCoeffs_ = None
         
         self.f = polyFunction(self.repr, (self.nq,1))
         self.g = polyFunction(self.repr, (self.nq,self.nu))
@@ -460,7 +467,8 @@ class polynomialSys(dynamicalSystem):
     
     def precompute(self):
         """
-        Naive Taylor
+        The Taylor expansion of a polynomial is the polynomial itself as long as the degree of the taylor expansion is at least the degree of the polynomial
+        However this is not guaranteed therefore we use the "standard" computation
         :return:
         """
         
@@ -560,4 +568,101 @@ class polynomialSys(dynamicalSystem):
             self.ctrlInput(uStar, t)
     
         return uStar
+
+    def __call__(self, x: np.ndarray, u_: Union[np.ndarray, Callable], t: float = 0., restrictInput:bool = True, mode:List[int] = [0, 0], x0:np.ndarray = None, dx0:np.ndarray = None):
+        
+        """
+        
+        :param x:
+        :param u_:
+        :param t:
+        :param restrictInput:
+        :param mode:
+        :param x0:
+        :param dx0:
+        :return:
+        """
+
+        def __call__(self, x: np.ndarray, u_: Union[np.ndarray, Callable], t: float = 0., restrictInput: bool = True, mode: List[int] = [0, 0], x0: np.ndarray = None, dx0: np.ndarray = None):
+            """
+            Evaluate dynamics for current position and control input
+            :param x:
+            :param u_:
+            :param t:
+            :param restrictInput:
+            :param mode: First letter -> sys dyn; second: sym dyn; Zero is nonlinear dyn, int means taylor approx
+            :param x0:
+            :param dx0: reference velocity. If given, only the velocity difference will be returned
+            :return:
+            """
+            if __debug__:
+                assert x.shape[0] == self.nq
+                assert all([(aMode >= 0) and (aMode <= self.maxTaylorDeg) for aMode in mode])
+    
+            # Check if u_ is Callable evaluate first
+            if hasattr(u_, "__call__"):
+                # General function used for optimized input later on
+                u = u_(x, t)
+            # elif u_.shape == (self.nu, self.nq):
+            #    #This is actually a feedback matrix
+            #    u = ndot(u_,x-x0)
+            # Can no longer be supported to avoid ambiguity
+            else:
+                # Its an actual control input
+                u = u_
+    
+            if restrictInput:
+                u = self.ctrlInput(u, t)
+    
+            if __debug__:
+                assert x.shape[1] == u.shape[1]
+                assert u.shape[0] == self.nu
+    
+            xd = np.zeros_like(x)
+            xd[:self.nqp, :] = x[self.nqp:, :]
+    
+            # system dynamics
+            if mode[0] == 0:
+                f = self.f.eval(x)  # [nq,nPt] or [nq,1]
+            elif mode[0] <= self.maxTaylorDeg:
+                # Get partial derivs
+                fPDeriv = self.pDerivF.__dict__[f"fPDeriv_to_{mode[0]:d}_eval"](*x0.squeeze())  # [nq,nMonoms]
+        
+                # Partial derivs to evaluated Taylor
+                z = self.repr.evalAllMonoms(x, mode[0])
+                # multiply with weights
+                z *= self.inversionTaylor.weightingMonoms[:z.size]
+                # (broadcast) multiply and sum up and contract
+                f = ndot(fPDeriv, z)
+    
+            # Compute - system dynamics
+            xd = f
+    
+            # input dynamics
+            if mode[1] == 0:
+                G = self.g.eval(x) # [nq,nu,nPt] or [nq,nu]
+                # ensure dim
+                G.resize((self.nq,self.nu,x.shape(1)))
+            else:
+                # Get partial derivs
+                indexKey = f"PDeriv_to_{mode[1]:d}_eval"
+                GPDeriv = self.pDerivG.__dict__[f"f{indexKey}"](*x0.squeeze())  # [nq,nu,nMonoms]
+        
+                # Partial derivs to evaluated Taylor
+                z = self.repr.evalAllMonoms(x, mode[1])
+                # multiply with weights
+                z *= self.inversionTaylor.weightingMonoms[:z.size]
+                # (broadcast) multiply and sum up and contract
+                g = neinsum("ijk,kn,jn->in", GPDeriv, z, u)  # ([nq,nu,nMonoms] . [nMonoms,nPt]) . (nu,nPt) -> [nq,nPt] Compute input
+    
+            # Compute - input dynamics
+            xd += g
+    
+            if dx0 is not None:
+                # Adjust for reference
+                xd -= dx0
+    
+            return xd
+
+    
     
