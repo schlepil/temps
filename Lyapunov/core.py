@@ -1,8 +1,12 @@
-from coreUtils import *
 from polynomial import *
 from dynamicalSystems import dynamicalSystem
 
 from itertools import product
+
+# Dummy for typing
+class zone:
+    pass
+
 
 class LyapunovFunction():
     
@@ -37,7 +41,7 @@ class LyapunovFunction():
     def getLyap(self, t):
         raise NotImplementedError
     
-    def getOptIdx(self, TorZone:Union[float, "a zone"], gTaylor:np.ndarray, X:np.ndarray, deg:int):
+    def getOptIdx(self, TorZone:Union[float, zone], gTaylor:np.ndarray, X:np.ndarray, deg:int):
         raise NotImplementedError
     
     def getCtrl(self, t, mode, dX:np.ndarray, x0:None, zone=None):
@@ -49,4 +53,4 @@ class LyapunovFunction():
     def evalVd(self, x: np.ndarray, xd: np.ndarray, t: np.ndarray, kd: bool = True):
         raise NotImplementedError
 
-        
+lyapunovFunctions = ()

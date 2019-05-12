@@ -128,21 +128,20 @@ def plotEllipse(ax, pos, P, alpha, plotAx=np.array([0, 1]), deltaPos=None, color
 
 
 def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
-    opts_ = {'plotStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
+    opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
              'faceAlpha':0.0, 'linestyle':'-',
              'plotAx':np.array([0, 1]),
-             'cmap':'viridis', 'colorStreams':'conv', 'nPt':200,
+             'cmap':'viridis', 'colorStreams':'conv', 'nPt':200, 'cbar':True,
              'modeCtrl':(1,nones((funnel.dynSys.nu,), dtype=nint)),
              'modeDyn':[3,3]}
     opts_.update(opts)
     
-    #assert opts_['colorStreams'] in ('conv', 'mag', 'dir')
-    assert (opts_['ctrlMode'] is None) or ((opts_['ctrlMode'] is np.ndarray) and (opts_['ctrlMode'].size == funnel.dynSys.nu))
+    # TODO define some asserts
     
     ff,aa = plt.subplots(1,1)
     
     # Plot the region
-    funnel.lyapFunc.plot(aa, t, opts_=opts_)
+    funnel.lyapFunc.plot(aa, t, opts=opts_)
     aa.autoscale()
     
     # Plot the streamlines
@@ -164,14 +163,26 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
         streamColor = plt.color.to_rgb(opts_['colorStreams'])
     except:
         if opts_['colorStreams'] == 'conv':
-            streamColor = funnel.lyapFunc.evalVd(XX, VV, t)
-        
+            streamColor = funnel.lyapFunc.evalVd(XX, VV, t, kd=False)/(funnel.lyapFunc.evalV(XX, t, kd=False)+1e-30)
         elif opts_['colorStreams'] == 'mag':
+            streamColor = norm(VV, ord=2, axis=0)
         elif opts_['colorStreams'] == 'dir':
+            streamColor = np.arctan2(VV[1,:], VV[0,:])
         else:
             raise NotImplementedError
+        streamColor = streamColor.squeeze()
+        streamColor -= nmin(streamColor)
+        streamColor /= nmax(streamColor)
     
-    aa.stream
+    thisStream = aa.streamplot(xx,yy,VV[0,:].reshape((opts_['nPt'],opts_['nPt'])),VV[1,:].reshape((opts_['nPt'],opts_['nPt'])), color=streamColor, cmap=opts_['cmap'])
+    
+    if opts_['cbar']:
+        thisCBar = ff.colorbar(thisStream, aa)
+    else:
+        thisCBar = None
+    
+    return {'fig':ff, 'ax':aa, 'cbar':thisCBar}
+    
 
 
 
