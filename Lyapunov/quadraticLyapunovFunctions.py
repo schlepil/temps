@@ -672,7 +672,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             if __debug__:
                 assert P.shape == (self.nq, self.nq)
         
-        taylorDeg = index( [gTaylor.shape[0] == len(aLNbr) for aLNbr in self.repr.varNumsUpToDeg] )
+        taylorDeg = [len(aLNbr) for aLNbr in self.repr.varNumsUpToDeg].index( gTaylor.shape[0])
         
         if which is None:
             which = np.arange(0, self.nu)
@@ -683,7 +683,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         if deg == 1:
             PG0 = ndot(P, gTaylor[0, :, :])
             if alwaysFull:
-                coeffsOut[:, self.repr.varNumsPerDeg[1]] = PG0.T[which, :]
+                coeffsOut[which, self.repr.varNumsPerDeg[1]] = PG0.T[which, :]
             else:
                 coeffsOut = PG0.T[which, :]  # Linear constraint each row of the returned matrix corresponds to the normal vector of a separating hyperplane
         else:
@@ -749,7 +749,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
         else:
             # First get the coefficients
-            polyCoeffs = self.getCstrWithDeg(P, gTaylor, deg)
+            polyCoeffs = self.getCstrWithDeg(TorZone, gTaylor, deg)
             # polyCoeffs is [nu, nMonoms]
             Y = ndot(polyCoeffs, self.repr.evalAllMonoms(dX)) # [nu, npt]
         
