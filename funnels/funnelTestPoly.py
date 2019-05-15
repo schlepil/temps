@@ -47,6 +47,8 @@ if __name__ == "__main__":
     
     plot.plot2dConv(myFunnel, 0.0)
     
+    plot.plot2dProof(myFunnel, 0.2)
+    
     distributor.terminate()
     
     

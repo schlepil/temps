@@ -199,24 +199,43 @@ def plot2dProof(funnel:fn.distributedFunnel, t=0.0, opts={}):
     try:
         subProof = funnel.proof_[t]
     except KeyError:
-        keysT = narray(funnel.proof_.keys(), dtype=nfloat)
+        keysT = narray(list(funnel.proof_.keys()), dtype=nfloat)
         tprime = keysT[ np.argmin( np.abs(keysT-t) ) ]
         print(f"Using time point {tprime} instead of {t}")
         t = tprime
-        subProof = funnel.proof_[tprime]
-
-
-    nProbs = len(subProof['origProb'])
-
-    nax = [1,1]
-
-    while True:
-        if nax[0]*nax[1]>=nProbs:
-            break
-        nax[0] += 1
-        if nax[0]*nax[1]>=nProbs:
-            break
-        nax[1] += 1
+        subProofList = funnel.proof_[t]
+    
+    allDict = {}
+    for nSub, subProof in enumerate(subProofList):
+        allDict[nSub] = {}
+        thisDict = allDict[nSub]
+        
+        nProbs = len(subProof['origProb'])
+    
+        nax = [1,1]
+    
+        while True:
+            if nax[0]*nax[1]>=nProbs:
+                break
+            nax[1] += 1
+            if nax[0]*nax[1]>=nProbs:
+                break
+            nax[0] += 1
+        
+        ff,aa = plt.subplots(*nax, sharex=True, sharey=True)
+        aa = narray(aa,ndmin=2)
+        thisDict['fig'] = ff
+        thisDict['ax'] = aa
+        
+        ff.subptitle(f"Proof {nSub} at {t}")
+        
+        #Loop over the significant problems and their solutions
+        for k, (aVal, aProb) in enumerate(subProof['sigProbAndVals']):
+            idx,idy = divmod(k, nax[1])
+            aa[idx,idy].set_title(f"{aProb['sol']['primal objective']:.2e} : {list(aProb['origProb']['probDict']['u'].squeeze())}")
+        
+    
+    
 
 
 
