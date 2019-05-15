@@ -4,8 +4,9 @@ from parallelChecker import parallelDefinitions as paraDef
 from parallelChecker.parallelWorkers import distributor
 
 from dynamicalSystems import dynamicalSystem
-from Lyapunov import LyapunovFunction, lyapEvol
-from Lyapunov import lyapunovFunctions
+import Lyapunov
+from Lyapunov import LyapunovFunction
+from Lyapunov.lyapPropagators import lyapEvol
 from trajectories import referenceTrajectory
 
 from polynomial import polynomialRepr, polynomial
@@ -33,11 +34,14 @@ class distributedFunnel:
                      'minConvRate':-0.,
                      'optsEvol':{
                                     'tDeltaMax':.1
-                                }
+                                },
+                     'storeProof':True
                      }
         self.opts.update(opts)
         
         assert self.opts['sphereBoundCritPoint'] == True #TODO
+        
+        self.proof_ = {}
 
     def doProjection(self, zone, criticalPoints:List[dict]=None, ctrlDict:dict=None):
         """
@@ -50,7 +54,7 @@ class distributedFunnel:
         """
         
         if self.opts['projection'] == "sphere":
-            if isinstance(self.lyapFunc, (lyapunovFunctions.quadraticLyapunovFunction, lyapunovFunctions.quadraticLyapunovFunctionTimed)):
+            if isinstance(self.lyapFunc, Lyapunov.lyapunovFunctions):
                 
                 Ci = cholesky(zone[0]/zone[1])
                 Ci_inv = inv(Ci) #aZone=(P_i, alpha_i)
@@ -90,7 +94,7 @@ class distributedFunnel:
         allU = [self.dynSys.ctrlInput.getMinU(t), self.traj.getU(t), self.dynSys.ctrlInput.getMaxU(t)]
         allDeltaU = [allU[0]-allU[1], allU[2]-allU[1]]
         
-        if isinstance(self.lyapFunc, (lyapunovFunctions.quadraticLyapunovFunction, lyapunovFunctions.quadraticLyapunovFunctionTimed)):
+        if isinstance(self.lyapFunc, Lyapunov.lyapunovFunctions):
             # Get the zone
             zone = self.lyapFunc.getPnPdot(t, True)
             # todo
@@ -136,7 +140,7 @@ class distributedFunnel:
         nq_ = self.dynSys.nq
         
     
-        if isinstance(self.lyapFunc, (lyapunovFunctions.quadraticLyapunovFunction, lyapunovFunctions.quadraticLyapunovFunctionTimed)):
+        if isinstance(self.lyapFunc, Lyapunov.lyapunovFunctions):
             
             if self.opts['sphereBoundCritPoint']:
                 # Use optimal control for each critical point (except point is very close to separating hyperplane), inside a sphere (in transformed coords) surrounding it
@@ -451,7 +455,29 @@ class distributedFunnel:
         
         distributor.reset()
 
-        return doesConverge, critPoints, results, resultsLin
+        return doesConverge, critPoints, results, resultsLin, timePoints
+    
+    
+    def storeProof(self, doesConverge, critPoints, results, resultsLin, timePoints):
+        
+        assert doesConverge
+        
+        for k, at in enumerate(timePoints):
+            thisSubProof =  {'t':at, 'critPoints':dp(critPoints[k]), 'sigProbAndVals':[], 'origProb':[]}
+            for aSubList in results[k]:
+                for aProb in aSubList: # To each crtitical point a list is associated
+                    if np.isfinite( resultsLin[results[0][0][0]['probDict']['resPlacementLin']] ):
+                        # This is part of the proof
+                        thisSubProof['sigProbAndVals'].append( (float(resultsLin[aProb['probDict']['resPlacementLin']]), dp(results[0][0][0])) )
+                        thisSubProof['origProb'].append( dp(aProb['origProb']) )
+                
+            # Save
+            if not at in self.proof_.keys():
+                self.proof_[at] = []
+            self.proof_[at].append( thisSubProof )
+    
+        return None
+            
         
 
     def compute(self, tStart:float, tStop:float, initZone):
@@ -538,6 +564,10 @@ class distributedFunnel:
             
             # Conservative
             lyapFunc_.setAlpha(alphaL, 0)
+            # Additional work if seeking to store the proof
+            if self.opts['storeProof']:
+                self.storeProof(*self.verify1(tSteps, criticalPoints, allTaylorApprox))
+            
             tL = tC
             
         return None

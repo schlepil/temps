@@ -172,6 +172,18 @@ class quadraticLyapunovFunction(LyapunovFunction):
     def getLyap(self, t):
         P = self.getPnPdot(t, False)
         return (P,1.)
+
+    def plot(self, ax: "plot.plt.axes", t: float = 0.0, opts={}):
+    
+        opts_ = {'plotStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
+                 'faceAlpha':0.5, 'linestyle':'-',
+                 'plotAx':np.array([0, 1])}
+        opts_.update(opts)
+    
+        P = self.Ps
+        x = self.dynSys.refTraj.getX(t)
+    
+        return plot.plotEllipse(ax, x, P, 1., **opts_)
     
     def evalV(self, x:np.ndarray, kd:bool=True):
         x = x.reshape((self.n,-1))
@@ -475,15 +487,69 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     def getLyap(self, t):
         P = self.getPnPdot(t, False)
         return (P,1.)
+
+    def plot(self, ax: "plot.plt.axes", t: float = 0.0, opts={}):
+    
+        opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
+                 'faceAlpha':0.5, 'linestyle':'-',
+                 'plotAx':np.array([0, 1])}
+        
+        for aKey in opts_.keys():
+            try:
+                opts_[aKey] = opts[aKey]
+            except KeyError:
+                pass
+        
+    
+        P = self.getPnPdot(t, False)
+        x = self.dynSys.ctrlInput.refTraj.getX(t)
+    
+        return plot.plotEllipse(ax, x, P, 1., **opts_)
     
     def evalV(self, x: np.ndarray, t:np.ndarray, kd: bool = True):
+        allP = self.getPnPdot(t, False)
         x = x.reshape((self.n, -1))
-        return nsum(ndot(self.C_, x)**2, axis=0, keepdims=kd)
+        if t.size == 1:
+            if x.shape[1] <= 10:
+                V = neinsum("in,ij,jn->n", x, allP, x)
+            else:
+                C = cholesky(allP)
+                V = nsum(ndot(C, x)**2,axis=0,keepdims=kd)
+        else:
+            V = neinsum("in,nij,jn->n", x,allP,x)
+        
+        if kd:
+            V.resize((1,x.shape[1]))
+        else:
+            V.resize((x.shape[1],))
+        
+        return V
     
-    def evalVd(self, x: np.ndarray, dx: np.ndarray, kd: bool = True):
+    def evalVd(self, x: np.ndarray, xd: np.ndarray, t:np.ndarray, kd: bool = True):
+        """
+        V = x.T.P.x
+        Vd = 2x.T.P.xd + x.T.Pd.x
+        :param x:
+        :param dx:
+        :param t:
+        :param kd:
+        :return:
+        """
+        
         x = x.reshape((self.n, -1))
-        dx = dx.reshape((self.n, -1))
-        return nsum(nmultiply(x, ndot((2.*self.P_), dx)), axis=0, keepdims=kd)
+        xd = xd.reshape((self.n, -1))
+        allP, _, allPd = self.getPnPdot(t)
+        
+        if t.size == 1:
+            allP.resize((1,self.nq, self.nq))
+            allPd.resize((1,self.nq, self.nq))
+        
+        Vd = neinsum("in,nij,jn->n", 2.*x, allP, xd) + neinsum("in,nij,jn->n", x, allPd, xd)
+        
+        if kd:
+            Vd.resize((1,x.shape[1]))
+        
+        return Vd
     
     def sphere2Ellip(self, x):
         x = x.reshape((self.n, -1))
@@ -584,7 +650,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
         return outCoeffs
     
-    def getCstrWithDeg(self, TorZone: Union[float, "a zone"], gTaylor: np.ndarray, deg: int, which: np.ndarray = None, alwaysFull: bool = True):
+    def getCstrWithDeg(self, TorZone: Union[float, zone], gTaylor: np.ndarray, deg: int, which: np.ndarray = None, alwaysFull: bool = True):
         """
         Returns the polynomial constraints resulting from the taylor approximation of the dyn sys / or the pure polynomial dynamics
         deg: either 1 or 3 : linear or polynomial constraint
@@ -606,7 +672,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             if __debug__:
                 assert P.shape == (self.nq, self.nq)
         
-        taylorDeg = index( [gTaylor.shape[0] == len(aLNbr) for aLNbr in self.repr.varNumsUpToDeg] )
+        taylorDeg = [len(aLNbr) for aLNbr in self.repr.varNumsUpToDeg].index( gTaylor.shape[0])
         
         if which is None:
             which = np.arange(0, self.nu)
@@ -617,7 +683,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         if deg == 1:
             PG0 = ndot(P, gTaylor[0, :, :])
             if alwaysFull:
-                coeffsOut[:, self.repr.varNumsPerDeg[1]] = PG0.T[which, :]
+                coeffsOut[which, self.repr.varNumsPerDeg[1]] = PG0.T[which, :]
             else:
                 coeffsOut = PG0.T[which, :]  # Linear constraint each row of the returned matrix corresponds to the normal vector of a separating hyperplane
         else:
@@ -649,7 +715,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             
         return ctrlCoeffs
 
-    def getOptIdx(self, TorZone: Union[float, "a zone"], gTaylor: np.ndarray, dX: np.ndarray, deg:int, x0:None):
+    def getOptIdx(self, TorZone: Union[float, zone], gTaylor: np.ndarray, dX: np.ndarray, deg:int, x0:None):
         """
         
         :param TorZone: either a float to denote a time point or a zone (here (P, alpha, Pdot)
@@ -683,7 +749,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
         else:
             # First get the coefficients
-            polyCoeffs = self.getCstrWithDeg(P, gTaylor, deg)
+            polyCoeffs = self.getCstrWithDeg(TorZone, gTaylor, deg)
             # polyCoeffs is [nu, nMonoms]
             Y = ndot(polyCoeffs, self.repr.evalAllMonoms(dX)) # [nu, npt]
         
@@ -803,7 +869,6 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             # TODO Copied from above, unify
             thisProb['probDict']['isTerminal'] = 0  # Convergence can be improved but only by increasing the computation load
             thisProb['strictSep'] = 0
-            probList.append(thisProb)
         
             thisCtrlType = nzeros((nu_, 1), dtype=nint)  # [None for _ in range(nu_, 1)]
         
@@ -850,6 +915,15 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             # Confine the current problem to the sphere
             thisProb['probDict']['nCstrNDegType'].append((2, 's'))
             thisProb['cstr'].append(thisPoly.coeffs.copy())
+            
+            # Add
+            # Here it can happen that the control law around the point is indeed unchanged
+            # or that the control law is not able to stabilize to "old" minimizer
+            # In these cases we can directly construct finer problems without reoptimizing
+            if self.checkProbFeasibility(thisSol, thisProb, opts):
+                probList.append(thisProb)
+            else:
+                probList.extend(self.analyzeSolSphereDiscreteCtrl(thisSol, ctrlDict, critPoints, opts))
         
             # Exclude the sphere from linear prob
             thisProbLin['probDict']['nCstrNDegType'].append((2, 's'))
@@ -1040,7 +1114,31 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 raise NotImplementedError
     
         return probList
-
+    
+    def checkProbFeasibility(self, oldSol:dict, newProb:dict, opts:dict)->Union[bool, List[bool]]:
+        """
+        (Among others) Check if the minimizers of the old solution converge now in the new problem(s)
+        :param newProb:
+        :return:
+        """
+        
+        thisPoly = polynomial(self.repr) #helper
+        
+        isFeas = [] #Return
+        
+        if isinstance(newProb, dict):
+            newProb = [newProb]
+        
+        yStarOld = oldSol['ySol']
+        
+        for aProb in newProb:
+            thisPoly.coeffs = aProb['obj']
+            isFeas.append( bool(nall( thisPoly.eval2(yStarOld)  > opts['numericEpsPos']) ) )
+        
+        if len(isFeas)==1:
+            return isFeas[0]
+        else:
+            return isFeas
 
 class piecewiseQuadraticLyapunovFunction(LyapunovFunction):
     """
@@ -1145,19 +1243,7 @@ class piecewiseQuadraticLyapunovFunction(LyapunovFunction):
                 x[:, thisIdx] = self.lyapVList[akey].Ellip2Sphere(x[:, thisIdx])
 
         return x
-    
-    def plot(self, ax:"plot.plt.axes", t:float=0.0, opts={}):
-        
-        opts_ = {'plotStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
-                 'faceAlpha':0.5, 'linestyle':'-',
-                 'plotAx':np.array([0, 1])}
-        opts_.update(opts)
-        
-        P = self.getPnPdot(t, False)
-        x = self.dynSys.refTraj.getX(t)
-        
-        return plot.plotEllipse(ax, x, P, 1. **opts_)
 
-
+lyapunovFunctions = tuple(list(lyapunovFunctions)+[quadraticLyapunovFunction, quadraticLyapunovFunctionTimed])
 
 

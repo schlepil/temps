@@ -1,5 +1,4 @@
 from coreUtils import *
-import Lyapunov.quadraticLyapunovFunction as quadLyap
 
 from dynamicalSystems import dynamicalSystem
 from trajectories import referenceTrajectory

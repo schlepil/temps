@@ -43,11 +43,14 @@ if __name__ == "__main__":
     
     myFunnel = distributedFunnel(pSys, lyapF, pSys.ctrlInput.refTraj, thisLyapEvol)
     
-    myFunnel.compute(0.0, 1.0, (nidentity(2), 0.8))
+    myFunnel.compute(0.0, 0.3, (nidentity(2), 0.8))
     
     plot.plot2dConv(myFunnel, 0.0)
     
     distributor.terminate()
+    
+    plot.plot2dConv(myFunnel, 0.)
+    
     
     print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0.,True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0.,True)[1]}")
     
