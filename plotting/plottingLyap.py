@@ -131,7 +131,7 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
     opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
              'faceAlpha':0.0, 'linestyle':'-',
              'plotAx':np.array([0, 1]),
-             'cmap':'viridis', 'colorStreams':'conv', 'nPt':200, 'cbar':True,
+             'cmap':'viridis', 'colorStreams':'ang', 'nPt':200, 'cbar':True,
              'modeCtrl':(1,nones((funnel.dynSys.nu,), dtype=nint)),
              'modeDyn':[3,3]}
     opts_.update(opts)
@@ -151,12 +151,12 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
     XX = np.vstack((xx.flatten(), yy.flatten()))
 
     x0 = funnel.dynSys.ctrlInput.refTraj.getX(t)
-    xd0 = funnel.dynSys.ctrlInput.refTraj.getDX(t)
+    dx0 = funnel.dynSys.ctrlInput.refTraj.getDX(t)
     
     UU = funnel.lyapFunc.getCtrl(t, opts_['modeCtrl'], XX, x0)
     
     # __call__(self, x:np.ndarray, u:np.ndarray, mode:str='OO', x0:np.ndarray=None):
-    VV = funnel.dynSys(XX, UU, opts_['modeDyn'], x0, xd0)
+    VV = funnel.dynSys(XX, UU, opts_['modeDyn'], x0=x0, dx0=dx0)
     
     # Compute streamline color
     try:
@@ -168,23 +168,57 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
             streamColor = norm(VV, ord=2, axis=0)
         elif opts_['colorStreams'] == 'dir':
             streamColor = np.arctan2(VV[1,:], VV[0,:])
+        elif opts_['colorStreams'] == 'ang':
+            streamColor = funnel.lyapFunc.convAng(XX, VV, t, kd=False)*180./np.pi
         else:
             raise NotImplementedError
-        streamColor = streamColor.squeeze()
-        streamColor -= nmin(streamColor)
-        streamColor /= nmax(streamColor)
+        streamColor = streamColor.squeeze().reshape((opts_['nPt'],opts_['nPt']))
+        #streamColor -= nmin(streamColor)
+        #streamColor /= nmax(streamColor)
     
     thisStream = aa.streamplot(xx,yy,VV[0,:].reshape((opts_['nPt'],opts_['nPt'])),VV[1,:].reshape((opts_['nPt'],opts_['nPt'])), color=streamColor, cmap=opts_['cmap'])
     
     if opts_['cbar']:
-        thisCBar = ff.colorbar(thisStream, aa)
+        thisCBar = ff.colorbar(thisStream.lines)
     else:
         thisCBar = None
     
     return {'fig':ff, 'ax':aa, 'cbar':thisCBar}
     
 
+def plot2dProof(funnel:fn.distributedFunnel, t=0.0, opts={}):
+    
+    opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
+             'faceAlpha':0.0, 'linestyle':'-',
+             'plotAx':np.array([0, 1]),
+             'cmap':'viridis', 'colorStreams':'ang', 'nPt':200, 'cbar':True,
+             'modeDyn':[3,3]}
+    opts_.update(opts)
+
+    #Get the subproof
+    try:
+        subProof = funnel.proof_[t]
+    except KeyError:
+        keysT = narray(funnel.proof_.keys(), dtype=nfloat)
+        tprime = keysT[ np.argmin( np.abs(keysT-t) ) ]
+        print(f"Using time point {tprime} instead of {t}")
+        t = tprime
+        subProof = funnel.proof_[tprime]
 
 
-    
-    
+    nProbs = len(subProof['origProb'])
+
+    nax = [1,1]
+
+    while True:
+        if nax[0]*nax[1]>=nProbs:
+            break
+        nax[0] += 1
+        if nax[0]*nax[1]>=nProbs:
+            break
+        nax[1] += 1
+
+
+
+
+

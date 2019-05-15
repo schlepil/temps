@@ -90,8 +90,9 @@ class distributedFunnel:
         ctrlDict = {} # Return value
         
         thisPoly = polynomial(self.repr) #Helper
-        
+
         allU = [self.dynSys.ctrlInput.getMinU(t), self.traj.getU(t), self.dynSys.ctrlInput.getMaxU(t)]
+        uRef = allU[1]
         allDeltaU = [allU[0]-allU[1], allU[2]-allU[1]]
         
         if isinstance(self.lyapFunc, Lyapunov.lyapunovFunctions):

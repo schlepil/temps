@@ -49,9 +49,8 @@ if __name__ == "__main__":
     
     distributor.terminate()
     
-    plot.plot2dConv(myFunnel, 0.)
-    
     
     print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0.,True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0.,True)[1]}")
+    plot.plt.show()
     
 

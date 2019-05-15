@@ -45,7 +45,7 @@ class dynamicalSystem:
     def fEval (self, X:np.ndarray):
         raise NotImplementedError
     
-    def __call__(self, x:np.ndarray, u:np.ndarray, mode:str='OO', x0:np.ndarray=None):
+    def __call__(self, x:np.ndarray, u:np.ndarray, restrictInput:bool=True, mode:str=[0,0], x0:np.ndarray=None, dx0:np.ndarray=None):
         raise NotImplementedError
     
     def getUopt(self,x:np.ndarray, dx:np.ndarray, respectCstr:bool=False, t:float=0.):
@@ -531,7 +531,7 @@ class polynomialSys(dynamicalSystem):
         nmultiply(fPDeriv, self.taylorExp.weightingMonoms[self.repr.varNumsUpToDeg[maxDeg]], out=fPDeriv)
         nmultiply(gPDeriv, self.taylorExp.weightingMonoms3d[self.repr.varNumsUpToDeg[maxDeg],:,:], out=gPDeriv)
         # Done
-        return fPDeriv[:, idxDemand], gPDeriv[idxDemand,:,:]
+        return nrequire(fPDeriv[:, idxDemand], dtype=nfloat, requirements='OA'), nrequire(gPDeriv[idxDemand,:,:], dtype=nfloat, requirements='OA')
 
     def getUopt(self, x: np.ndarray, dx: np.ndarray, respectCstr: bool = False, t: float = 0.):
         """
@@ -569,100 +569,89 @@ class polynomialSys(dynamicalSystem):
     
         return uStar
 
-    def __call__(self, x: np.ndarray, u_: Union[np.ndarray, Callable], t: float = 0., restrictInput:bool = True, mode:List[int] = [0, 0], x0:np.ndarray = None, dx0:np.ndarray = None):
-        
+
+
+    def __call__(self, x: np.ndarray, u_: Union[np.ndarray, Callable], t: float = 0., restrictInput: bool = True, mode: List[int] = [0, 0], x0: np.ndarray = None, dx0: np.ndarray = None):
         """
-        
+        Evaluate dynamics for current position and control input
         :param x:
         :param u_:
         :param t:
         :param restrictInput:
-        :param mode:
+        :param mode: First letter -> sys dyn; second: sym dyn; Zero is nonlinear dyn, int means taylor approx
         :param x0:
-        :param dx0:
+        :param dx0: reference velocity. If given, only the velocity difference will be returned
         :return:
         """
+        if __debug__:
+            assert x.shape[0] == self.nq
+            assert all([(aMode >= 0) and (aMode <= self.maxTaylorDeg) for aMode in mode])
 
-        def __call__(self, x: np.ndarray, u_: Union[np.ndarray, Callable], t: float = 0., restrictInput: bool = True, mode: List[int] = [0, 0], x0: np.ndarray = None, dx0: np.ndarray = None):
-            """
-            Evaluate dynamics for current position and control input
-            :param x:
-            :param u_:
-            :param t:
-            :param restrictInput:
-            :param mode: First letter -> sys dyn; second: sym dyn; Zero is nonlinear dyn, int means taylor approx
-            :param x0:
-            :param dx0: reference velocity. If given, only the velocity difference will be returned
-            :return:
-            """
-            if __debug__:
-                assert x.shape[0] == self.nq
-                assert all([(aMode >= 0) and (aMode <= self.maxTaylorDeg) for aMode in mode])
-    
-            # Check if u_ is Callable evaluate first
-            if hasattr(u_, "__call__"):
-                # General function used for optimized input later on
-                u = u_(x, t)
-            # elif u_.shape == (self.nu, self.nq):
-            #    #This is actually a feedback matrix
-            #    u = ndot(u_,x-x0)
-            # Can no longer be supported to avoid ambiguity
-            else:
-                # Its an actual control input
-                u = u_
-    
-            if restrictInput:
-                u = self.ctrlInput(u, t)
-    
-            if __debug__:
-                assert x.shape[1] == u.shape[1]
-                assert u.shape[0] == self.nu
-    
-            xd = np.zeros_like(x)
-            xd[:self.nqp, :] = x[self.nqp:, :]
-    
-            # system dynamics
-            if mode[0] == 0:
-                f = self.f.eval(x)  # [nq,nPt] or [nq,1]
-            elif mode[0] <= self.maxTaylorDeg:
-                # Get partial derivs
-                fPDeriv = self.pDerivF.__dict__[f"fPDeriv_to_{mode[0]:d}_eval"](*x0.squeeze())  # [nq,nMonoms]
-        
-                # Partial derivs to evaluated Taylor
-                z = self.repr.evalAllMonoms(x, mode[0])
-                # multiply with weights
-                z *= self.inversionTaylor.weightingMonoms[:z.size]
-                # (broadcast) multiply and sum up and contract
-                f = ndot(fPDeriv, z)
-    
-            # Compute - system dynamics
-            xd = f
-    
-            # input dynamics
-            if mode[1] == 0:
-                G = self.g.eval(x) # [nq,nu,nPt] or [nq,nu]
-                # ensure dim
-                G.resize((self.nq,self.nu,x.shape(1)))
-            else:
-                # Get partial derivs
-                indexKey = f"PDeriv_to_{mode[1]:d}_eval"
-                GPDeriv = self.pDerivG.__dict__[f"f{indexKey}"](*x0.squeeze())  # [nq,nu,nMonoms]
-        
-                # Partial derivs to evaluated Taylor
-                z = self.repr.evalAllMonoms(x, mode[1])
-                # multiply with weights
-                z *= self.inversionTaylor.weightingMonoms[:z.size]
-                # (broadcast) multiply and sum up and contract
-                g = neinsum("ijk,kn,jn->in", GPDeriv, z, u)  # ([nq,nu,nMonoms] . [nMonoms,nPt]) . (nu,nPt) -> [nq,nPt] Compute input
-    
-            # Compute - input dynamics
-            xd += g
-    
-            if dx0 is not None:
-                # Adjust for reference
-                xd -= dx0
-    
-            return xd
+        # Check if u_ is Callable evaluate first
+        if hasattr(u_, "__call__"):
+            # General function used for optimized input later on
+            u = u_(x, t)
+        # elif u_.shape == (self.nu, self.nq):
+        #    #This is actually a feedback matrix
+        #    u = ndot(u_,x-x0)
+        # Can no longer be supported to avoid ambiguity
+        else:
+            # Its an actual control input
+            u = u_
+
+        if restrictInput:
+            u = self.ctrlInput(u, t)
+
+        if __debug__:
+            assert x.shape[1] == u.shape[1]
+            assert u.shape[0] == self.nu
+
+        # system dynamics
+        if mode[0] == 0:
+            f = self.f.eval(x)  # [nPt, nq, 1] or [nq,1]
+            f.resize((x.shape[1],self.nq, 1))
+            f = nrequire(np.transpose(f, (2,1,0))[0,:,:], dtype=nfloat, requirements='OA')
+        elif mode[0] <= self.maxTaylorDeg:
+            # Get partial derivs
+            fPDeriv = self.pDerivF.__dict__[f"fPDeriv_to_{mode[0]:d}_eval"](*x0.squeeze())  # [nq,nMonoms]
+
+            # Partial derivs to evaluated Taylor
+            z = self.repr.evalAllMonoms(x, mode[0])
+            # multiply with weights
+            z *= self.inversionTaylor.weightingMonoms[:z.size]
+            # (broadcast) multiply and sum up and contract
+            f = ndot(fPDeriv, z)
+
+        # Compute - system dynamics
+        xd = f
+
+        # input dynamics
+        if mode[1] == 0:
+            G = self.g.eval(x) # [nPt,nq,nu] or [1,nq,nu]
+            # ensure dim
+            G.resize((x.shape[1],self.nq,self.nu))
+            #Compute
+            g = neinsum( 'nij,jn->in', G, u ) #[nPt,nq,nu] . [nu,nPt] -> [nq,nPt]
+        else:
+            # Get partial derivs
+            indexKey = f"PDeriv_to_{mode[1]:d}_eval"
+            GPDeriv = self.pDerivG.__dict__[f"f{indexKey}"](*x0.squeeze())  # [nq,nu,nMonoms]
+
+            # Partial derivs to evaluated Taylor
+            z = self.repr.evalAllMonoms(x, mode[1])
+            # multiply with weights
+            z *= self.inversionTaylor.weightingMonoms[:z.size]
+            # (broadcast) multiply and sum up and contract
+            g = neinsum("ijk,kn,jn->in", GPDeriv, z, u)  # ([nq,nu,nMonoms] . [nMonoms,nPt]) . (nu,nPt) -> [nq,nPt] Compute input
+
+        # Compute - input dynamics
+        xd += g
+
+        if dx0 is not None:
+            # Adjust for reference
+            xd -= dx0
+
+        return xd
 
     
     

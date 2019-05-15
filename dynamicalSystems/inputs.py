@@ -72,7 +72,11 @@ class boxInputCstr(inputConstraints):
         # 1 is maximum input
         # 0 is reference input (must be given if occuring!
         # -1 is minimal input
-        
+        try:
+            idx = idx.copy().reshape((-1,))
+        except (AttributeError, TypeError):
+            idx = narray(idx, ndmin=1, dtype=nint)
+
         if __debug__:
             assert idx.dtype in (nintu,nint)
             assert len(idx.shape) == 1
@@ -176,6 +180,11 @@ class boxInputCstrLFBG(boxInputCstr):
         :param scale:
         :return:
         """
+
+        try:
+            idx = idx.copy().reshape((-1,))
+        except (AttributeError, TypeError):
+            idx = narray(idx, ndmin=1, dtype=nint)
         
         if __debug__:
             assert (P is None) or (P.shape[0]==P.shape[1])
@@ -224,13 +233,30 @@ class boxInputCstrLFBG(boxInputCstr):
 
     #######################
     def getPolyCtrl(self, aDeg, t, x0, gTaylor, zone, alwaysfull=True, scale=1., limitEqual=False):
+
+        """
+
+        :param aDeg:
+        :param t:
+        :param x0:
+        :param gTaylor:
+        :param zone:
+        :param alwaysfull:
+        :param scale:
+        :param limitEqual:
+        :return:
+        """
         
         #Test if quadratic zone
         try:
-            P,alpha,Pd = zone
-            assert (P.shape == (x0.size, x0.size)) and (Pd.shape == (x0.size, x0.size))
-            P=P/alpha
-            zoneType = 'q'
+            if isinstance(zone, (list, tuple)):
+                P,alpha,Pd = zone
+                assert (P.shape == (x0.size, x0.size)) and (Pd.shape == (x0.size, x0.size))
+                P=P/alpha
+                zoneType = 'q'
+            else:
+                P = zone
+                assert (P.shape == (x0.size, x0.size))
         except:
             print("Could not determine zone")
             raise NotImplementedError
@@ -240,9 +266,8 @@ class boxInputCstrLFBG(boxInputCstr):
         deltaUMaxAbs = nmin(uRef-self.getMinU(t), self.getMaxU(t)-uRef)
         
         
-        
         if zoneType == 'q':
-            if aDeg == 2:
+            if aDeg == 1: # Linear control based on linear seperation
                 K = -ndot(P,gTaylor[0,:,:]).T.copy()
                 #Normalize
                 K /= norm(K, ord=2, axis=1, keepdims=True)
@@ -250,21 +275,22 @@ class boxInputCstrLFBG(boxInputCstr):
                 # scale such that uOut[k] never exceeds limits
                 minScale = np.Inf
                 for i in range(self.nu):
-                    scaleI = float(mndot([K[[i],:],P,K[[i],:].T])**.5)
+                    scaleI = deltaUMaxAbs[i]*float(mndot([K[[i],:],P,K[[i],:].T])**.5)
                     if limitEqual:
                         minScale = min(minScale, scaleI)
                     else:
                         K[i,:] *= scaleI
-                K *= scale
                 if limitEqual:
                     K *= minScale
+                # Global additional scaling for safety
+                K *= scale
+
                 
                 if alwaysfull:
                     ctrlCoeffs = nzeros((self.nu, self.repr.nMonoms), dtype=nfloat)
                     ctrlCoeffs[:, self.repr.varNumsPerDeg[1]] = K
                 else:
                     ctrlCoeffs = K
-                
             else:
                 raise NotImplementedError
         else:

@@ -507,6 +507,10 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         return plot.plotEllipse(ax, x, P, 1., **opts_)
     
     def evalV(self, x: np.ndarray, t:np.ndarray, kd: bool = True):
+        t = narray(t, ndmin=1, dtype=nfloat)
+
+        assert (t.size == x.shape[1]) or (t.size == 1)
+
         allP = self.getPnPdot(t, False)
         x = x.reshape((self.n, -1))
         if t.size == 1:
@@ -535,14 +539,20 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         :param kd:
         :return:
         """
-        
+
+        t = narray(t, ndmin=1, dtype=nfloat)
+
         x = x.reshape((self.n, -1))
         xd = xd.reshape((self.n, -1))
-        allP, _, allPd = self.getPnPdot(t)
-        
+
+        assert (t.size == x.shape[1]) or (t.size == 1)
+        assert (x.shape == xd.shape)
+
+        allP, allPd = self.getPnPdot(t)
+
         if t.size == 1:
-            allP.resize((1,self.nq, self.nq))
-            allPd.resize((1,self.nq, self.nq))
+            allP = np.tile(allPd, (x.shape[1],1,1))
+            allPd = np.tile(allPd, (x.shape[1],1,1))
         
         Vd = neinsum("in,nij,jn->n", 2.*x, allP, xd) + neinsum("in,nij,jn->n", x, allPd, xd)
         
@@ -550,6 +560,38 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             Vd.resize((1,x.shape[1]))
         
         return Vd
+
+    def convAng(self, x: np.ndarray, xd: np.ndarray, t: np.ndarray, kd: bool = True):
+
+        """
+        Returns the angle between the normal to the surface and the velocity
+        :param x:
+        :param xd:
+        :param t:
+        :param kd:
+        :return:
+        """
+
+        t = narray(t, ndmin=1, dtype=nfloat)
+
+        assert (x.shape == xd.shape)
+        assert ((t.size == 1) or (x.shape[1] == t.size))
+
+        # Get the quadratic function
+        P = self.getPnPdot(t, returnPd=False)
+
+        if t.size == 1:
+            P = np.tile(P, (x.shape[1],1,1))
+
+        # Project to get normal directions at x
+        n = neinsum( "in,nij->jn", x, P) #TODO check if correct
+
+        #Normalize
+        n /= (norm(n,axis=0,keepdims=True)+floatEps)
+        xdn = xd / (norm(xd,axis=0,keepdims=True)+floatEps)
+
+        return np.arcsin(nsum(-(nmultiply(n,xdn)), axis=0, keepdims=kd))
+
     
     def sphere2Ellip(self, x):
         x = x.reshape((self.n, -1))
@@ -694,7 +736,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
         return coeffsOut
 
-    def getPolyCtrl(self, aDeg, t, x0=None, gTaylor=None, zone=None, alwaysfull=True):
+    def getPolyCtrl(self, mode, t, x0=None, gTaylor=None, zone=None, alwaysfull=True):
         
         if x0 is None:
             x0 = self.refTraj.getX(t)
@@ -707,15 +749,19 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
         P,alpha,Pd = zone
         P=P/alpha
-        
-        if aDeg == 2:
-            ctrlCoeffs = self.dynSys.ctrlInput.getPolyCtrl(aDeg, t, x0, gTaylor, zone, alwaysfull)
+
+        assert mode[0] == 1, 'Only linear separation is currently implemented'
+
+        ctrlCoeffs_, ctrlMonoms_ = self.dynSys.ctrlInput.getU(mode[1], t, monomOut=True)
+        if alwaysfull:
+            ctrlCoeffs = nzeros((self.nu, self.repr.nMonoms), dtype=nfloat)
+            ctrlCoeffs[:, ctrlMonoms_] = ctrlCoeffs_
         else:
-            raise NotImplementedError
-            
+            ctrlCoeffs = ctrlCoeffs_
+
         return ctrlCoeffs
 
-    def getOptIdx(self, TorZone: Union[float, zone], gTaylor: np.ndarray, dX: np.ndarray, deg:int, x0:None):
+    def getOptIdx(self, TorZone: Union[float, zone], gTaylor: np.ndarray, dX: np.ndarray, deg:int, x0=None):
         """
         
         :param TorZone: either a float to denote a time point or a zone (here (P, alpha, Pdot)
@@ -762,7 +808,8 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         """
         
         :param t: time point
-        :param mode: what control law is to be applied
+        :param mode: what control law is to be applied; mode[0] -> Degree of separation surface; mode[1] -> Degree of control; Currently mode[1]
+        has to be in [0,1,2] <-> [uref, uOptDiscrete, Linear feedback]
         :param dX: Offset between points and reference point
         :param x0: reference point
         :param zone: zone describing the Lyapunov levelset
@@ -775,20 +822,16 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             x0 = self.dynSys.ctrlInput.refTraj.getX(t)
             
         fTaylor, gTaylor = self.dynSys.getTaylorApprox(x0)
-        
-        # Get optimal control index for discrete control
-        idxOpt = self.getOptIdx(zone, gTaylor, dX, mode[0], x0)
-        
+
         # Get the polynomial control laws
         ctrlDict = {}
         for aDeg in np.unique(mode[1]):
-            ctrlDict[aDeg] = self.getPolyCtrl(aDeg, t, gTaylor, alwaysfull=True)
-        
-        # Get the minimal/reference/maximal
-        uRef = self.refTraj.getU(t)
-        uMin = self.dynSys.ctrlInput.getMinU(t)
-        uMax = self.dynSys.ctrlInput.getMaxU(t)
-        
+            if aDeg==1:
+                ctrlDict[1] = self.getPolyCtrl((mode[0], 1*nones((self.nu,),dtype=nint)), t, x0=x0, gTaylor=gTaylor, alwaysfull=True)
+                ctrlDict[-1] = self.getPolyCtrl((mode[0], -1*nones((self.nu,),dtype=nint)), t, x0=x0, gTaylor=gTaylor, alwaysfull=True)
+            else:
+                ctrlDict[aDeg] = self.getPolyCtrl((mode[0], aDeg*nones((self.nu,),dtype=nint)), t, x0=x0, gTaylor=gTaylor, alwaysfull=True)
+
         # Get the polyvalues
         dZ = self.repr.evalAllMonoms(dX)
         
@@ -798,18 +841,13 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         # Compute
         U = nzeros((self.nu, dX.shape[1]), dtype=nfloat)
         
-        for i in self.dynSys.nu:
-            if mode[1][i] == 0:
-                # Reference
-                U[i,:] = uRef[i,0]
-            elif mode[1][i] == 1:
+        for i in range(self.dynSys.nu):
+            if mode[1][i] == 1:
                 # Min/Max
-                U[i, idxOptPlus[i,:]] = uMax[i, 0]
-                U[i, np.logical_not(idxOptPlus[i,:])] = uMin[i, 0]
-            elif mode[1][i] == 2:
-                U[i, :] = ndot(ctrlDict[2], dZ)
+                U[i, idxOptPlus[i, :]] = ndot(ctrlDict[1][[i],:], dZ[:,idxOptPlus[i, :]])
+                U[i, np.logical_not(idxOptPlus[i, :])] = ndot(ctrlDict[-1][[i],:], dZ[:,np.logical_not(idxOptPlus[i, :])])
             else:
-                raise NotImplementedError
+                U[i, :] = ndot(ctrlDict[mode[1][i]][[i],:], dZ)
         
         return U
 

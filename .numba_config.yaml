@@ -1,1 +1,3 @@
 DISABLE_JIT : 0
+NUMBA_CPU_NAME=generic
+NUMBA_CPU_FEATURES = +sse,+sse2,+avx,+avx2

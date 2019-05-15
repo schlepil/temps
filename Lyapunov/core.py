@@ -44,7 +44,7 @@ class LyapunovFunction():
     def getOptIdx(self, TorZone:Union[float, zone], gTaylor:np.ndarray, X:np.ndarray, deg:int):
         raise NotImplementedError
     
-    def getCtrl(self, t, mode, dX:np.ndarray, x0:None, zone=None)
+    def getCtrl(self, t, mode, dX:np.ndarray, x0:None, zone=None):
         raise NotImplementedError
     
     def getCtrl(self, t, mode, dX:np.ndarray, x0:None, zone=None):
@@ -54,6 +54,9 @@ class LyapunovFunction():
         raise NotImplementedError
     
     def evalVd(self, x: np.ndarray, xd: np.ndarray, t: np.ndarray, kd: bool = True):
+        raise NotImplementedError
+
+    def convAng(self, x: np.ndarray, t: np.ndarray, kd: bool = True):
         raise NotImplementedError
 
 lyapunovFunctions = ()
