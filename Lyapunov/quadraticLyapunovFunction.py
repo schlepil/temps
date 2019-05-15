@@ -163,6 +163,11 @@ class quadraticLyapunovFunction(LyapunovFunction):
             return P, np.zeros_like(P)
         else:
             return P
+    
+    def getZone(self, t):
+        P,Pd = self.getPnPdot(t, True)
+        alpha = 1. if len(P.shape) == 2 else nones((P.shape[0],), nfloat)
+        return [P,alpha, Pd]
         
     def getLyap(self, t):
         P = self.getPnPdot(t, False)
@@ -462,6 +467,11 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     def getPnPdot(self, t:np.ndarray, returnPd=True):
         return self.interpolate(t, self.Ps_, self.C_, self.Plog_, self.t_, returnPd)
     
+    def getZone(self, t):
+        P,Pd = self.getPnPdot(t, True)
+        alpha = 1. if len(P.shape) == 2 else nones((P.shape[0],), nfloat)
+        return [P,alpha, Pd]
+    
     def getLyap(self, t):
         P = self.getPnPdot(t, False)
         return (P,1.)
@@ -574,7 +584,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
         return outCoeffs
     
-    def getCstrWithDeg(self, gTaylor: np.ndarray, taylorDeg: int, deg: int, which: np.ndarray = None, alwaysFull: bool = True):
+    def getCstrWithDeg(self, TorZone: Union[float, "a zone"], gTaylor: np.ndarray, deg: int, which: np.ndarray = None, alwaysFull: bool = True):
         """
         Returns the polynomial constraints resulting from the taylor approximation of the dyn sys / or the pure polynomial dynamics
         deg: either 1 or 3 : linear or polynomial constraint
@@ -584,30 +594,158 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         :param which:
         :return:
         """
-        if __debug__:
-            assert deg in (1, 3)
-            assert taylorDeg >= deg
+        
+        try:
+            t = float(TorZone)
+            P = self.getPnPdot(t, False)
+        except TypeError:
+            if isinstance(TorZone, (list, tuple)):
+                P = TorZone[0]/TorZone[1]
+            else:
+                P = TorZone
+            if __debug__:
+                assert P.shape == (self.nq, self.nq)
+        
+        taylorDeg = index( [gTaylor.shape[0] == len(aLNbr) for aLNbr in self.repr.varNumsUpToDeg] )
         
         if which is None:
             which = np.arange(0, self.nu)
         
         if alwaysFull:
-            coeffsOut = nzeros((len(which), self.repr.nMonoms))
+            coeffsOut = nzeros((len(which), self.repr.nMonoms), dtype=nfloat)
         
         if deg == 1:
-            PG0 = ndot(self.P, gTaylor[0, :, :])
+            PG0 = ndot(P, gTaylor[0, :, :])
             if alwaysFull:
-                coeffsOut[:, len(self.repr.varNumsPerDeg[0]):len(self.repr.varNumsPerDeg[0])+len(self.repr.varNumsPerDeg[1])] = PG0.T[which, :]
+                coeffsOut[:, self.repr.varNumsPerDeg[1]] = PG0.T[which, :]
             else:
                 coeffsOut = PG0.T[which, :]  # Linear constraint each row of the returned matrix corresponds to the normal vector of a separating hyperplane
         else:
             # Return full matrix, each row corresponds to the coefficients of one polynomial constraint (for all monomials in the representation)
             # Due the matrix multiplication of P and each g
             PG = nmatmul(self.P, gTaylor)  # gTaylor is g[monom,i,j]
-            compPolyCstr_Numba(self.repr.varNumsPerDeg[1], PG, self.repr.varNumsUpToDeg[taylorDeg], which, self.idxMat, coeffsOut)  # Expects coeffs
-            # to be zero
+            compPolyCstr_Numba(self.repr.varNumsPerDeg[1], PG, self.repr.varNumsUpToDeg[taylorDeg], which, self.idxMat, coeffsOut)  # Expects coeffs to be zero
         
         return coeffsOut
+
+    def getPolyCtrl(self, aDeg, t, x0=None, gTaylor=None, zone=None, alwaysfull=True):
+        
+        if x0 is None:
+            x0 = self.refTraj.getX(t)
+        
+        if gTaylor is None:
+            _, gTaylor = self.dynSys.getTaylorApprox(x0)
+        
+        if zone is None:
+            zone = self.getZone(t)
+        
+        P,alpha,Pd = zone
+        P=P/alpha
+        
+        if aDeg == 2:
+            ctrlCoeffs = self.dynSys.ctrlInput.getPolyCtrl(aDeg, t, x0, gTaylor, zone, alwaysfull)
+        else:
+            raise NotImplementedError
+            
+        return ctrlCoeffs
+
+    def getOptIdx(self, TorZone: Union[float, "a zone"], gTaylor: np.ndarray, dX: np.ndarray, deg:int, x0:None):
+        """
+        
+        :param TorZone: either a float to denote a time point or a zone (here (P, alpha, Pdot)
+        :param gTaylor: Taylor expansion
+        :param dX: Points to be evaluated
+        :param deg: -1 means true nonlinear input dynamics
+        :param x0: reference point. If None, dX is interpreted as offset, if given then dX is "absolute"
+        :return:
+        """
+        
+        try:
+            t = float(TorZone)
+            P = self.getPnPdot(t, False)
+        except TypeError:
+            if isinstance(TorZone, (list, tuple)):
+                P = TorZone[0]/TorZone[1]
+            else:
+                P = TorZone
+            if __debug__:
+                assert P.shape == (self.nq, self.nq)
+        
+        if x0 is not None:
+            dX = dX-x0
+        
+        if deg == -1:
+            assert x0 is not None
+            # Use true nonlinear dyn
+            allPG = self.dynSys.gEval(dX) #[nPt, *g.shape]
+            allPG = nmatmul(P, allPG)
+            Y = neinsum( 'ji,ijk->ki', dX, allPG )#[nu, nPt] stacked matrix multiplication of ndot( dX[:,[k].T, allPG[k,:,:] )
+        
+        else:
+            # First get the coefficients
+            polyCoeffs = self.getCstrWithDeg(P, gTaylor, deg)
+            # polyCoeffs is [nu, nMonoms]
+            Y = ndot(polyCoeffs, self.repr.evalAllMonoms(dX)) # [nu, npt]
+        
+        idx = -(Y>0.).astype(nint)
+        idx[idx==0] = 1
+        
+        return idx
+    
+    def getCtrl(self, t, mode, dX:np.ndarray, x0:None, zone=None):
+        """
+        
+        :param t: time point
+        :param mode: what control law is to be applied
+        :param dX: Offset between points and reference point
+        :param x0: reference point
+        :param zone: zone describing the Lyapunov levelset
+        :return:
+        """
+        if zone is None:
+            zone = self.getZone(t)
+            
+        if x0 is None:
+            x0 = self.dynSys.ctrlInput.refTraj.getX(t)
+            
+        fTaylor, gTaylor = self.dynSys.getTaylorApprox(x0)
+        
+        # Get optimal control index for discrete control
+        idxOpt = self.getOptIdx(zone, gTaylor, dX, mode[0], x0)
+        
+        # Get the polynomial control laws
+        ctrlDict = {}
+        for aDeg in np.unique(mode[1]):
+            ctrlDict[aDeg] = self.getPolyCtrl(aDeg, t, gTaylor, alwaysfull=True)
+        
+        # Get the minimal/reference/maximal
+        uRef = self.refTraj.getU(t)
+        uMin = self.dynSys.ctrlInput.getMinU(t)
+        uMax = self.dynSys.ctrlInput.getMaxU(t)
+        
+        # Get the polyvalues
+        dZ = self.repr.evalAllMonoms(dX)
+        
+        # Get the indices for optimal control
+        idxOptPlus = self.getOptIdx(zone, gTaylor, dX, mode[0]) == 1
+        
+        # Compute
+        U = nzeros((self.nu, dX.shape[1]), dtype=nfloat)
+        
+        for i in self.dynSys.nu:
+            if mode[1][i] == 0:
+                # Reference
+                U[i,:] = uRef[i,0]
+            elif mode[1][i] == 1:
+                # Min/Max
+                U[i, idxOptPlus[i,:]] = uMax[i, 0]
+                U[i, np.logical_not(idxOptPlus[i,:])] = uMin[i, 0]
+            elif mode[1][i] == 2:
+                U[i, :] = ndot(ctrlDict[2], dZ)
+            else:
+                raise NotImplementedError
+        
+        return U
 
     def analyzeSolSphereLinCtrl(self, thisSol, ctrlDict, critPoints, opts):
         nq_ = self.nq

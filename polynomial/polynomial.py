@@ -187,14 +187,22 @@ class polynomial():
         
         return self._evalPoly.eval(x)
 
-    def eval2(self, x:np.array):
+    def eval2(self, x:np.array, deg:int = None):
         assert self._coeffs.size == self.repr.nMonoms
-
-        nMonoms_ = self.repr.varNumsUpToDeg[self.maxDeg].size
+        
+        if deg is None:
+            nMonoms_ = self.repr.varNumsUpToDeg[self.maxDeg].size
+        else:
+            assert deg <= self.repr.maxDeg
+            nMonoms_ = len(self.repr.varNumsUpToDeg[deg])
+            
         coeffsEval = np.reshape(self._coeffs, (1,self.repr.nMonoms))[[0],:nMonoms_]
-
-        z = x[:nMonoms_,:] if (x.shape[0] == self.repr.nMonoms) \
-                                                             else evalMonomsNumba(x, self.repr.varNum2varNumParents[:nMonoms_,:])
+        
+        if x.shape[0] >= nMonoms_:
+            z = x[:nMonoms_, :]
+        else:
+            z = evalMonomsNumba(x, self.repr.varNum2varNumParents[:nMonoms_, :])
+        
         return ndot(coeffsEval, z)
 
 
@@ -238,4 +246,4 @@ class polyFunction():
         if xs1==1:
             y = y[0,:,:]
         
-        return y
+        return y #[nPt, *shape_]

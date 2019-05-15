@@ -132,7 +132,8 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
              'faceAlpha':0.0, 'linestyle':'-',
              'plotAx':np.array([0, 1]),
              'cmap':'viridis', 'colorStreams':'conv', 'nPt':200,
-             'dynMode':'PP', 'ctrlMode':None}
+             'modeCtrl':(1,nones((funnel.dynSys.nu,), dtype=nint)),
+             'modeDyn':[3,3]}
     opts_.update(opts)
     
     assert opts_['colorStreams'] in ('conv', 'mag', 'dir')
@@ -151,13 +152,12 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
     XX = np.vstack((xx.flatten(), yy.flatten()))
 
     x0 = funnel.dynSys.ctrlInput.refTraj.getX(t)
-    dx0 = funnel.dynSys.ctrlInput.refTraj.getDX(t)
-
-    UU = funnel.dynSys.ctrlInput.computeCtrl(t, XX, opts_['ctrlMode'])
-
-    UU = funnel.dynSys.ctrlInput()
+    xd0 = funnel.dynSys.ctrlInput.refTraj.getDX(t)
+    
+    U = funnel.lyapFunc.getCtrl(t, opts_['modeCtrl'], XX, x0)
+    
     # __call__(self, x:np.ndarray, u:np.ndarray, mode:str='OO', x0:np.ndarray=None):
-    VV = funnel.dynSys(XX, )
+    V = funnel.dynSys(XX, U, opts_['modeDyn'], x0, xd0)
 
 
 
