@@ -618,7 +618,7 @@ class polynomialSys(dynamicalSystem):
             # Partial derivs to evaluated Taylor
             z = self.repr.evalAllMonoms(x, mode[0])
             # multiply with weights
-            z *= self.inversionTaylor.weightingMonoms[:z.size]
+            z *= self.taylorExp.weightingMonoms[:z.size].reshape((-1,1))
             # (broadcast) multiply and sum up and contract
             f = ndot(fPDeriv, z)
 
@@ -634,15 +634,16 @@ class polynomialSys(dynamicalSystem):
             g = neinsum( 'nij,jn->in', G, u ) #[nPt,nq,nu] . [nu,nPt] -> [nq,nPt]
         else:
             # Get partial derivs
+            xList = x0.squeeze()
             indexKey = f"PDeriv_to_{mode[1]:d}_eval"
-            GPDeriv = self.pDerivG.__dict__[f"f{indexKey}"](*x0.squeeze())  # [nq,nu,nMonoms]
+            GPDeriv = np.stack([narray(aFunc(*xList)) for aFunc in self.pDerivG.__dict__["g"+indexKey]])  # [nMonoms,nq,nu]
 
             # Partial derivs to evaluated Taylor
             z = self.repr.evalAllMonoms(x, mode[1])
             # multiply with weights
-            z *= self.inversionTaylor.weightingMonoms[:z.size]
+            z *= self.taylorExp.weightingMonoms[:z.size].reshape((-1,1))
             # (broadcast) multiply and sum up and contract
-            g = neinsum("ijk,kn,jn->in", GPDeriv, z, u)  # ([nq,nu,nMonoms] . [nMonoms,nPt]) . (nu,nPt) -> [nq,nPt] Compute input
+            g = neinsum("kij,kn,jn->in", GPDeriv, z, u)  # ([nMonoms,nq,nu] . [nMonoms,nPt]) . (nu,nPt) -> [nq,nPt] Compute input
 
         # Compute - input dynamics
         xd += g

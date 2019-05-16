@@ -23,7 +23,7 @@ class distributedFunnel:
         self.repr = self.lyapFunc.repr
 
         self.opts = {'convLim':1e-3, #Dichotomic
-                     'minDistToSep':0.3, #When to ude linear feedback and "ignore" separation
+                     'minDistToSep':"0.1+0.25/self.dynSys.nu", #When to use linear feedback and "ignore" separation
                      'sphereBoundCritPoint':True, # Whether to use separation or spheric confinement
                      'interSteps':3, # How many points to check per interval
                      'projection':'sphere',
@@ -37,7 +37,10 @@ class distributedFunnel:
                                 },
                      'storeProof':True
                      }
-        self.opts.update(opts)
+        recursiveExclusiveUpdate(self.opts, opts)
+
+        if isinstance(self.opts['minDistToSep'], str):
+            self.opts['minDistToSep'] = eval(self.opts['minDistToSep'])
         
         assert self.opts['sphereBoundCritPoint'] == True #TODO
         
@@ -154,7 +157,8 @@ class distributedFunnel:
                 probList = []
     
                 # 1.1 The linear control approximation
-                thisProbBase = {'probDict':{'nPt':-1, 'solver':self.opts['solver'], 'dimsNDeg':(self.dynSys.nq, self.repr.maxDeg), 'nCstrNDegType':[]}, 'cstr':[]}
+                thisProbBase = {'probDict':{'nPt':-1, 'solver':self.opts['solver'], 'minDist':1., 'dimsNDeg':(self.dynSys.nq, self.repr.maxDeg),
+                                'nCstrNDegType':[]}, 'cstr':[]}
                 thisProbLin = dp(thisProbBase)
                 thisProbLin['probDict']['isTerminal']=-1 # Base case, non-convergence is "treatable" via critPoints
                 probList.append([thisProbLin])

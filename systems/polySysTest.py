@@ -11,7 +11,7 @@ nu_ = None
 def getUlims():
     return nu_*[limL_],nu_*[limU_]
 
-def getSys(repr: polynomialRepr, P=None, G=None):
+def getSys(repr: polynomialRepr, P=None, G=None, f0=None):
     
     global nu_
     
@@ -33,6 +33,9 @@ def getSys(repr: polynomialRepr, P=None, G=None):
         expAsList[i] = 3
         idx = repr.monom2num[list2int(expAsList)]
         fCoeffs[i, idx] = 1.
+
+    if f0 is not None:
+        fCoeffs[:,0] = f0
     
     if G is None:
         gCoeffs[0,nDim-1,0] = 1.
@@ -54,7 +57,7 @@ def getSys(repr: polynomialRepr, P=None, G=None):
     for i in range(nDim):
         qM[i,0] = qS[i]
     uS = sy.symbols(f"u:{gCoeffs.shape[2]}")
-    uM = sy.Matrix(nzeros((1, gCoeffs.shape[2])))
+    uM = sy.Matrix(nzeros((gCoeffs.shape[2],1)))
     for i in range(gCoeffs.shape[2]):
         uM[i,0] = uS[i]
     nu_ = gCoeffs.shape[2]
@@ -86,6 +89,6 @@ def getSysStablePos(nDims:int, deg:int, P=None, G=None):
     print(refTraj(0.))
 
     # Get the input constraints along the refTraj
-    pSys.ctrlInput = boxInputCstrLFBG(repr, refTraj, 1, *getUlims())
+    pSys.ctrlInput = boxInputCstrLFBG(repr, refTraj, pSys.nu, *getUlims())
 
     return pSys

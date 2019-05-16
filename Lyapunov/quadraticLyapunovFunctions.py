@@ -173,7 +173,7 @@ class quadraticLyapunovFunction(LyapunovFunction):
         P = self.getPnPdot(t, False)
         return (P,1.)
 
-    def plot(self, ax: "plot.plt.axes", t: float = 0.0, opts={}):
+    def plot(self, ax: "plot.plt.axes", t: float = 0.0, x0:np.ndarray=None, opts={}):
     
         opts_ = {'plotStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
                  'faceAlpha':0.5, 'linestyle':'-',
@@ -181,7 +181,7 @@ class quadraticLyapunovFunction(LyapunovFunction):
         opts_.update(opts)
     
         P = self.Ps
-        x = self.dynSys.refTraj.getX(t)
+        x = self.dynSys.refTraj.getX(t) if x0 is None else x0
     
         return plot.plotEllipse(ax, x, P, 1., **opts_)
     
@@ -193,6 +193,30 @@ class quadraticLyapunovFunction(LyapunovFunction):
         x = x.reshape((self.n,-1))
         dx = dx.reshape((self.n, -1))
         return nsum(nmultiply(x, ndot((2.*self.P_), dx)),axis=0,keepdims=kd)
+
+    def convAng(self, x: np.ndarray, xd: np.ndarray, kd: bool = True):
+
+        """
+        Returns the angle between the normal to the surface and the velocity
+        :param x:
+        :param xd:
+        :param t:
+        :param kd:
+        :return:
+        """
+        assert (x.shape == xd.shape)
+
+        # Get the quadratic function
+        P = self.Ps_
+
+        # Project to get normal directions at x
+        n = neinsum( "in,ij->jn", x, P) #TODO check if correct
+
+        #Normalize
+        n /= (norm(n,axis=0,keepdims=True)+floatEps)
+        xdn = xd / (norm(xd,axis=0,keepdims=True)+floatEps)
+
+        return np.arccos(nsum(-(nmultiply(n,xdn)), axis=0, keepdims=kd))
     
     def sphere2Ellip(self, x):
         x = x.reshape((self.n, -1))
@@ -488,7 +512,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         P = self.getPnPdot(t, False)
         return (P,1.)
 
-    def plot(self, ax: "plot.plt.axes", t: float = 0.0, opts={}):
+    def plot(self, ax: "plot.plt.axes", t: float = 0.0, x0:np.ndarray=None, opts={}):
     
         opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
                  'faceAlpha':0.5, 'linestyle':'-',
@@ -502,7 +526,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
     
         P = self.getPnPdot(t, False)
-        x = self.dynSys.ctrlInput.refTraj.getX(t)
+        x = self.dynSys.ctrlInput.refTraj.getX(t) if x0 is None else x0
     
         return plot.plotEllipse(ax, x, P, 1., **opts_)
     
@@ -590,7 +614,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         n /= (norm(n,axis=0,keepdims=True)+floatEps)
         xdn = xd / (norm(xd,axis=0,keepdims=True)+floatEps)
 
-        return np.arcsin(nsum(-(nmultiply(n,xdn)), axis=0, keepdims=kd))
+        return np.arccos(nsum(-(nmultiply(n,xdn)), axis=0, keepdims=kd))
 
     
     def sphere2Ellip(self, x):
@@ -736,23 +760,23 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
         return coeffsOut
 
-    def getPolyCtrl(self, mode, t, x0=None, gTaylor=None, zone=None, alwaysfull=True):
+    def getPolyCtrl(self, mode, t, x0=None, uRef=None, gTaylor=None, zone=None, alwaysfull=True):
         
         if x0 is None:
             x0 = self.refTraj.getX(t)
+        if uRef is None:
+            uRef = self.refTraj.getU(t)
         
         if gTaylor is None:
             _, gTaylor = self.dynSys.getTaylorApprox(x0)
         
         if zone is None:
             zone = self.getZone(t)
-        
-        P,alpha,Pd = zone
-        P=P/alpha
 
         assert mode[0] == 1, 'Only linear separation is currently implemented'
 
-        ctrlCoeffs_, ctrlMonoms_ = self.dynSys.ctrlInput.getU(mode[1], t, monomOut=True)
+        #ctrlCoeffs_, ctrlMonoms_ = self.dynSys.ctrlInput.getU(mode[1], t, monomOut=True)
+        ctrlCoeffs_, ctrlMonoms_ = self.dynSys.ctrlInput.getU2(mode[1], t, zone=zone, gTaylor=gTaylor, x0=x0, monomOut=True, uRef=uRef)
         if alwaysfull:
             ctrlCoeffs = nzeros((self.nu, self.repr.nMonoms), dtype=nfloat)
             ctrlCoeffs[:, ctrlMonoms_] = ctrlCoeffs_
@@ -804,7 +828,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
         return idx
     
-    def getCtrl(self, t, mode, dX:np.ndarray, x0:None, zone=None):
+    def getCtrl(self, t, mode, dX:np.ndarray, x0=None, uRef=None, zone=None):
         """
         
         :param t: time point
@@ -820,6 +844,9 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             
         if x0 is None:
             x0 = self.dynSys.ctrlInput.refTraj.getX(t)
+        if uRef is None:
+            uRef = self.dynSys.ctrlInput.refTraj.getU(t)
+
             
         fTaylor, gTaylor = self.dynSys.getTaylorApprox(x0)
 
@@ -827,10 +854,10 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         ctrlDict = {}
         for aDeg in np.unique(mode[1]):
             if aDeg==1:
-                ctrlDict[1] = self.getPolyCtrl((mode[0], 1*nones((self.nu,),dtype=nint)), t, x0=x0, gTaylor=gTaylor, alwaysfull=True)
-                ctrlDict[-1] = self.getPolyCtrl((mode[0], -1*nones((self.nu,),dtype=nint)), t, x0=x0, gTaylor=gTaylor, alwaysfull=True)
+                ctrlDict[1] = self.getPolyCtrl((mode[0], 1*nones((self.nu,),dtype=nint)), t, x0=x0, uRef=uRef, gTaylor=gTaylor, alwaysfull=True)
+                ctrlDict[-1] = self.getPolyCtrl((mode[0], -1*nones((self.nu,),dtype=nint)), t, x0=x0, uRef=uRef, gTaylor=gTaylor, alwaysfull=True)
             else:
-                ctrlDict[aDeg] = self.getPolyCtrl((mode[0], aDeg*nones((self.nu,),dtype=nint)), t, x0=x0, gTaylor=gTaylor, alwaysfull=True)
+                ctrlDict[aDeg] = self.getPolyCtrl((mode[0], aDeg*nones((self.nu,),dtype=nint)), t, x0=x0, uRef=uRef, gTaylor=gTaylor, alwaysfull=True)
 
         # Get the polyvalues
         dZ = self.repr.evalAllMonoms(dX)
@@ -848,7 +875,9 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 U[i, np.logical_not(idxOptPlus[i, :])] = ndot(ctrlDict[-1][[i],:], dZ[:,np.logical_not(idxOptPlus[i, :])])
             else:
                 U[i, :] = ndot(ctrlDict[mode[1][i]][[i],:], dZ)
-        
+
+        U = self.dynSys.ctrlInput(U)
+
         return U
 
     def analyzeSolSphereLinCtrl(self, thisSol, ctrlDict, critPoints, opts):
@@ -1060,7 +1089,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
         keepOptCtrl = np.ones(uLinCurrent.shape, dtype=np.bool_)
     
-        # Now take away as many seperations as possible
+        # Now take away as many separations as possible (greedy approach)
         # for i,ui in enumerate(uCurrent):
         for i, idxi in enumerate(linInputRankingIdx):
             ui = uLinCurrent[idxi]

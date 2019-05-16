@@ -17,6 +17,9 @@ class inputConstraints:
     
     def getU(self, idx:np.ndarray, *args, **kwargs):
         raise NotImplementedError
+
+    def getU2(self, idx:np.ndarray, t, zone, gTaylor, x0, monomOut=False, uRef=None, *args, **kwargs):
+        raise NotImplementedError
     
     def getBounds(self, *args, **kwargs):
         return self.getMinU(*args, **kwargs), self.getMaxU(*args, **kwargs)
@@ -99,6 +102,41 @@ class boxInputCstr(inputConstraints):
             return uOut
         else:
             return uOut,self.repr.varNumsPerDeg[0]
+
+    def getUVal(self, X:np.ndarray, idx:np.ndarray, t=0., zone=None, gTaylor=None, uRef=None, x0:np.ndarray=None, *args, **kwargs):
+        """
+        Compute the actual values
+        :param X:
+        :param idx:
+        :param t:
+        :param uRef:
+        :param x0:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        # If x0 is given, then X is in absolute coords
+
+        assert zone is not None
+        assert gTaylor is not None
+
+        if x0 is None:
+            DX = X
+        else:
+            DX = X-x0
+
+        Z = self.repr.evalAllMonoms(DX)
+
+        ctrlCoeffs_, ctrlMonoms_ = self.getU2(idx, t, zone, gTaylor=gTaylor, x0=self.refTraj.getX(t),monomOut=True, uRef=uRef)
+
+        ctrlCoeffs = nzeros((self.nu, self.repr.nMonoms), dtype=nfloat)
+        ctrlCoeffs[:,ctrlMonoms_] = ctrlCoeffs_
+
+        u = ndot(ctrlCoeffs, Z)
+
+        u=self(u)
+
+        return u
     
     #######################
     def __call__(self,inputNonCstr,t:float=0.):
@@ -230,6 +268,51 @@ class boxInputCstrLFBG(boxInputCstr):
             return uOut
         else:
             return uOut, self.repr.varNumsUpToDeg[0 if nq==0 else 1]
+
+    #######################
+
+    def getU2(self, idx:np.ndarray,t,zone, gTaylor, x0, monomOut=False, uRef=None):
+        """
+
+        :param idx:
+        :param t:
+        :param zone:
+        :param gTaylor:
+        :param x0:
+        :param monomOut:
+        :return:
+        """
+
+        #Test if quadratic zone
+        try:
+            if isinstance(zone, (list, tuple)):
+                P,alpha,Pd = zone
+                assert (P.shape == (x0.size, x0.size)) and (Pd.shape == (x0.size, x0.size))
+                P=P/alpha
+                alpha=1.
+                zoneType = 'q'
+            else:
+                P = zone
+                assert (P.shape == (x0.size, x0.size))
+        except:
+            print("Could not determine zone")
+            raise NotImplementedError
+
+        # Defaults
+        uRef = self.refTraj.getU(t) if uRef is None else uRef
+
+
+        if zoneType == 'q':
+            ctrlCoeffs_, ctrlMonoms_ = self.getU(idx, t, uRef, P=P, PG0=ndot(P, gTaylor[0,:,:]), alpha=alpha, monomOut=True)
+        else:
+            raise NotImplementedError
+
+        if monomOut:
+            return ctrlCoeffs_, ctrlMonoms_
+        else:
+            ctrlCoeffs = nzeros((self.nu, self.repr.nMonoms), dtype=nfloat)
+            ctrlCoeffs[:,ctrlMonoms_] = ctrlCoeffs_
+            return ctrlCoeffs
 
     #######################
     def getPolyCtrl(self, aDeg, t, x0, gTaylor, zone, alwaysfull=True, scale=1., limitEqual=False):

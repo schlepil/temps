@@ -1,4 +1,6 @@
 from coreUtils import *
+import polynomial as poly
+import relaxations as relax
 
 import matplotlib
 # Adjust this if necessary, Fix for pycharm
@@ -126,12 +128,34 @@ def plotEllipse(ax, pos, P, alpha, plotAx=np.array([0, 1]), deltaPos=None, color
     
     return e
 
+def getStreamColor(lyapFunc,XX,VV,t,opts):
+    opts_ = {'colorStreams':'ang', 'nGrid':200}
+    recursiveExclusiveUpdate(opts_,opts)
+
+    # Compute streamline color
+    try:
+        streamColor = matplotlib.colors.to_rgb(opts_['colorStreams'])
+    except:
+        if opts_['colorStreams'] == 'conv':
+            streamColor = lyapFunc.evalVd(XX, VV, t, kd=False)/(lyapFunc.evalV(XX, t, kd=False)+1e-30)
+        elif opts_['colorStreams'] == 'mag':
+            streamColor = norm(VV, ord=2, axis=0)
+        elif opts_['colorStreams'] == 'dir':
+            streamColor = np.arctan2(VV[1,:], VV[0,:])
+        elif opts_['colorStreams'] == 'ang':
+            streamColor = lyapFunc.convAng(XX, VV, t, kd=False)*180./np.pi
+        else:
+            raise NotImplementedError
+        streamColor = streamColor.squeeze().reshape((opts_['nGrid'],opts_['nGrid']))
+
+    return streamColor
+
 
 def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
     opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
              'faceAlpha':0.0, 'linestyle':'-',
              'plotAx':np.array([0, 1]),
-             'cmap':'viridis', 'colorStreams':'ang', 'nPt':200, 'cbar':True,
+             'cmap':'viridis', 'colorStreams':'ang', 'nGrid':200, 'cbar':True,
              'modeCtrl':(1,nones((funnel.dynSys.nu,), dtype=nint)),
              'modeDyn':[3,3]}
     opts_.update(opts)
@@ -147,7 +171,7 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
     # Plot the streamlines
     
     # Get the veloctiy
-    xx, yy = ax2Grid(aa, opts_['nPt'])
+    xx, yy = ax2Grid(aa, opts_['nGrid'])
     XX = np.vstack((xx.flatten(), yy.flatten()))
 
     x0 = funnel.dynSys.ctrlInput.refTraj.getX(t)
@@ -158,25 +182,9 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
     # __call__(self, x:np.ndarray, u:np.ndarray, mode:str='OO', x0:np.ndarray=None):
     VV = funnel.dynSys(XX, UU, opts_['modeDyn'], x0=x0, dx0=dx0)
     
-    # Compute streamline color
-    try:
-        streamColor = plt.color.to_rgb(opts_['colorStreams'])
-    except:
-        if opts_['colorStreams'] == 'conv':
-            streamColor = funnel.lyapFunc.evalVd(XX, VV, t, kd=False)/(funnel.lyapFunc.evalV(XX, t, kd=False)+1e-30)
-        elif opts_['colorStreams'] == 'mag':
-            streamColor = norm(VV, ord=2, axis=0)
-        elif opts_['colorStreams'] == 'dir':
-            streamColor = np.arctan2(VV[1,:], VV[0,:])
-        elif opts_['colorStreams'] == 'ang':
-            streamColor = funnel.lyapFunc.convAng(XX, VV, t, kd=False)*180./np.pi
-        else:
-            raise NotImplementedError
-        streamColor = streamColor.squeeze().reshape((opts_['nPt'],opts_['nPt']))
-        #streamColor -= nmin(streamColor)
-        #streamColor /= nmax(streamColor)
+    streamColor = getStreamColor(funnel.lyapFunc, XX,VV,t,opts_)
     
-    thisStream = aa.streamplot(xx,yy,VV[0,:].reshape((opts_['nPt'],opts_['nPt'])),VV[1,:].reshape((opts_['nPt'],opts_['nPt'])), color=streamColor, cmap=opts_['cmap'])
+    thisStream = aa.streamplot(xx,yy,VV[0,:].reshape((opts_['nGrid'],opts_['nGrid'])),VV[1,:].reshape((opts_['nGrid'],opts_['nGrid'])), color=streamColor, cmap=opts_['cmap'])
     
     if opts_['cbar']:
         thisCBar = ff.colorbar(thisStream.lines)
@@ -187,24 +195,35 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
     
 
 def plot2dProof(funnel:fn.distributedFunnel, t=0.0, opts={}):
+
+    from plotting.plottingCstr import plot2dCstr
     
-    opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
+    opts_ = {'zoneOpts':{'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
              'faceAlpha':0.0, 'linestyle':'-',
-             'plotAx':np.array([0, 1]),
-             'cmap':'viridis', 'colorStreams':'ang', 'nPt':200, 'cbar':True,
-             'modeDyn':[3,3]}
-    opts_.update(opts)
+             'plotAx':np.array([0, 1])},
+             'streamOpts':{'cmap':'viridis', 'colorStreams':'ang', 'nGrid':200, 'cbar':True, 'plotValidOnly':True, 'validEps':-.1},
+             'modeDyn':[3,3],
+             'cstrOpts':{'binaryPlot': True, 'filled': False, 'nGrid': 200, 'cbar': False, 'ctrOpts': {}}
+             }
+    recursiveExclusiveUpdate(opts_, opts)
+    optsStream_ = opts_['streamOpts']
+
+    # Helper stuff
+    thisPoly = poly.polynomial(funnel.repr)
+    thisRelax = relax.lasserreRelax(funnel.repr)
 
     #Get the subproof
     try:
-        subProof = funnel.proof_[t]
+        subProofList = funnel.proof_[t]
     except KeyError:
         keysT = narray(list(funnel.proof_.keys()), dtype=nfloat)
         tprime = keysT[ np.argmin( np.abs(keysT-t) ) ]
         print(f"Using time point {tprime} instead of {t}")
         t = tprime
         subProofList = funnel.proof_[t]
-    
+
+    x0, dx0, uRef = funnel.dynSys.ctrlInput.refTraj.getX(t), funnel.dynSys.ctrlInput.refTraj.getDX(t), funnel.dynSys.ctrlInput.refTraj.getU(t)
+
     allDict = {}
     for nSub, subProof in enumerate(subProofList):
         allDict[nSub] = {}
@@ -226,13 +245,66 @@ def plot2dProof(funnel:fn.distributedFunnel, t=0.0, opts={}):
         aa = narray(aa,ndmin=2)
         thisDict['fig'] = ff
         thisDict['ax'] = aa
-        
-        ff.subptitle(f"Proof {nSub} at {t}")
-        
+
+
+        ff.suptitle(f"Proof {nSub} at {t:.4e}")
         #Loop over the significant problems and their solutions
         for k, (aVal, aProb) in enumerate(subProof['sigProbAndVals']):
+            thisDict[k] = {}
             idx,idy = divmod(k, nax[1])
-            aa[idx,idy].set_title(f"{aProb['sol']['primal objective']:.2e} : {list(aProb['origProb']['probDict']['u'].squeeze())}")
+            aa[idx,idy].set_title( f"{aProb['sol']['primal objective']:.2e} : {list(aProb['origProb']['probDict']['u'].reshape((-1,)))}" )
+
+            # Plot the zone
+            zonePlot = funnel.lyapFunc.plot(ax=aa[idx,idy], t=t, x0=x0, opts=opts_['zoneOpts'])
+
+            # Get the grid
+            aa[idx, idy].autoscale()
+            aa[idx, idy].axis('equal')
+
+            xx,yy = ax2Grid(aa[idx, idy], opts_['streamOpts']['nGrid'])
+            XX = np.vstack([xx.flatten(), yy.flatten()])
+            DXX = XX-x0
+
+            # Plot the additional contraints and check which points satisfy them
+            idxValid = nones((DXX.shape[1],)).astype(np.bool_)
+
+            for aCstrCoeff in aProb['origProb']['cstr'][1:]:
+                thisPoly.coeffs = aCstrCoeff
+                thisCstr = relax.lasserreConstraint(thisRelax, thisPoly)
+                # Plot
+                plot2dCstr(thisCstr, aa[idx,idy], x0=x0, opts=opts_['cstrOpts'])
+                # Check feasibility of points
+                idxValid = np.logical_and(idxValid, thisCstr.isValid(XX, atol=opts_['streamOpts']['validEps']))
+
+            # Get the velocities
+            UU = funnel.dynSys.ctrlInput.getUVal(DXX, aProb['origProb']['probDict']['u'], t, zone=funnel.lyapFunc.getZone(t),
+                                                 gTaylor=funnel.dynSys.getTaylorApprox(x0)[1], uRef=uRef)
+            VV = funnel.dynSys(XX, UU, mode=opts_['modeDyn'], x0=x0,dx0=dx0)
+
+            streamColor = getStreamColor(funnel.lyapFunc, XX, VV, t, opts_['streamOpts'])
+
+            thisStream = aa[idx, idy].streamplot(xx, yy, VV[0, :].reshape((optsStream_['nGrid'], optsStream_['nGrid'])), VV[1, :].reshape((optsStream_['nGrid'], optsStream_['nGrid'])),
+                                       color=streamColor, cmap=optsStream_['cmap'])
+
+            if optsStream_['cbar']:
+                thisCBar = ff.colorbar(thisStream.lines)
+            else:
+                thisCBar = None
+
+            thisDict[k]['zonePlot'] = zonePlot
+            thisDict[k]['stream'] = thisStream
+            thisDict[k]['cbar'] = thisCBar
+
+    return allDict
+
+
+
+
+
+
+
+
+
         
     
     

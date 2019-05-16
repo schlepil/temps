@@ -3,10 +3,11 @@ import plotting.plottingTools as pt
 
 import relaxations as rel
 
-def plot2dCstr(aObj:Union[rel.constraint, rel.polynomial, rel.convexProg], ax:pt.matplotlib.axes, opts={}, fig=None):
+def plot2dCstr(aObj:Union[rel.constraint, rel.polynomial, rel.convexProg], ax:pt.matplotlib.axes, x0:np.ndarray=None, opts={}, fig=None):
     
     opts_ = {'binaryPlot':True, 'filled':False, 'nGrid':200, 'cbar':True, 'ctrOpts':{}}
-    opts_.update(opts)
+    #opts_.update(opts)
+    recursiveExclusiveUpdate(opts_, opts)
     
     if isinstance(aObj, rel.polynomial):
         bRel = rel.lasserreRelax(aObj.repr)
@@ -20,7 +21,11 @@ def plot2dCstr(aObj:Union[rel.constraint, rel.polynomial, rel.convexProg], ax:pt
     #Get points
     xg,yg = pt.ax2Grid(ax, opts_['nGrid'])
     XX = np.vstack([xg.flatten(),yg.flatten()])
-    ZZ = aObj.poly.repr.evalAllMonoms(XX)
+    if x0 is not None:
+        DXX = XX - x0
+    else:
+        DXX = XX
+    ZZ = aObj.poly.repr.evalAllMonoms(DXX)
 
     if isinstance(aObj, rel.convexProg):
         YY = sum([aCstr.poly.eval2(ZZ) for aCstr in aObj.constraints.l+aObj.constraints.q+aObj.constraints.s])

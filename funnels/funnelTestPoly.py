@@ -23,12 +23,30 @@ from funnels import *
 if __name__ == "__main__":
     
     # Complicate the problem
-    R = plot.Rot(45./180*np.pi)
-    P = mndot([R.T, narray([[2,0],[0,1]]), R])
+    cplx = 2
+
+    if cplx == 0:
+        R = P = nidentity(2, dtype=nfloat)
+        G = narray([[0.],[1.]], dtype=nfloat)
+    elif cplx == 1:
+        R = plot.Rot(45./180*np.pi).astype(dtype=nfloat)
+        P = mndot([R.T, narray([[2,0],[0,1]], dtype=nfloat), R])
+        G = narray([[0.],[1.]], dtype=nfloat)
+    elif cplx == 2:
+        R = plot.Rot(45. / 180 * np.pi)
+        P = mndot([R.T, narray([[2, 0], [0, 1]], dtype=nfloat), R])
+        G = nzeros((2,2), dtype=nfloat)
+        G[0,1] = 1.
+        G[1,0] = 0.6
+        G[1,1] = 0.9
+    else:
+        raise NotImplementedError
+
+
     
     # Get the polynomial representation which also decides on the maximal relaxation
     # Let use full here
-    pSys = getSysStablePos(2,6,P=P)
+    pSys = getSysStablePos(2,6,P=P,G=G)
     
     thisRepr = pSys.repr  # Todo debug digits. there is an error somewhere
 
@@ -47,7 +65,7 @@ if __name__ == "__main__":
     
     plot.plot2dConv(myFunnel, 0.0)
     
-    plot.plot2dProof(myFunnel, 0.2)
+    plot.plot2dProof(myFunnel, 0.0)
     
     distributor.terminate()
     

@@ -40,6 +40,9 @@ class LyapunovFunction():
     
     def getLyap(self, t):
         raise NotImplementedError
+
+    def plot(self, ax: "plot.plt.axes", t: float = 0.0, opts = {}):
+        raise NotImplementedError
     
     def getOptIdx(self, TorZone:Union[float, zone], gTaylor:np.ndarray, X:np.ndarray, deg:int):
         raise NotImplementedError
