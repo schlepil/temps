@@ -1,4 +1,6 @@
 from coreUtils.coreUtilsImport import Callable, Iterable, List
+from copy import deepcopy as dp
+
 
 def lmap(f:Callable, l:Iterable)->List:
     return list(map(f,l))
@@ -31,3 +33,24 @@ def recursiveExclusiveUpdate(dict0:dict, dict1:dict):
                 dict0[aKey0] = dict1[aKey0]
 
     return None
+
+def rescaleLinCtrlDict(ctrlDict:dict, scale=1., doDeepCopy=True):
+
+    if doDeepCopy:
+        ctrlDict = dp(ctrlDict)
+        
+    for aInKey, aCoeffDict in ctrlDict.items():
+        try:
+            # Rescale the linear input
+            # Attention only correct of 'projection' is 'sphere'
+            int(aInKey)  # Ensure that it is dynamics
+            assert isinstance(aCoeffDict, dict)
+            aCoeffDict[2] *= scale
+        except (KeyError, AssertionError, TypeError, ValueError):
+            if __debug__:
+                print(f"Passed on {aInKey} for rescaling")
+        except IndexError:
+            print('No Indexable features should be addressed')
+            assert 0
+    
+    return ctrlDict

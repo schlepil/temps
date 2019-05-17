@@ -100,9 +100,10 @@ class distributedFunnel:
         
         if isinstance(self.lyapFunc, Lyapunov.lyapunovFunctions):
             # Get the zone
-            zone = self.lyapFunc.getPnPdot(t, True)
+            #zone = self.lyapFunc.getPnPdot(t, True)
             # todo
-            zone = [zone[0], 1., zone[1]]
+            #zone = [zone[0], 1., zone[1]]
+            zone = self.lyapFunc.getZone(t)
             # Optimal control
             objectiveStar = self.lyapFunc.getObjectiveAsArray(fTaylorApprox, gTaylorApprox, self.dynSys.maxTaylorDeg, np.ones((self.dynSys.nu, 1)), self.repr.varNumsPerDeg[0], dx0=self.traj.getDX(t), t=t, P=zone[0], Pdot=zone[2])
         
@@ -335,7 +336,12 @@ class distributedFunnel:
             # Thats it, this part of the state-space is proven to be non-stabilizable
             return []
         
-        return self.lyapFunc.analyzeSol(thisSol, ctrlDict, critPoints, opts=self.opts)
+        newProbList = self.lyapFunc.analyzeSol(thisSol, ctrlDict, critPoints, opts=self.opts)
+        
+        for aProb in newProbList:
+            aProb['probDict']['resPlacementParent'] = thisSol['origProb']['probDict']['resPlacement']
+        
+        return newProbList
         
     def solve1(self, timePoints, critPoints, allTaylorApprox):
         """
@@ -361,7 +367,7 @@ class distributedFunnel:
         for k, (at, aCritPList, aTaylorApprox) in enumerate(zip(timePoints, critPoints, allTaylorApprox)):
     
             # Get the control dict
-            aCtrlDict, aZone = self.getCtrlDict(at, aTaylorApprox[0], aTaylorApprox[1], returnZone=True)
+            aCtrlDict, aZone = self.getCtrlDict(at, aTaylorApprox[0], aTaylorApprox[1], returnZone=True, opts=self.opts)
             zones.append(aZone)
             # Project the problem if this reduced complexity
             self.doProjection(aZone, aCritPList, aCtrlDict)
@@ -402,7 +408,7 @@ class distributedFunnel:
         doesConverge = None
         
         # Get all zones to be checked
-        allCtrlDictsNzones = [self.getCtrlDict(at, aTaylorApprox[0], aTaylorApprox[1], returnZone=True) for at, aTaylorApprox in zip(timePoints, allTaylorApprox)]
+        allCtrlDictsNzones = [self.lyapFunc.getCtrlDict(at, aTaylorApprox[0], aTaylorApprox[1], returnZone=True, opts=self.opts) for at, aTaylorApprox in zip(timePoints, allTaylorApprox)]
         # Project
         for at, aPointList, aCtrlNZone in zip(timePoints, critPoints, allCtrlDictsNzones):
             self.doProjection(aCtrlNZone[1], aPointList, aCtrlNZone[0])
@@ -419,6 +425,7 @@ class distributedFunnel:
                 resultsLin = np.hstack( [resultsLin, -np.Inf*nones((len(aSubProbList),), dtype=nfloat)] )
                 for j, aProb in enumerate(aSubProbList):
                     results[-1][-1].append(None)
+                    aProb['probDict']['resPlacementParent'] = None
                     aProb['probDict']['resPlacement'] = (k,i,j)
                     aProb['probDict']['resPlacementLin'] = resIdLin
                     resIdLin += 1
@@ -479,7 +486,8 @@ class distributedFunnel:
             # Save
             if not at in self.proof_.keys():
                 self.proof_[at] = []
-            self.proof_[at].append( thisSubProof )
+            self.proof_[at].append( (thisSubProof, results) )
+            
     
         return None
             

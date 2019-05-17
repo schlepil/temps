@@ -9,3 +9,5 @@ unifiedQueues_ = False
 solver_ = 'cvxopt'
 
 useSharedMem_ = False
+
+printProbNSol_ = True

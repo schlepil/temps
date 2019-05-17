@@ -121,6 +121,25 @@ class convexProg():
                 # Optimize the solution locally to reduce rounding errors
                 raise NotImplementedError
             #The simple solution is exact enough
+            
+            #Check all constraints
+            isValid = True
+            zSol = self.repr.evalAllMonoms(xSol)
+            atol = -1e-6
+            while True:
+                for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
+                    isValid = isValid and bool(aCstr.isValid(zSol, atol=atol))
+                # TODO check if this is a proper solution
+                if isValid and (atol > -1.e-1):
+                    break
+                else:
+                    atol *= 2.
+                    isValid = True
+                
+            assert abs(atol) < 1e-1
+            if __debug__:
+                print("Found valid solution for atol : {atol}")
+            
             return xSol, None, (None, None, None)
         else:
             # Here it is more tricky
@@ -260,6 +279,8 @@ class convexProg():
                 else:
                     atol *= 2.
                     isValid[:] = True
+            if __debug__:
+                print("Found valid solution for atol : {atol}")
             
             #Only return valid ones
             xSol = xSol[:, isValid]

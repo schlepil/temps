@@ -511,6 +511,54 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     def getLyap(self, t):
         P = self.getPnPdot(t, False)
         return (P,1.)
+    
+    def getCtrlDict(self, t:float, fTaylorApprox=None, gTaylorApprox=None,returnZone=True, taylorDeg=None, maxCtrlDeg=2, opts={}):
+        
+        assert ((0<=maxCtrlDeg) and (maxCtrlDeg<=2))
+        assert (taylorDeg is None) or (taylorDeg <= self.dynSys.maxTaylorDeg)
+        
+        opts_ = {'minConvRate':0.}
+        recursiveExclusiveUpdate(opts_, opts)
+        
+        ctrlDict = {}  # Return value
+    
+        thisPoly = polynomial(self.dynSys.repr)  # Helper
+    
+        allU = [self.dynSys.ctrlInput.getMinU(t), self.dynSys.ctrlInput.refTraj.getU(t), self.dynSys.ctrlInput.getMaxU(t)]
+        allDeltaU = [allU[0]-allU[1], allU[2]-allU[1]]
+    
+        zone = self.getZone(t)
+        # Optimal control
+        objectiveStar = self.getObjectiveAsArray(fTaylorApprox, gTaylorApprox, self.dynSys.maxTaylorDeg, np.ones((self.dynSys.nu, 1)), self.repr.varNumsPerDeg[0], dx0=self.dynSys.ctrlInput.refTraj.getDX(t), t=t, zone=zone)
+        # Parse
+        ctrlDict[-1] = {0:objectiveStar[0, :]}
+        # Add minimal exponential convergence rate
+        thisPoly.setQuadraticForm(nidentity(self.dynSys.nq))
+        ctrlDict[-1][0] -= thisPoly.coeffs*opts_['minConvRate']
+    
+        for k in range(self.dynSys.nu):
+            if __debug__:
+                assert abs(objectiveStar[k+1, 0]) <= 1e-9
+            #Each part of the total convergence depends linearly on the input
+            ctrlDict[k] = {-1:objectiveStar[k+1, :]*allDeltaU[0][k, 0], 1:objectiveStar[k+1, :]*allDeltaU[1][k, 0]}  # Best is minimal or maximal
+    
+        # Linear control based on separating hyperplanes
+        ctrlDict['PG0'] = ndot(zone[0], gTaylorApprox[0, :, :])
+        uCtrlLin, uMonomLin = self.dynSys.ctrlInput.getU(2*np.ones((self.dynSys.nu,), dtype=nint), 0., P=zone[0], PG0=ctrlDict['PG0'], alpha=zone[1], monomOut=True)
+        # Attention here the resulting polynomial coefficients are already scaled correctly (no multiplication with deltaU necessary)
+        objectivePolyCtrlLin = self.getObjectiveAsArray(fTaylorApprox, gTaylorApprox, self.dynSys.maxTaylorDeg, uCtrlLin, uMonomLin, dx0=self.dynSys.ctrlInput.refTraj.getDX(t), t=t, zone=zone)
+    
+        # Parse
+        for k in range(self.dynSys.nu):
+            ctrlDict[k][2] = objectivePolyCtrlLin[k+1, :]  # set linear
+    
+        ctrlDict['sphereProj'] = False
+        
+        if returnZone:
+            return ctrlDict, zone
+        else:
+            return  ctrlDict
+        
 
     def plot(self, ax: "plot.plt.axes", t: float = 0.0, x0:np.ndarray=None, opts={}):
     
@@ -672,7 +720,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         return objPoly
     
     def getObjectiveAsArray(self, fTaylor: np.ndarray = None, gTaylor: np.ndarray = None, taylorDeg: int = 3,
-                            u: np.ndarray = None, uMonom: np.ndarray = None, x0: np.ndarray = None, dx0: np.ndarray = None, t: float = 0., P=None, Pdot=None):
+                            u: np.ndarray = None, uMonom: np.ndarray = None, x0: np.ndarray = None, dx0: np.ndarray = None, t: float = 0., zone=None):
         
         """
         Unified call, returns an array of polynomial coefficients
@@ -696,7 +744,9 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             assert (x0 is None) != (fTaylor is None)
             assert taylorDeg is not None
             assert u is not None
-            assert ((P is None) and (Pdot is None)) or ((P is not None) and (Pdot is not None))
+        
+        if zone is None:
+            zone = self.getZone(t)
         
         if dx0 is None:
             dx0 = self.refTraj.getDX(t)
@@ -706,8 +756,8 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         outCoeffs = nzeros((1+self.nu, self.nMonoms), nfloat)
         
         
-        if ((P is None) or (Pdot is None)):
-            P, Pdot = self.getPnPdot(t, True)
+        P,alphaTemp,Pdot = zone
+        P /= alphaTemp
         
         # evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u, monomU, idxMat, coeffsOut, Pdot)
         outCoeffs = evalPolyLyapAsArray_Numba(P, self.repr.varNumsPerDeg[1], fTaylor, self.repr.varNumsUpToDeg[taylorDeg], gTaylor,
@@ -749,7 +799,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         if deg == 1:
             PG0 = ndot(P, gTaylor[0, :, :])
             if alwaysFull:
-                coeffsOut[which, self.repr.varNumsPerDeg[1]] = PG0.T[which, :]
+                coeffsOut[which, self.repr.varNumsPerDeg[1][0]:self.repr.varNumsPerDeg[1][-1]+1] = PG0.T[which, :] #TODO change indexing this is not correct
             else:
                 coeffsOut = PG0.T[which, :]  # Linear constraint each row of the returned matrix corresponds to the normal vector of a separating hyperplane
         else:
@@ -939,7 +989,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
             thisCtrlType = nzeros((nu_, 1), dtype=nint)  # [None for _ in range(nu_, 1)]
         
-            # Decide what to do
+            # Decide what to do for each critical point
             yPlaneDist = ndot(thisY.T, ctrlDict['PG0']).reshape((nu_,))
         
             minDist =.9  # np.Inf
@@ -948,28 +998,31 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 if iDist < -opts['minDistToSep']:
                     # Negative -> use maximal control input
                     thisCtrlType[i, 0] = 1
-                    minDist = min(minDist, abs(iDist))
+                    minDist = min(minDist, abs(iDist)) # Ensure that limiting sphere and control separation surface do not intersect
                 elif iDist < opts['minDistToSep']:
                     # Linear control as iDist is self.opts['minDistToSep'] <= iDist < self.opts['minDistToSep']
                     thisCtrlType[i, 0] = 2
                 else:
                     # Large positive -> use minimal control input
                     thisCtrlType[i, 0] = -1
+                    minDist = min(minDist, abs(iDist)) # Ensure that limiting sphere and control separation surface do not intersect
             # Remember
             thisProb['probDict']['u'] = thisCtrlType.copy()
             thisProb['probDict']['minDist'] = minDist
             thisProb['probDict']['center'] = thisY.copy()
-        
+            
+            # Rescale the control dict
+            ctrlDict = rescaleLinCtrlDict(ctrlDict, 1./probDict_['minDist'], True)
+            
             # Now we have the necessary information and we can construct the actual problem
             thisCoeffs = ctrlDict[-1][0].copy()  # Objective resulting from system dynamics
+            if __debug__:
+                thisProb[f"obj_-1,0"] = ctrlDict[-1][0].copy()
             for i, type in enumerate(thisCtrlType.reshape((-1,))):
-                if type == 2:
-                    # Rescale due to the reduced size
-                    if __debug__:
-                        assert abs(ctrlDict[i][type][0]) < 1e-10
-                    thisCoeffs[1:] += ctrlDict[i][type][1:]*(1./minDist)
-                else:
-                    thisCoeffs += ctrlDict[i][type]
+                thisCoeffs += ctrlDict[i][type]
+                if __debug__:
+                    thisProb[f"obj_{i},{type}"] = ctrlDict[i][type].copy()
+                    
             thisProb['obj'] = -thisCoeffs  # Inverse sign to maximize divergence <-> minimize convergence
             # get the sphere
             # (y-thisY).T.P.(y-thisY)<=mindDist**2
@@ -1001,7 +1054,10 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         return probList
 
     def analyzeSolSphereDiscreteCtrl(self, thisSol, ctrlDict, critPoints, opts):
-    
+        
+        # Deep copy control dict as the scaling of the linear feedback control law depends
+        # on the size of the restricting hypersphere
+        
         nq_ = self.nq
         nu_ = self.nu
     
@@ -1010,6 +1066,9 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         probDict_ = thisSol['origProb']['probDict']
     
         probList = []
+        
+        # Rescale
+        ctrlDict = rescaleLinCtrlDict(ctrlDict, 1./probDict_['minDist'], True)
     
         #thisProbLin = thisSol['origProb'] # Replaced by all (suitable) combinations
         #probList.append(thisProbLin)
@@ -1128,15 +1187,15 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             thisProb = dp(thisProbBase)
             probList.append(thisProb)
             thisCoeffs = ctrlDict[-1][0].copy()
+            
+            if __debug__:
+                thisProb[f'obj_-1,0'] = ctrlDict[-1][0].copy()
         
             for k in range(nu_):
-                if input[k] == 2:
-                    # Rescale the linear input
-                    # Attention only correct of 'projection' is 'sphere'
-                    thisCoeffs += ctrlDict[k][input[k]]/thisProbBase['probDict']['minDist']
-                else:
-                    # Minimal or maximal input
-                    thisCoeffs += ctrlDict[k][input[k]]
+                thisCoeffs += ctrlDict[k][input[k]]
+                if __debug__:
+                    thisProb[f'obj_{k},{input[k]}'] = ctrlDict[k][input[k]].copy()
+                    
             
                 try:
                     idx = np.flatnonzero(uLinCurrent == k)[0]
@@ -1150,7 +1209,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 except IndexError:
                     # Was already linear
                     pass
-            thisProb['obj'] = thisCoeffs
+            thisProb['obj'] = -thisCoeffs
             thisProb['probDict']['u'] = narray(input, dtype=nint).reshape((-1,1))
             # Done
         return probList
@@ -1197,10 +1256,16 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             newProb = [newProb]
         
         yStarOld = oldSol['ySol']
-        
+        zStarOld = self.repr.evalAllMonoms(yStarOld)
+        idxOk = nones((yStarOld.shape[1],)).astype(np.bool_)
         for aProb in newProb:
+            # We have to check first if some/all of the critical points are excluded
+            for aCstr in aProb['cstr'][1:]:
+                thisPoly.coeffs = aCstr
+                idxOk = np.logical_and( idxOk, (thisPoly.eval2(zStarOld)>=0.).reshape((-1,)) )
+            # Get the value
             thisPoly.coeffs = aProb['obj']
-            isFeas.append( bool(nall( thisPoly.eval2(yStarOld)  > opts['numericEpsPos']) ) )
+            isFeas.append( bool(nall( thisPoly.eval2(zStarOld[:,idxOk])  > opts['numericEpsPos']) ) )
         
         if len(isFeas)==1:
             return isFeas[0]

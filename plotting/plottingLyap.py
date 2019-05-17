@@ -225,7 +225,7 @@ def plot2dProof(funnel:fn.distributedFunnel, t=0.0, opts={}):
     x0, dx0, uRef = funnel.dynSys.ctrlInput.refTraj.getX(t), funnel.dynSys.ctrlInput.refTraj.getDX(t), funnel.dynSys.ctrlInput.refTraj.getU(t)
 
     allDict = {}
-    for nSub, subProof in enumerate(subProofList):
+    for nSub, (subProof,_) in enumerate(subProofList):
         allDict[nSub] = {}
         thisDict = allDict[nSub]
         

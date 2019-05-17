@@ -24,6 +24,7 @@ if __name__ == "__main__":
     
     # Complicate the problem
     cplx = 2
+    shapeP = 1
 
     if cplx == 0:
         R = P = nidentity(2, dtype=nfloat)
@@ -41,6 +42,14 @@ if __name__ == "__main__":
         G[1,1] = 0.9
     else:
         raise NotImplementedError
+    
+    if shapeP == 0:
+        Ps = nidentity(2)
+        alpha = 0.8
+    elif shapeP == 1:
+        Ps = np.array([[1.1,0.05],[0.05, 0.95]], dtype=nfloat)
+        alpha = 0.8
+        
 
 
     
@@ -61,7 +70,7 @@ if __name__ == "__main__":
     
     myFunnel = distributedFunnel(pSys, lyapF, pSys.ctrlInput.refTraj, thisLyapEvol)
     
-    myFunnel.compute(0.0, 0.3, (nidentity(2), 0.8))
+    myFunnel.compute(0.0, 0.3, (Ps, alpha))
     
     plot.plot2dConv(myFunnel, 0.0)
     

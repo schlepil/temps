@@ -12,7 +12,13 @@ from multiprocessing.sharedctypes import RawArray as mpRawArray
 import queue
 import time
 
-import os
+import os, json, pickle
+
+mySerializer = variableStruct()
+mySerializer.dumps = lambda x: str(x)
+
+serializer = pickle
+serializer = mySerializer
 
 if useSharedMem_:
     import ctypes
@@ -35,6 +41,10 @@ problemDict_ = {}
 def probSetterShared_(problem: dict, probQueue: Queue, workerId: int):
     # First copy, then put into queue
     # Necessary
+    
+    if __debug__ and printProbNSol_:
+        print(f"Putting; \n {serializer.dumps(problem)}")
+    
     polyObjSharedNP_[workerId][:problem['obj'].size] = problem['obj']
     for k, aCstr in enumerate(problem['cstr']):
         polyCstrSharedNP_[workerId][k][:aCstr.size] = aCstr
@@ -51,6 +61,10 @@ def probSetterShared_(problem: dict, probQueue: Queue, workerId: int):
 
 def probSetterBare_(problem: dict, probQueue: Queue, workerId: int):
     # Put all into the queue
+    
+    if __debug__:
+        print(f"Putting; \n {serializer.dumps(problem)}")
+    
     problem['probDict']['workerId'] = workerId
     probQueue.put(problem)
     
@@ -63,17 +77,18 @@ else:
 
 
 def solGetter(solQueues: List[Queue], workerId: int = None, block=True, timeout=0.0001):
+    sol = None
     if workerId is None:
         if block:
-            while True:
+            while sol is None:
                 for aQueue in solQueues:
                     try:
-                        return aQueue.get(block=block, timeout=timeout)
+                        sol =  aQueue.get(block=block, timeout=timeout)
+                        break
                     except queue.Empty:
                         pass
                 time.sleep(0.0001)
         else:
-            sol = None
             for aQueue in solQueues:
                 if sol is not None:
                     break
@@ -87,7 +102,12 @@ def solGetter(solQueues: List[Queue], workerId: int = None, block=True, timeout=
                 return sol
     
     else:
-        return solQueues[workerId].get(block=block, timeout=timeout)
+        sol = solQueues[workerId].get(block=block, timeout=timeout)
+    
+    if __debug__ and printProbNSol_:
+        print(f"Recieving; \n {serializer.dumps(sol)}")
+    
+    return sol
 
 
 class workDistributor:
@@ -150,6 +170,10 @@ class workDistributor:
         
         self.waitingList.append(problem)
         self.spin()
+        
+        if __debug__ and printProbNSol_:
+            print(f"Appending: \n {serializer.dumps(problem)}")
+        
         return None
     
     def getSol(self, workerId=None, block=None, timeout=None):
@@ -182,6 +206,9 @@ class workDistributor:
         if self.doStoreOrig:
             sol['origProb'] = self.probStore_[sol['probDict']['probIdStore__']]
             del self.probStore_[sol['probDict']['probIdStore__']]
+        
+        if __debug__ and printProbNSol_:
+            print(f"Returning: \n {serializer.dumps(sol)}")
         
         return sol
 
@@ -233,6 +260,10 @@ class workDistributorNoThread:
             self.probStore_[id] = dp(problem)
         
         self.waitingList.append(problem)
+        
+        if __debug__ and printProbNSol_:
+            print(f"Appending: \n {serializer.dumps(problem)}")
+        
         return None
     
     def getSol(self, workerId=None, block=None, timeout=None):
@@ -247,6 +278,9 @@ class workDistributorNoThread:
         if self.doStoreOrig:
             sol['origProb'] = self.probStore_[sol['probDict']['probIdStore__']]
             del self.probStore_[sol['probDict']['probIdStore__']]
+        
+        if __debug__ and printProbNSol_:
+            print(f"Returning: \n {serializer.dumps(sol)}")
         
         return sol
 

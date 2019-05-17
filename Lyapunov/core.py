@@ -40,6 +40,9 @@ class LyapunovFunction():
     
     def getLyap(self, t):
         raise NotImplementedError
+    
+    def getZone(self,t):
+        raise NotImplementedError
 
     def plot(self, ax: "plot.plt.axes", t: float = 0.0, opts = {}):
         raise NotImplementedError
