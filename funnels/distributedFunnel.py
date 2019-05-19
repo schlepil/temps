@@ -158,7 +158,7 @@ class distributedFunnel:
                 probList = []
     
                 # 1.1 The linear control approximation
-                thisProbBase = {'probDict':{'nPt':-1, 'solver':self.opts['solver'], 'minDist':1., 'dimsNDeg':(self.dynSys.nq, self.repr.maxDeg),
+                thisProbBase = {'probDict':{'nPt':-1, 'solver':self.opts['solver'], 'minDist':1., 'scaleFacK':1., 'dimsNDeg':(self.dynSys.nq, self.repr.maxDeg),
                                 'nCstrNDegType':[]}, 'cstr':[]}
                 thisProbLin = dp(thisProbBase)
                 thisProbLin['probDict']['isTerminal']=-1 # Base case, non-convergence is "treatable" via critPoints

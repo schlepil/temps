@@ -37,11 +37,17 @@ class LyapunovFunction():
 
     def getObjectiveAsArray(self, fTaylor: np.ndarray = None, gTaylor: np.ndarray = None, taylorDeg: int = 3, u: np.ndarray = None, uMonom: np.ndarray = None, x0: np.ndarray = None, dx0: np.ndarray = None, t: float = 0., P=None, Pdot=None):
         raise NotImplementedError
+
+    def register(self, t, ShapenAlpha):
+        raise NotImplementedError
     
     def getLyap(self, t):
         raise NotImplementedError
     
     def getZone(self,t):
+        raise NotImplementedError
+
+    def getCtrlDict(self, t: float, fTaylorApprox = None, gTaylorApprox = None, returnZone = True, taylorDeg = None, maxCtrlDeg = 2, opts = {}):
         raise NotImplementedError
 
     def plot(self, ax: "plot.plt.axes", t: float = 0.0, opts = {}):

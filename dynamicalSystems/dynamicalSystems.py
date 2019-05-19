@@ -284,7 +284,7 @@ class secondOrderSys(dynamicalSystem):
         #Done
         return MifTaylor, MiGTaylor
     
-    def __call__(self, x:np.ndarray, u_:Union[np.ndarray,Callable], t:float=0., restrictInput:bool=True, mode:List[int]=[0,0], x0:np.ndarray=None, dx0:np.ndarray=None):
+    def __call__(self, x:np.ndarray, u:Union[np.ndarray,Callable], t:float=0., restrictInput:bool=True, mode:List[int]=[0,0], x0:np.ndarray=None, dx0:np.ndarray=None):
         """
         Evaluate dynamics for current position and control input
         :param x:
@@ -301,16 +301,16 @@ class secondOrderSys(dynamicalSystem):
             assert all([(aMode >= 0) and (aMode <=self.maxTaylorDeg) for aMode in mode ])
         
         # Check if u_ is Callable evaluate first
-        if hasattr(u_, "__call__"):
+        if hasattr(u, "__call__"):
             # General function used for optimized input later on
-            u = u_(x,t)
+            u = u(x,t)
         #elif u_.shape == (self.nu, self.nq):
         #    #This is actually a feedback matrix
         #    u = ndot(u_,x-x0)
         # Can no longer be supported to avoid ambiguity
         else:
             # Its an actual control input
-            u=u_
+            u=u
         
         if restrictInput:
             u = self.ctrlInput(u,t)
@@ -492,6 +492,9 @@ class polynomialSys(dynamicalSystem):
         
         self.taylorExp = variableStruct()
         # Add an array with the weighting coefficient of the Taylor expansion
+        
+        #TODO weighting coeffs wrong!!! -> multinomial coefficient!!!
+        
         self.taylorExp.weightingMonoms = []
         for k in range(self.maxTaylorDeg+1):
             self.taylorExp.weightingMonoms.extend(len(self.repr.listOfMonomialsPerDeg[k])*[1./float(factorial(k))])
@@ -571,7 +574,7 @@ class polynomialSys(dynamicalSystem):
 
 
 
-    def __call__(self, x: np.ndarray, u_: Union[np.ndarray, Callable], t: float = 0., restrictInput: bool = True, mode: List[int] = [0, 0], x0: np.ndarray = None, dx0: np.ndarray = None):
+    def __call__(self, x: np.ndarray, u: Union[np.ndarray, Callable], t: float = 0., restrictInput: bool = True, mode: List[int] = [0, 0], x0: np.ndarray = None, dx0: np.ndarray = None):
         """
         Evaluate dynamics for current position and control input
         :param x:
@@ -588,16 +591,16 @@ class polynomialSys(dynamicalSystem):
             assert all([(aMode >= 0) and (aMode <= self.maxTaylorDeg) for aMode in mode])
 
         # Check if u_ is Callable evaluate first
-        if hasattr(u_, "__call__"):
+        if hasattr(u, "__call__"):
             # General function used for optimized input later on
-            u = u_(x, t)
+            u = u(x, t)
         # elif u_.shape == (self.nu, self.nq):
         #    #This is actually a feedback matrix
         #    u = ndot(u_,x-x0)
         # Can no longer be supported to avoid ambiguity
         else:
             # Its an actual control input
-            u = u_
+            u = u
 
         if restrictInput:
             u = self.ctrlInput(u, t)

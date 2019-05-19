@@ -229,7 +229,12 @@ class boxInputCstrLFBG(boxInputCstr):
             assert ((P is None) and (PG0 is None)) or ((P is not None) and (PG0 is not None))
             assert np.all(idx<2) or (PG0 is not None)
             assert (alpha is None) or (alpha > 0.)
-            
+        
+        if alpha is not None:
+            P /= alpha
+        
+        Ci = inv(cholesky(P))
+        
         nq = 0 if PG0 is None else P.shape[0]
         
         #First column of uout is
@@ -255,9 +260,22 @@ class boxInputCstrLFBG(boxInputCstr):
                 if __debug__:
                     assert self.thisLimL[k,0] <= uRef[k,0] <= self.thisLimU[k,0]
                 uMaxAbsK = min(uRef[k,0]-self.thisLimL[k,0],self.thisLimU[k,0]-uRef[k,0])
-                ki = -PG0[:,[k]].T/norm(PG0[:,k],ord=2,axis=0)#normalise
+                #ki = -PG0[:,[k]].T/norm(PG0[:,k],ord=2,axis=0)#normalise
                 #scale such that uOut[k] never exceeds limits
-                ki *= uMaxAbsK*(mndot([ki,P,ki.T])/alpha)**.5
+                #ki *= uMaxAbsK*(mndot([ki,P,ki.T])/alpha)**.5
+                # The version above is wrong
+                # In fact we have to solve the following problem:
+                # max ki.x
+                # s.t x.T.P.x <= 1
+                # Pose y = C.x with P = C.T.C; Ci = inv(C)
+                # max ki.Ci.y
+                # s.t. y.T.y <= 1
+                # -> 2-Norm y is 1.
+                # -> maximum attained for y and (ki.Ci).T parallel
+                ki = -PG0[:,[k]].T/norm(PG0[:,k],ord=2,axis=0)#normalise
+                kTildeNorm = norm(ndot(ki, Ci), axis = 1)
+                ki *= uMaxAbsK/kTildeNorm
+                
                 uOut[k,0]=uRef[k,0]
                 uOut[[k],1:]=ki
         

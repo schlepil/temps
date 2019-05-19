@@ -18,7 +18,7 @@ mySerializer = variableStruct()
 mySerializer.dumps = lambda x: str(x)
 
 serializer = pickle
-serializer = mySerializer
+#serializer = mySerializer
 
 if useSharedMem_:
     import ctypes

@@ -465,7 +465,12 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 if __debug__:
                     print(f"RWInserting item")
                 # Keep ordering
-                ind = np.where(self.t_ > t)[0][0]
+                try:
+                    ind = np.where(self.t_ > t)[0][0]
+                except IndexError:
+                    # Larger than all occuring values
+                    ind = self.t_.size
+
                 self.t_ = np.hstack((self.t_[:ind], t, self.t_[ind:]))
                 self.P_ = np.vstack((self.P_[:ind,:,:], PnAlpha[0].reshape((1,self.P_.shape[1],self.P_.shape[2])), self.P_[ind:,:,:]))
                 self.alpha_ = np.hstack((self.alpha_[:ind], PnAlpha[1], self.alpha_[ind:]))
@@ -665,13 +670,41 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         return np.arccos(nsum(-(nmultiply(n,xdn)), axis=0, keepdims=kd))
 
     
-    def sphere2Ellip(self, x):
-        x = x.reshape((self.n, -1))
-        return ndot(self.Ci_, x)
+    def sphere2Ellip(self, t, x):
+        t = narray(t, dtype=nfloat, ndmin=1)
+        assert (t.size==1) or (t.size == x.shape[1])
+        
+        P = self.getPnPdot(t,False)
+        
+        if t.size == 1:
+            y = ndot(inv(cholesky(P)), x)
+        else:
+            y = np.empty_like(x)
+            for k in range(x.shape[1]):
+                y[:,[k]] = ndot(inv(cholesky(P[k,:,:])), x[:,[k]])
+        
+        return y
     
-    def ellip2Sphere(self, x):
-        x = x.reshape((self.n, -1))
-        return ndot(self.C_, x)
+    def ellip2Sphere(self, t, y):
+        t = narray(t, dtype=nfloat, ndmin=1)
+        assert (t.size == 1) or (t.size == y.shape[1])
+    
+        P = self.getPnPdot(t, False)
+    
+        if t.size == 1:
+            x = ndot(cholesky(P), y)
+        else:
+            x = np.empty_like(y)
+            for k in range(y.shape[1]):
+                x[:, [k]] = ndot(inv(cholesky(P[k, :, :])), y[:, [k]])
+    
+        return x
+    
+    def sphere2lvlSet(self, *args, **kwargs):
+        return self.sphere2Ellip(*args, **kwargs)
+    
+    def lvlSet2Sphere(self, *args, **kwargs):
+        return self.ellip2Sphere(*args, **kwargs)
     
     def lqrP(self, Q: np.ndarray, R: np.ndarray, x: np.ndarray = None, A: np.ndarray = None, B: np.ndarray = None, N: np.ndarray = None):
         """
@@ -1006,13 +1039,18 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                     # Large positive -> use minimal control input
                     thisCtrlType[i, 0] = -1
                     minDist = min(minDist, abs(iDist)) # Ensure that limiting sphere and control separation surface do not intersect
+                
+            # Any point within the separation sphere can at most have the distance 2*minDist to any of the
+            # separating hyperplanes;
+            # Therefore we can safely scale the linear feedback gain by min(1., 1./(2*minDist))
+            thisProb['probDict']["scaleFacK"] = max(1., 1./(2.*minDist))
             # Remember
             thisProb['probDict']['u'] = thisCtrlType.copy()
             thisProb['probDict']['minDist'] = minDist
             thisProb['probDict']['center'] = thisY.copy()
             
             # Rescale the control dict
-            ctrlDict = rescaleLinCtrlDict(ctrlDict, 1./probDict_['minDist'], True)
+            ctrlDict = rescaleLinCtrlDict(ctrlDict, thisProb['probDict']["scaleFacK"], True)
             
             # Now we have the necessary information and we can construct the actual problem
             thisCoeffs = ctrlDict[-1][0].copy()  # Objective resulting from system dynamics
@@ -1068,7 +1106,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         probList = []
         
         # Rescale
-        ctrlDict = rescaleLinCtrlDict(ctrlDict, 1./probDict_['minDist'], True)
+        ctrlDict = rescaleLinCtrlDict(ctrlDict, probDict_["scaleFacK"], True)
     
         #thisProbLin = thisSol['origProb'] # Replaced by all (suitable) combinations
         #probList.append(thisProbLin)
