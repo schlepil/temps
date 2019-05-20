@@ -129,10 +129,10 @@ def evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u,
 
     # Part one -> System dynamics
     # Compute z'*P*f*y
-    # z'*P*f*y = sum_j sum_i sum_l z_i*P[i,j]*f[j,l]*y[l]
+    # z'*P*f*y = sum_i sum_j z_i*P[i,j]*(sum_l f[j,l]*y[l]) = sum_i sum_j sum_l z_i*P[i,j]*f[j,l]*y[l]
     tmpValPij = 0.0  # "declare" before
-    for j in range(P.shape[0]):
-        for i, amz in enumerate(monomP):  # Enumerate is equally fast (maybe even faster) then looping + accessing
+    for i, amz in enumerate(monomP):  # Enumerate is equally fast (maybe even faster) then looping + accessing
+        for j in range(P.shape[1]):
             tmpValPij = P[i, j]  # Avoid repeated access
             if tmpValPij != 0.0:
                 for l, amy in enumerate(monomF):
@@ -144,29 +144,31 @@ def evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u,
     # y -> monomials of input dynamics
     # w -> monomials of control law
 
-    # Compute z'*P*g*y*u*w = sum_a sum_b P[b,a] sum_c sum_d g[c,a,d] (z[b]y[c]) sum_e u[d,e] w[e]
+    # Compute z'.P.(g.y).(u.w) The brackets can be skipped and are only for illustrations
+    # = sum_a z_a * ( sum_b P[a,b] *(sum_c (sum_d g[d,b,c]*y_d) * (sum_e u[c,e], w_c))
+    # = sum_a z_a * ( sum_b P[a,b] *(sum_c (sum_d (sum_e g[d,b,c]*y_d) * u[c,e], w_c))
     # a -> final inner prod
-    # b -> monom z monomP
-    # c -> monom y monomG
-    # d -> mat mul input dynamics
+    # b -> sum over row
+    # c -> mat mul input dynamics
+    # d -> monom y monomG
     # e -> monom w monomU
     tmpValPba = 0.0  # "declare" before
-    for a in range(P.shape[0]):
-        for b, amz in enumerate(monomP):
+    for a, amz in enumerate(monomP):
+        for b in range(P.shape[1]):
             tmpValPba = P[b, a]
             if tmpValPba == 0.0:
                 continue  # skip
-            for c, amy in enumerate(monomG):
-                for d in range(g.shape[2]):
-                    tmpValPbaGcad = tmpValPba * g[c, a, d]
-                    if tmpValPbaGcad == 0.0:
+            for c in range(g.shape[2]):
+                for d, amy in enumerate(monomG):
+                    tmpValPbaGdbc = tmpValPba * g[d, b, c]
+                    if tmpValPbaGdbc == 0.0:
                         continue  # skip
                     tmpVarNumXBYC = idxMat[amz, amy]
                     for e, amw in enumerate(monomU):
-                        tmpValUde = u[d, e]
-                        if tmpValUde == 0.0:
+                        tmpValUce = u[c, e]
+                        if tmpValUce == 0.0:
                             continue
-                        coeffsOut[1+d,idxMat[tmpVarNumXBYC, amw]] += (tmpValPbaGcad * tmpValUde) # TODO this causes a lot of jumping around in the array..
+                        coeffsOut[1+c,idxMat[tmpVarNumXBYC, amw]] += (tmpValPbaGdbc * tmpValUce) # TODO this causes a lot of jumping around in the array...
 
     # Part three
     # Contribution of reference velocity

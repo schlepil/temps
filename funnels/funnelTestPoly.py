@@ -212,6 +212,8 @@ def doTesting(funnel:distributedFunnel):
     aa[3].plot(convDynSysMixU, 'r')
     aa[3].plot(convCtrlDictMixU, '--b')
     
+    if not np.allclose(convDynSysZeroU, convCtrlDictZeroU):
+        print("Failed on zero U")
     
     if not np.allclose(convDynSysMinU, convCtrlDictMinU):
         print("Failed on min U")
@@ -220,7 +222,7 @@ def doTesting(funnel:distributedFunnel):
         print("Failed on max U")
     
     if not np.allclose(convDynSysMixU, convCtrlDictMixU):
-        print("Failed on mix U")
+        print("Failed on mix U") #todo
     
     return None
     
@@ -274,7 +276,7 @@ if __name__ == "__main__":
     
     # Set the interpolator
     #lyapF.interpolate = lyap.standardInterpolNoDeriv
-    lyapF.interpolate = lyap.standardInterpol
+    lyapF.interpolate = lyap.standardInterpolNoDeriv
     
     # evolving the Lyapunov function along the trajectory
     thisLyapEvol = lyap.noChangeLyap()
