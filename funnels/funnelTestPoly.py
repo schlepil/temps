@@ -49,7 +49,7 @@ def doTesting(funnel:distributedFunnel):
     
     # Taylor
     fTaylor, gTaylor = dynSys_.getTaylorApprox(x0)
-    
+
     # Get the control dict
     ctrlDict, zoneP = lyapFunc_.getCtrlDict(t, fTaylor, gTaylor, True)
     # Project to unit sphere
@@ -68,6 +68,9 @@ def doTesting(funnel:distributedFunnel):
     aa[1].axis('equal')
     
     xx,yy = plot.ax2Grid(aa[0],100)
+    xx *= 1.25
+    yy *= 1.25
+
     
     XX = np.vstack((xx.flatten(), yy.flatten()))
     ZZ = repr_.evalAllMonoms(XX)
@@ -78,7 +81,41 @@ def doTesting(funnel:distributedFunnel):
     # Project onto sphere
     dYY = lyapFunc_.ellip2Sphere(t, dXX)
     dZY = repr_.evalAllMonoms(dYY)
-    
+
+    # Check if the taylor approx is the same as the original for polynomials
+    idx2 = np.random.choice(np.arange(xx.shape[1]), 1)
+    idx3 = np.random.choice(np.arange(xx.shape[1]), 1)
+    fTaylor2, gTaylor2 = dynSys_.getTaylorApprox(XX[:,idx2])
+    dXX2 = XX-XX[:,idx2]
+    dZX2 = repr_.evalAllMonoms(dXX2)
+
+    fXX = np.transpose(dynSys_.fEval(XX), (2,1,0))[0,:,:]
+    # Test other
+    fXXCall = dynSys_(XX-XX[:, idx3], u=nzeros((dynSys_.nu, XX.shape[1])), restrictInput=False, mode=[3,3], x0=XX[:, idx3])
+    fXXtaylor1 = ndot(fTaylor, dZX[:fTaylor.shape[1],:])
+    fXXtaylor2 = ndot(fTaylor2, dZX2[:fTaylor2.shape[1],:])
+
+    GXX = dynSys_.gEval(XX)
+    GXXtaylor1 = neinsum("zij,zn->nij", gTaylor, dZX[:gTaylor.shape[0],:])
+    GXXtaylor2 = neinsum("zij,zn->nij", gTaylor2, dZX2[:gTaylor.shape[0],:])
+
+    if not np.allclose(fXX, fXXCall):
+        print(f"Prob in call ot dynSys")
+    if not np.allclose(fXX, fXXtaylor1):
+        print(f"f failed for taylor1 or dynSys")
+    if not np.allclose(fXX, fXXtaylor2):
+        print(f"f failed for taylor2 or dynSys")
+    if not np.allclose(GXX, GXXtaylor1):
+        print(f"G failed for taylor1 or dynSys")
+    if not np.allclose(GXX, GXXtaylor2):
+        print(f"G failed for taylor2 or dynSys")
+
+    fff,aaa = plot.plt.subplots(1,1)
+    lyapFunc_.plot(aaa, t, opts={'faceAlpha':0.})
+    aaa.axis('equal')
+    aaa.autoscale()
+    aaa.streamplot(xx,yy, fXXCall[0,:].reshape((100,100)), fXXCall[1,:].reshape((100,100)))
+
     # Check if
     # Control input does not exceed limits
     Vxx = lyapFunc_.evalV(dXX, t, kd=False)
@@ -119,6 +156,8 @@ def doTesting(funnel:distributedFunnel):
                 print(f"Ignore keys {i}-{type}")
     
     # Now compare the control dict convergence with the actual convergence
+    # No input
+    dxUzero = dynSys_(XX, u=np.zeros_like(uMin), restrictInput=False, mode=[3, 3], x0=x0, dx0=dx0)
     # Minimal input
     dxUmin = dynSys_(XX, u=uMin, restrictInput=False, mode=[3,3],x0=x0,dx0=dx0)
     # Maximal input
@@ -127,11 +166,16 @@ def doTesting(funnel:distributedFunnel):
     dxUmix = dynSys_(XX, u=np.vstack([uMin[0,:], Ulinx[1,:]]), restrictInput=False, mode=[3, 3], x0=x0, dx0=dx0)
     
     # Using dynSys
+    convDynSysZeroU = lyapFunc_.evalVd(dXX, dxUzero, t, False)
     convDynSysMinU = lyapFunc_.evalVd(dXX, dxUmin, t, False)
     convDynSysMaxU = lyapFunc_.evalVd(dXX, dxUmax, t, False)
     convDynSysMixU = lyapFunc_.evalVd(dXX, dxUmix, t, False)
     
     # Using ctrlDict
+    convCtrlDictZeroU = ctrlDict[-1][0].copy()
+    thisPoly0.coeffs = convCtrlDictZeroU
+    convCtrlDictZeroU = thisPoly0.eval2(dZX).reshape((-1,))
+
     convCtrlDictMinU = ctrlDict[-1][0].copy()
     convCtrlDictMinU += ctrlDict[0][-1]
     convCtrlDictMinU += ctrlDict[1][-1]
@@ -158,13 +202,15 @@ def doTesting(funnel:distributedFunnel):
     aa.plot(convCtrlDictMaxU, '--b')
     aa.plot(convCtrlDictMixU, '*-g')
 
-    ff, aa = plot.plt.subplots(3, 1)
-    aa[0].plot(convDynSysMinU, 'r')
-    aa[0].plot(convCtrlDictMinU, '--b')
-    aa[1].plot(convDynSysMaxU, 'r')
-    aa[1].plot(convCtrlDictMaxU, '--b')
-    aa[2].plot(convDynSysMixU, 'r')
-    aa[2].plot(convCtrlDictMixU, '--b')
+    ff, aa = plot.plt.subplots(4, 1)
+    aa[0].plot(convDynSysZeroU, 'r')
+    aa[0].plot(convCtrlDictZeroU, '--b')
+    aa[1].plot(convDynSysMinU, 'r')
+    aa[1].plot(convCtrlDictMinU, '--b')
+    aa[2].plot(convDynSysMaxU, 'r')
+    aa[2].plot(convCtrlDictMaxU, '--b')
+    aa[3].plot(convDynSysMixU, 'r')
+    aa[3].plot(convCtrlDictMixU, '--b')
     
     
     if not np.allclose(convDynSysMinU, convCtrlDictMinU):

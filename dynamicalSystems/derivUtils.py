@@ -6,6 +6,12 @@ from polynomial.utils_numba import getIdxAndParent
 
 from itertools import permutations, combinations
 
+from scipy.misc import factorial
+
+def getTaylorWeights(allMonom:List):
+    return 1./narray( [nprod(factorial(aMonom)) for aMonom in allMonom] , dtype=nfloat)
+
+
 def getInverseTaylorStrings(Mstr='M',Mistr='Mi',fstr='f',derivStrings=['x','y','z'], doCompile:bool=False):
     """
     Compute strings corresponding to the Taylor approximation of

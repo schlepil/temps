@@ -631,7 +631,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             allP = np.tile(allPd, (x.shape[1],1,1))
             allPd = np.tile(allPd, (x.shape[1],1,1))
         
-        Vd = neinsum("in,nij,jn->n", 2.*x, allP, xd) + neinsum("in,nij,jn->n", x, allPd, xd)
+        Vd = neinsum("in,nij,jn->n", 2.*x, allP, xd) + neinsum("in,nij,jn->n", x, allPd, x)
         
         if kd:
             Vd.resize((1,x.shape[1]))

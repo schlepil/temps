@@ -6,7 +6,7 @@ from polynomial.utils_numba import getIdxAndParent
 
 import string
 
-from dynamicalSystems.derivUtils import getInverseTaylorStrings, compParDerivs
+from dynamicalSystems.derivUtils import getInverseTaylorStrings, compParDerivs, getTaylorWeights
 
 class dynamicalSystem:
     
@@ -122,7 +122,6 @@ class secondOrderSys(dynamicalSystem):
         raise NotImplementedError
     
     def compPderivAndTaylor(self):
-        from math import factorial
         
         self.compPDerivF()
         self.compPDerivG()
@@ -133,10 +132,12 @@ class secondOrderSys(dynamicalSystem):
             derivStrings = string.ascii_lowercase[:self.maxTaylorDeg]
         self.inversionTaylor = variableStruct(**getInverseTaylorStrings('M','Mi','W',derivStrings))
         #Add an array with the weighting coefficient of the Taylor expansion
-        self.inversionTaylor.weightingMonoms = []
-        for k in range(self.maxTaylorDeg+1):
-            self.inversionTaylor.weightingMonoms.extend( len(self.repr.listOfMonomialsPerDeg[k])*[1./float(factorial(k))] )
-        self.inversionTaylor.weightingMonoms = narray(self.inversionTaylor.weightingMonoms, dtype=nfloat)
+        #self.inversionTaylor.weightingMonoms = []
+        #for k in range(self.maxTaylorDeg+1):
+        #    self.inversionTaylor.weightingMonoms.extend( len(self.repr.listOfMonomialsPerDeg[k])*[1./float(factorial(k))] )
+        #self.inversionTaylor.weightingMonoms = narray(self.inversionTaylor.weightingMonoms, dtype=nfloat)
+        # Weighting coeffs wrong
+        self.inversionTaylor.weightingMonoms = getTaylorWeights(self.repr.listOfMonomials[self.repr.varSlicesUpToDeg[self.maxTaylorDeg]]) #getTaylorWeights(self.repr.listOfMonomials)
         self.inversionTaylor.weightingMonoms3d = np.transpose(np.broadcast_to(self.inversionTaylor.weightingMonoms,(self.nu,self.nq,self.inversionTaylor.weightingMonoms.size)),(2,1,0))
 
         return None
@@ -493,12 +494,12 @@ class polynomialSys(dynamicalSystem):
         self.taylorExp = variableStruct()
         # Add an array with the weighting coefficient of the Taylor expansion
         
-        #TODO weighting coeffs wrong!!! -> multinomial coefficient!!!
-        
-        self.taylorExp.weightingMonoms = []
-        for k in range(self.maxTaylorDeg+1):
-            self.taylorExp.weightingMonoms.extend(len(self.repr.listOfMonomialsPerDeg[k])*[1./float(factorial(k))])
-        self.taylorExp.weightingMonoms = narray(self.taylorExp.weightingMonoms, dtype=nfloat)
+        #weighting coeffs wrong!!! -> multinomial coefficient!!!
+        #self.taylorExp.weightingMonoms = []
+        #for k in range(self.maxTaylorDeg+1):
+        #    self.taylorExp.weightingMonoms.extend(len(self.repr.listOfMonomialsPerDeg[k])*[1./float(factorial(k))])
+
+        self.taylorExp.weightingMonoms = getTaylorWeights(self.repr.listOfMonomials[self.repr.varSlicesUpToDeg[self.maxTaylorDeg]])
         self.taylorExp.weightingMonoms3d = np.transpose(np.broadcast_to(self.taylorExp.weightingMonoms, (self.nu, self.nq, self.taylorExp.weightingMonoms.size)), (2, 1, 0))
 
         return None
@@ -574,7 +575,8 @@ class polynomialSys(dynamicalSystem):
 
 
 
-    def __call__(self, x: np.ndarray, u: Union[np.ndarray, Callable], t: float = 0., restrictInput: bool = True, mode: List[int] = [0, 0], x0: np.ndarray = None, dx0: np.ndarray = None):
+    def __call__(self, x: np.ndarray, u: Union[np.ndarray, Callable], t: float = 0., restrictInput: bool = True, mode: List[int] = [0, 0],
+                 x0: np.ndarray = None, dx0: np.ndarray = None):
         """
         Evaluate dynamics for current position and control input
         :param x:
@@ -621,7 +623,7 @@ class polynomialSys(dynamicalSystem):
             # Partial derivs to evaluated Taylor
             z = self.repr.evalAllMonoms(x, mode[0])
             # multiply with weights
-            z *= self.taylorExp.weightingMonoms[:z.size].reshape((-1,1))
+            z *= self.taylorExp.weightingMonoms[:fPDeriv.shape[1]].reshape((-1,1))
             # (broadcast) multiply and sum up and contract
             f = ndot(fPDeriv, z)
 
@@ -644,7 +646,7 @@ class polynomialSys(dynamicalSystem):
             # Partial derivs to evaluated Taylor
             z = self.repr.evalAllMonoms(x, mode[1])
             # multiply with weights
-            z *= self.taylorExp.weightingMonoms[:z.size].reshape((-1,1))
+            z *= self.taylorExp.weightingMonoms[:GPDeriv.shape[0]].reshape((-1,1))
             # (broadcast) multiply and sum up and contract
             g = neinsum("kij,kn,jn->in", GPDeriv, z, u)  # ([nMonoms,nq,nu] . [nMonoms,nPt]) . (nu,nPt) -> [nq,nPt] Compute input
 

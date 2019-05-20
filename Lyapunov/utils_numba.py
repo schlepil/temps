@@ -102,8 +102,8 @@ def evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u,
     V = z'.P.z
     V = 2.*z'.P.dz + z'.Pdot.z
     where z is the vector of monomials stored in monomP
-    f and monomF have to store the derivatives of z (system dynamics)
-    g and monomG have to store the derivatives of z (input dynamics)
+    f and monomF have to store the derivatives of y (system dynamics)
+    g and monomG have to store the derivatives of y (input dynamics)
     u and monomU respresent the control law
     Pdot : Time-derivative of the Lyapunov region. If None: P != func(t)
     #Attention for efficiency, the monomials have to be given as the variable number
@@ -124,17 +124,19 @@ def evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u,
     :return:
     """
 
+    # Set to zero
+    coeffsOut[:,:] = 0.
+
     # Part one -> System dynamics
     # Compute z'*P*f*y
-    # z'*P*f*y = sum_j sum_i sum_l z_i*P[i,j]*A[j,l]*y[l]
+    # z'*P*f*y = sum_j sum_i sum_l z_i*P[i,j]*f[j,l]*y[l]
     tmpValPij = 0.0  # "declare" before
     for j in range(P.shape[0]):
         for i, amz in enumerate(monomP):  # Enumerate is equally fast (maybe even faster) then looping + accessing
             tmpValPij = P[i, j]  # Avoid repeated access
             if tmpValPij != 0.0:
                 for l, amy in enumerate(monomF):
-                    if f[j, l] != 0.0:
-                        coeffsOut[0,idxMat[amz, amy]] = tmpValPij * f[j, l]
+                    coeffsOut[0,idxMat[amz, amy]] += tmpValPij * f[j, l]
 
     # Part two
     # Compute z'*P*g*y*u*w

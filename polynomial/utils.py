@@ -227,6 +227,7 @@ class polynomialRepr():
         
         #self.varNumsUpToDeg = [np.hstack(self.varNumsPerDeg[:k]) for k in range(1,self.maxDeg+2)]
         self.varNumsUpToDeg = [ self.varNums[:nVars] for nVars in [sum([len(aV) for aV in self.varNumsPerDeg[:k]]) for k in range(1,self.maxDeg+2)] ]
+        self.varSlicesUpToDeg = [ slice(aVarNums[0], aVarNums[-1]+1, 1) for aVarNums in self.varNumsUpToDeg ]
 
         # Setup fast access.
         # Fastest (by far) method seems to be using standard dicts...
