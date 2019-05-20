@@ -163,12 +163,15 @@ def doTesting(funnel:distributedFunnel):
     # Maximal input
     dxUmax = dynSys_(XX, u=uMax, restrictInput=False, mode=[3,3],x0=x0,dx0=dx0)
     # Mixed [1,2]
+    dxUlin = dynSys_(XX, u=Ulinx, restrictInput=False, mode=[3, 3], x0=x0, dx0=dx0)
+    # Mixed [1,2]
     dxUmix = dynSys_(XX, u=np.vstack([uMin[0,:], Ulinx[1,:]]), restrictInput=False, mode=[3, 3], x0=x0, dx0=dx0)
     
     # Using dynSys
     convDynSysZeroU = lyapFunc_.evalVd(dXX, dxUzero, t, False)
     convDynSysMinU = lyapFunc_.evalVd(dXX, dxUmin, t, False)
     convDynSysMaxU = lyapFunc_.evalVd(dXX, dxUmax, t, False)
+    convDynSysLinU = lyapFunc_.evalVd(dXX, dxUlin, t, False)
     convDynSysMixU = lyapFunc_.evalVd(dXX, dxUmix, t, False)
     
     # Using ctrlDict
@@ -188,8 +191,14 @@ def doTesting(funnel:distributedFunnel):
     thisPoly0.coeffs = convCtrlDictMaxU
     convCtrlDictMaxU = thisPoly0.eval2(dZX).reshape((-1,))
 
+    convCtrlDictLinU = ctrlDict[-1][0].copy()
+    convCtrlDictLinU += ctrlDict[0][2]
+    convCtrlDictLinU += ctrlDict[1][2]
+    thisPoly0.coeffs = convCtrlDictLinU
+    convCtrlDictLinU = thisPoly0.eval2(dZX).reshape((-1,))
+
     convCtrlDictMixU = ctrlDict[-1][0].copy()
-    convCtrlDictMixU += ctrlDict[0][1]
+    convCtrlDictMixU += ctrlDict[0][-1]
     convCtrlDictMixU += ctrlDict[1][2]
     thisPoly0.coeffs = convCtrlDictMixU
     convCtrlDictMixU = thisPoly0.eval2(dZX).reshape((-1,))
@@ -202,15 +211,17 @@ def doTesting(funnel:distributedFunnel):
     aa.plot(convCtrlDictMaxU, '--b')
     aa.plot(convCtrlDictMixU, '*-g')
 
-    ff, aa = plot.plt.subplots(4, 1)
+    ff, aa = plot.plt.subplots(5, 1)
     aa[0].plot(convDynSysZeroU, 'r')
     aa[0].plot(convCtrlDictZeroU, '--b')
     aa[1].plot(convDynSysMinU, 'r')
     aa[1].plot(convCtrlDictMinU, '--b')
     aa[2].plot(convDynSysMaxU, 'r')
     aa[2].plot(convCtrlDictMaxU, '--b')
-    aa[3].plot(convDynSysMixU, 'r')
-    aa[3].plot(convCtrlDictMixU, '--b')
+    aa[3].plot(convDynSysLinU, 'r')
+    aa[3].plot(convCtrlDictLinU, '--b')
+    aa[4].plot(convDynSysMixU, 'r')
+    aa[4].plot(convCtrlDictMixU, '--b')
     
     if not np.allclose(convDynSysZeroU, convCtrlDictZeroU):
         print("Failed on zero U")
@@ -220,6 +231,9 @@ def doTesting(funnel:distributedFunnel):
     
     if not np.allclose(convDynSysMaxU, convCtrlDictMaxU):
         print("Failed on max U")
+    
+    if not np.allclose(convDynSysLinU, convCtrlDictLinU):
+        print("Failed on lin U") #todo
     
     if not np.allclose(convDynSysMixU, convCtrlDictMixU):
         print("Failed on mix U") #todo
