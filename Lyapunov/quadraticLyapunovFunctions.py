@@ -1015,8 +1015,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
             thisProb = dp(thisProbBase)
             thisProb['probDict']['nPt'] = len(critPoints)-1
-        
-            # TODO Copied from above, unify
+
             thisProb['probDict']['isTerminal'] = 0  # Convergence can be improved but only by increasing the computation load
             thisProb['strictSep'] = 0
         
@@ -1025,7 +1024,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             # Decide what to do for each critical point
             yPlaneDist = ndot(thisY.T, ctrlDict['PG0']).reshape((nu_,))
         
-            minDist =.9  # np.Inf
+            minDist =.9 # Has to be always strictly smaller than one otherwise linear control prob becomes infeasible  # np.Inf
         
             for i, iDist in enumerate(yPlaneDist):
                 if iDist < -opts['minDistToSep']:
@@ -1050,7 +1049,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             thisProb['probDict']['center'] = thisY.copy()
             
             # Rescale the control dict
-            ctrlDict = rescaleLinCtrlDict(ctrlDict, thisProb['probDict']["scaleFacK"], True)
+            ctrlDict = rescaleLinCtrlDict(ctrlDict, thisProb['probDict']["scaleFacK"], True) #Rescale a deepcopy'
             
             # Now we have the necessary information and we can construct the actual problem
             thisCoeffs = ctrlDict[-1][0].copy()  # Objective resulting from system dynamics
@@ -1078,14 +1077,18 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             # Here it can happen that the control law around the point is indeed unchanged
             # or that the control law is not able to stabilize to "old" minimizer
             # In these cases we can directly construct finer problems without reoptimizing
-            if self.checkProbFeasibility(thisSol, thisProb, opts):
-                probList.append(thisProb)
+            # TODO check if really works
+            if 0:
+                if self.checkProbFeasibility(thisSol, thisProb, opts):
+                    probList.append(thisProb)
+                else:
+                    probList.extend(self.analyzeSolSphereDiscreteCtrl(thisSol, ctrlDict, critPoints, opts))
+
+                # Exclude the sphere from linear prob
+                thisProbLin['probDict']['nCstrNDegType'].append((2, 's'))
+                thisProbLin['cstr'].append(-thisPoly.coeffs.copy())
             else:
-                probList.extend(self.analyzeSolSphereDiscreteCtrl(thisSol, ctrlDict, critPoints, opts))
-        
-            # Exclude the sphere from linear prob
-            thisProbLin['probDict']['nCstrNDegType'].append((2, 's'))
-            thisProbLin['cstr'].append(-thisPoly.coeffs.copy())
+                probList.append(thisProb)
         
             # Done for one point
     
@@ -1121,16 +1124,15 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             return []
     
         # Construct new problems
-        # TODO here we could use a "recursive" scheme that computes convergence within a sphere centered at the currently
-        # diverging point and exclude it from the rest -> Not compatible with current data-structure
         # Heuristic: Find an input combination that ensures convergence but minimizes the number of separations
-        # easier to work on 1d
+        # ensure correct input form (1d)
         probDict_['u'] = probDict_['u'].reshape((-1,))
-        uLinCurrent = np.flatnonzero(probDict_['u'] == 2)
+        uLinCurrent = np.flatnonzero(probDict_['u'] == 2) # The input indexes which can be "improved"
     
         # Distance to separating hyperplanes
         allYPlaneDist = [ndot(allY[:, [k]].T, ctrlDict['PG0']).reshape((nu_,)) for k in range(allY.shape[1])]
-        allYPlaneSign = [np.sign(a) for a in allYPlaneDist]
+        allYPlaneSign = [np.sign(a).astype(nint) for a in allYPlaneDist]
+
         # Distance to separating hypersurface
         allYSurfaceDist = [nzeros((nu_,), dtype=nfloat) for _ in range(allY.shape[1])]
         for k in range(allY.shape[1]):
@@ -1158,7 +1160,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             except:
                 if __debug__:
                     print(f"Unable to eval {aKey} with {aVal}")
-        # Compute convergence
+        # Compute convergence (OPtimal control input with respect to separating hypersurface)
         allRes = nzeros((allY.shape[1],), dtype=nfloat)
         for k in range(allY.shape[1]):
             thisRes = convDict[-1][0][k]

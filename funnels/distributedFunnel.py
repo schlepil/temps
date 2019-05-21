@@ -12,6 +12,8 @@ from trajectories import referenceTrajectory
 from polynomial import polynomialRepr, polynomial
 import relaxations as relax
 
+from funnels.testUtils import testSol
+
 class distributedFunnel:
 
     def __init__(self, dynSys:dynamicalSystem, lyapFunc:LyapunovFunction, traj:referenceTrajectory, evolveLyap:lyapEvol, opts={}):
@@ -437,6 +439,10 @@ class distributedFunnel:
             k, i, j = thisSol['probDict']['resPlacement']
             results[k][i][j] = dp(thisSol)
             resultsLin[thisSol['probDict']['resPlacementLin']] = thisSol['sol']['primal objective']
+
+            if __debug__:
+                testSol(thisSol, allCtrlDictsNzones[k][0])
+
             if thisSol['sol']['primal objective']>=self.opts['numericEpsPos']:
                 # Proves convergence for the sub region treated
                 pass

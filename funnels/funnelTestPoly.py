@@ -162,8 +162,9 @@ def doTesting(funnel:distributedFunnel):
     dxUmin = dynSys_(XX, u=uMin, restrictInput=False, mode=[3,3],x0=x0,dx0=dx0)
     # Maximal input
     dxUmax = dynSys_(XX, u=uMax, restrictInput=False, mode=[3,3],x0=x0,dx0=dx0)
-    # Mixed [1,2]
+    # Linear [2,2]
     dxUlin = dynSys_(XX, u=Ulinx, restrictInput=False, mode=[3, 3], x0=x0, dx0=dx0)
+    dxUlinlim = dynSys_(XX, u=Ulinx, restrictInput=True, mode=[3, 3], x0=x0, dx0=dx0)
     # Mixed [1,2]
     dxUmix = dynSys_(XX, u=np.vstack([uMin[0,:], Ulinx[1,:]]), restrictInput=False, mode=[3, 3], x0=x0, dx0=dx0)
     
@@ -172,6 +173,7 @@ def doTesting(funnel:distributedFunnel):
     convDynSysMinU = lyapFunc_.evalVd(dXX, dxUmin, t, False)
     convDynSysMaxU = lyapFunc_.evalVd(dXX, dxUmax, t, False)
     convDynSysLinU = lyapFunc_.evalVd(dXX, dxUlin, t, False)
+    convDynSysLinLimU = lyapFunc_.evalVd(dXX, dxUlinlim, t, False)
     convDynSysMixU = lyapFunc_.evalVd(dXX, dxUmix, t, False)
     
     # Using ctrlDict
@@ -220,6 +222,7 @@ def doTesting(funnel:distributedFunnel):
     aa[2].plot(convCtrlDictMaxU, '--b')
     aa[3].plot(convDynSysLinU, 'r')
     aa[3].plot(convCtrlDictLinU, '--b')
+    aa[3].plot(convDynSysLinLimU, '-.g')
     aa[4].plot(convDynSysMixU, 'r')
     aa[4].plot(convCtrlDictMixU, '--b')
     
@@ -298,7 +301,9 @@ if __name__ == "__main__":
     myFunnel = distributedFunnel(pSys, lyapF, pSys.ctrlInput.refTraj, thisLyapEvol)
     
     doTesting(myFunnel)
-    
+
+    plot.plt.show()
+
     myFunnel.compute(0.0, 0.3, (Ps, alpha))
     
     plot.plot2dConv(myFunnel, 0.0)
