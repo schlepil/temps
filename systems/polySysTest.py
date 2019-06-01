@@ -11,7 +11,7 @@ nu_ = None
 def getUlims():
     return nu_*[limL_],nu_*[limU_]
 
-def getSys(repr: polynomialRepr, P=None, G=None, f0=None):
+def getSys(repr: polynomialRepr, P=None, G=None, f0=None, randomize=None):
     
     global nu_
     
@@ -52,6 +52,15 @@ def getSys(repr: polynomialRepr, P=None, G=None, f0=None):
             for j in range(gCoeffs.shape[2]):
                 gCoeffs[:,i,j] = repr.doLinCoordChange(gCoeffs[:,i,j].copy(), Ci)
     
+    
+    # Randomize:
+    if randomize is not None:
+        nVarsRand = len(repr.varNumsUpToDeg[randomize[0]])
+        fCoeffs[:,:nVarsRand] += randomize[1]*(np.random.rand(nDim, nVarsRand)-.5)
+        nVarsRand = len(repr.varNumsUpToDeg[randomize[2]])
+        gCoeffs[:nVarsRand,:,:] += randomize[3]*(np.random.rand(nVarsRand, nDim, gCoeffs.shape[2])-.5)
+    
+    
     qS = sy.symbols(f"q:{nDim}")
     qM =sy.Matrix(nzeros((nDim,1)))
     for i in range(nDim):
@@ -67,14 +76,14 @@ def getSys(repr: polynomialRepr, P=None, G=None, f0=None):
     return pSys
 
 
-def getSysStablePos(nDims:int, deg:int, P=None, G=None):
+def getSysStablePos(nDims:int, deg:int, P=None, G=None, f0=None, randomize=None):
     import polynomial as poly
     import trajectories as traj
 
     repr = poly.polynomialRepr(nDims, deg)
 
     # Get the dynamical system
-    pSys = getSys(repr, P, G)
+    pSys = getSys(repr, P, G, f0=f0, randomize=randomize)
 
     # Get the trajectory
     xTraj = lambda t: nzeros((nDims,1), dtype=nfloat)

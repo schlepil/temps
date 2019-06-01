@@ -180,6 +180,29 @@ class polynomial():
         self._coeffs = quadraticForm_Numba(Q,qMonoms, h, hMonoms, self.repr.idxMat, np.zeros((self.repr.nMonoms,), dtype=nfloat))
         self.maxDeg = self.getMaxDegree()
         return None
+
+    def setEllipsoidalConstraint(self, center:np.ndarray, radius:float, P=None):
+        """
+        # get the ellipsoid
+        # Polynomial constrained are defined as being valid of larger then zero : p(x)>=0.
+        # (x-center).T.P.(x-center) <= radius**2
+        # center.T.P.center - 2*center.T.P.x + x.T.P.x - radius**2 <= 0
+        # center.T.(-P).center + 2*center.T.P.x - x.T.P.x + radius**2 >= 0
+        :param center:
+        :param radius:
+        :param P:
+        :return:
+        """
+        self._coeffs.flags['WRITEABLE'] = True
+        self._coeffs[:] = 0.
+    
+        P = nidentity(center.size, dtype=nfloat) if P is None else P
+        
+        self.setQuadraticForm(-P, self.repr.varNumsPerDeg[1], 2.*ndot(center.T, P).squeeze(), self.repr.varNumsPerDeg[1])
+        self._coeffs[0] += (mndot([center.T, -P, center])+radius**2)
+        self._coeffs.flags['WRITEABLE'] = False
+        return None
+        
     
     def eval(self, x:np.array):
         if not self._isUpdate:

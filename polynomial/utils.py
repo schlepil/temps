@@ -341,10 +341,6 @@ class polynomialRepr():
             assert maxDeg <= self.maxDeg
             nMonoms_ = sum([len(a) for a in self.varNumsPerDeg[:maxDeg+1]])
             return evalMonomsNumba(x, self.varNum2varNumParents[:nMonoms_,:])
-        
-        
-        
-        
             
         
     

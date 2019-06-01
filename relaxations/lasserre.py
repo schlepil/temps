@@ -142,7 +142,7 @@ class lasserreRelax:
         
         res = nempty((z.shape[1],), dtype=nbool)
         
-        #Compute the smallest eigenvalue and check if positive (up to some tolerance
+        #Compute the smallest eigenvalue and check if positive (up to some tolerance)
         for i in range(z.shape[1]):
             # Attention, inverse sign for consistency
             res[i] = eigh(-self.evalCstr(z[:,[i]]), eigvals_only=True, eigvals=(0,0), check_finite=False)>atol
@@ -180,7 +180,15 @@ class lasserreConstraint(constraint):
         self.num2monom = self.baseRelax.repr.num2monom
 
         self.precompute()
-
+    
+    @property
+    def coeffs(self):
+        return self.poly.coeffs
+    
+    @coeffs.setter
+    def coeffs(self, new_coeffs):
+        self.poly.coeffs = new_coeffs
+        return None
 
     def precompute(self):
 

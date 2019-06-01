@@ -14,6 +14,9 @@ class constraint:
     def isValid(self, z: np.ndarray, atol=-1e-6):
         # Checks if constraint is verified for a certain points
         raise NotImplementedError
+    
+    def coeffs(self, *args, **kwargs):
+        raise NotImplementedError
 
 class linearConstraint(constraint):
     def __init__(self,Gl,hl):

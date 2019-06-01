@@ -3,6 +3,8 @@ from Lyapunov.utils_numba import *
 
 from control import lqr
 
+
+
 import plotting as plot
 
 
@@ -981,9 +983,10 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         allY = thisSol['ySol']
     
         # Test if any of the points is infeasible relying on optimal control
+        PG0n = ctrlDict['PG0']/(norm(ctrlDict['PG0'], axis=0, keepdims=True)+floatEps)
         for k in range(allY.shape[1]):
             thisY = allY[:, [k]]
-            yPlaneDist = ndot(thisY.T, ctrlDict['PG0']).reshape((nu_,))
+            yPlaneDist = ndot(thisY.T, PG0n).reshape((nu_,))
             yPlaneSign = np.sign(yPlaneDist)
             yPlaneSign[yPlaneSign == 0] = 1
             yPlaneSign = np.require(yPlaneSign, dtype=nint)
@@ -1022,7 +1025,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             thisCtrlType = nzeros((nu_, 1), dtype=nint)  # [None for _ in range(nu_, 1)]
         
             # Decide what to do for each critical point
-            yPlaneDist = ndot(thisY.T, ctrlDict['PG0']).reshape((nu_,))
+            yPlaneDist = ndot(thisY.T, PG0n).reshape((nu_,))
         
             minDist =.9 # Has to be always strictly smaller than one otherwise linear control prob becomes infeasible  # np.Inf
         
@@ -1061,17 +1064,14 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                     thisProb[f"obj_{i},{type}"] = ctrlDict[i][type].copy()
                     
             thisProb['obj'] = -thisCoeffs  # Inverse sign to maximize divergence <-> minimize convergence
+            
             # get the sphere
-            # (y-thisY).T.P.(y-thisY)<=mindDist**2
-            # thisY.T.P.thisY - 2*thisY.T.P.y + y.T.P.y - minDist**2 <= 0
-            # thisY.T.(-P).thisY + 2*thisY.T.P.y + y.T.(-P).y + minDist**2 >= 0
-            # with P = Id
-            thisPoly.setQuadraticForm(-nidentity((nq_), dtype=nfloat), self.repr.varNumsPerDeg[1], 2.*thisY.squeeze(), self.repr.varNumsPerDeg[1])  # Attention sign!
-            thisPoly.coeffs[0] +=( minDist**2+mndot([thisY.T, -nidentity((nq_), dtype=nfloat), thisY]))
+            thisPoly.setEllipsoidalConstraint(thisY, minDist)
         
             # Confine the current problem to the sphere
             thisProb['probDict']['nCstrNDegType'].append((2, 's'))
             thisProb['cstr'].append(thisPoly.coeffs.copy())
+            
             
             # Add
             # Here it can happen that the control law around the point is indeed unchanged
@@ -1083,11 +1083,14 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                     probList.append(thisProb)
                 else:
                     probList.extend(self.analyzeSolSphereDiscreteCtrl(thisSol, ctrlDict, critPoints, opts))
-
-                # Exclude the sphere from linear prob
+                # Exclude the sphere from linear control prob
                 thisProbLin['probDict']['nCstrNDegType'].append((2, 's'))
                 thisProbLin['cstr'].append(-thisPoly.coeffs.copy())
             else:
+                # Exclude the sphere from linear control prob
+                thisProbLin['probDict']['nCstrNDegType'].append((2, 's'))
+                thisProbLin['cstr'].append(-thisPoly.coeffs.copy())
+                # Append the new problem
                 probList.append(thisProb)
         
             # Done for one point
@@ -1126,11 +1129,12 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         # Construct new problems
         # Heuristic: Find an input combination that ensures convergence but minimizes the number of separations
         # ensure correct input form (1d)
+        PG0n = ctrlDict['PG0']/(norm(ctrlDict['PG0'], axis=0, keepdims=True)+floatEps)
         probDict_['u'] = probDict_['u'].reshape((-1,))
         uLinCurrent = np.flatnonzero(probDict_['u'] == 2) # The input indexes which can be "improved"
     
         # Distance to separating hyperplanes
-        allYPlaneDist = [ndot(allY[:, [k]].T, ctrlDict['PG0']).reshape((nu_,)) for k in range(allY.shape[1])]
+        allYPlaneDist = [ndot(allY[:, [k]].T, PG0n).reshape((nu_,)) for k in range(allY.shape[1])]
         allYPlaneSign = [np.sign(a).astype(nint) for a in allYPlaneDist]
 
         # Distance to separating hypersurface

@@ -138,7 +138,7 @@ class convexProg():
                 
             assert abs(atol) < 1e-1
             if __debug__:
-                print("Found valid solution for atol : {atol}")
+                print(f"Found valid solution for atol : {atol}")
             
             return xSol, None, (None, None, None)
         else:
@@ -158,7 +158,14 @@ class convexProg():
             #U, monomBase = sy.Matrix(V.T).rref()# <- This is shit; U, monomBase = sy.Matrix(V.T).rref(simplify=True, iszerofunc=lambda x:x**2<1e-20) #is correct but slow
             #U = narray(U, dtype=nfloat).T
             cond_ = (v2[0]/v2[-1])
-            Ue, varMonomBase = robustRREF(V.T, cond_/10., tol0_=1e-9, fullOut=False) #"Exact" rref
+            
+            try:
+                Ue, varMonomBase = robustRREF(V.T, cond_/10., tol0_=1e-8, fullOut=False) #"Exact" rref
+            except RuntimeError:
+                try:
+                    Ue, varMonomBase = robustRREF(V.T, cond_/100., tol0_=1e-8, fullOut=False)  # "Exact" rref
+                except RuntimeError:
+                    Ue, varMonomBase = robustRREF(V.T, cond_/500., tol0_=1e-7, fullOut=False)  # "Exact" rref
             Ue = Ue.T.copy()
 
             varMonomBase = narray(varMonomBase, dtype=nintu).reshape((-1,))
@@ -280,7 +287,7 @@ class convexProg():
                     atol *= 2.
                     isValid[:] = True
             if __debug__:
-                print("Found valid solution for atol : {atol}")
+                print(f"Found valid solution for atol : {atol}")
             
             #Only return valid ones
             xSol = xSol[:, isValid]

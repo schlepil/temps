@@ -20,6 +20,48 @@ from funnels import *
 
 #from parallelChecker import probSetter, solGetter, probQueues, solQueues
 
+def test2(funnel:distributedFunnel):
+    import plotting as plot
+    import relaxations as relax
+    
+    Ngrid = 100
+    
+    repr_ = funnel.dynSys.repr
+
+    relLasserre = relax.lasserreRelax(repr_)
+    thisPoly = polynomial(repr_)
+    
+    center = 2.*(np.random.rand(2,1)-.5)
+    P = 1.5*(np.random.rand(2,2)-.5)
+    P = ndot(P.T, P) +.5*nidentity(2)
+    
+    thisPoly.setEllipsoidalConstraint(center, 1., P)
+    
+    lass_cstr = relax.lasserreConstraint(relLasserre, thisPoly)
+    
+    ff,aa = plot.plt.subplots(1,1)
+    plot.plotEllipse(aa, center, P, 1., faceAlpha=0.)
+    
+    aa.autoscale()
+    aa.axis('equal')
+    
+    xx,yy,XX = plot.ax2Grid(aa,Ngrid,True)
+    
+    z = lass_cstr.poly.eval2(XX).reshape((Ngrid,Ngrid))
+    
+    aa.contour(xx,yy,z,[-0.1, 0., 0.01])
+    
+    is_valid = lass_cstr.isValid(XX, simpleEval=False)
+    is_n_valid = np.logical_not(is_valid)
+    
+    aa.plot(XX[0,is_valid], XX[1,is_valid], '.g')
+    aa.plot(XX[0,is_n_valid], XX[1,is_n_valid], '.r')
+    
+    aa.plot(center[0,:], center[1,:], 'sk')
+    
+    return None
+    
+
 def doTesting(funnel:distributedFunnel):
     import plotting as plot
     import relaxations as relax
@@ -250,7 +292,9 @@ if __name__ == "__main__":
     # Complicate the problem
     cplx = 2
     shapeP = 2
-
+    
+    randomize = None
+    
     if cplx == 0:
         R = P = nidentity(2, dtype=nfloat)
         G = narray([[0.],[1.]], dtype=nfloat)
@@ -265,6 +309,14 @@ if __name__ == "__main__":
         G[0,1] = 1.
         G[1,0] = 0.6
         G[1,1] = 0.9
+    elif cplx == 3:
+        R = plot.Rot(45./180*np.pi)
+        P = mndot([R.T, narray([[2, 0], [0, 1]], dtype=nfloat), R])
+        G = nzeros((2, 2), dtype=nfloat)
+        G[0, 1] = 1.
+        G[1, 0] = 0.6
+        G[1, 1] = 0.9
+        randomize=[2,0.1,2,.05]
     else:
         raise NotImplementedError
     
@@ -285,7 +337,7 @@ if __name__ == "__main__":
     
     # Get the polynomial representation which also decides on the maximal relaxation
     # Let use full here
-    pSys = getSysStablePos(2,6,P=P,G=G)
+    pSys = getSysStablePos(2,8,P=P,G=G, randomize=randomize)
     
     thisRepr = pSys.repr  # Todo debug digits. there is an error somewhere
 
@@ -293,22 +345,24 @@ if __name__ == "__main__":
     
     # Set the interpolator
     #lyapF.interpolate = lyap.standardInterpolNoDeriv
-    lyapF.interpolate = lyap.standardInterpolNoDeriv
+    lyapF.interpolate = lyap.standardInterpol
     
     # evolving the Lyapunov function along the trajectory
     thisLyapEvol = lyap.noChangeLyap()
     
     myFunnel = distributedFunnel(pSys, lyapF, pSys.ctrlInput.refTraj, thisLyapEvol)
     
-    doTesting(myFunnel)
-
-    plot.plt.show()
+    #doTesting(myFunnel) # seems ok
+    #test2(myFunnel)
+    #plot.plt.show()
 
     myFunnel.compute(0.0, 0.3, (Ps, alpha))
     
     plot.plot2dConv(myFunnel, 0.0)
-    
     plot.plot2dProof(myFunnel, 0.0)
+
+    plot.plot2dConv(myFunnel, 0.11)
+    plot.plot2dProof(myFunnel, 0.11)
     
     distributor.terminate()
     

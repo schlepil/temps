@@ -16,6 +16,7 @@ import os, json, pickle
 
 mySerializer = variableStruct()
 mySerializer.dumps = lambda x: str(x)
+#mySerializer.dumps = lambda x: ""
 
 serializer = pickle
 #serializer = mySerializer
@@ -234,6 +235,11 @@ class workDistributorNoThread:
         
         if self.doStoreOrig:
             self.probStore_ = {}
+            
+        while not self.solQ[0].empty():
+            self.solQ.get()
+        while not self.probQ[0].empty():
+            self.probQ.get()
         
         return None
     
@@ -425,6 +431,7 @@ def workerSolve(inQueue, outQueue):
 
         # Actually solve
         solution = thisProb.solve()
+        
         if doThreading_:
             if not solution['status'] == 'optimal':
                 if useSharedMem_:
@@ -444,15 +451,44 @@ def workerSolve(inQueue, outQueue):
             extraction = thisProb.extractOptSol(solution)
         except:
             print('a')
+            extraction = thisProb.extractOptSol(solution)
 
         if ('toUnitCircle' in input.keys()) and (input['toUnitCircle']):
             # Add the unscaled solution
             ySol = ndot(C, extraction[0])
-
         else:
             ySol = extraction[0]
         
+        
         if __debug__:
+            xSol = extraction[0]
+            if xSol is None:
+                print("What the hell")
+                import plotting as plot
+                ff, aa = plot.plt.subplots(1, 1)
+                extraction = thisProb.extractOptSol(solution)
+                aa.set_xlim(-2, 2)
+                aa.set_ylim(-2, 2)
+                xx, yy, XX = plot.ax2Grid(aa, 100, True)
+                ZZ = thisRepr.evalAllMonoms(XX)
+                thisPoly = poly.polynomial(thisRepr)
+                for acstr in inputAll['cstr']:
+                    thisPoly.coeffs = acstr
+                    z = thisPoly.eval2(ZZ).reshape((100,100))
+                    aa.contour(xx,yy,z, levels=[-0.1, 0., 0.01])
+                
+            zSol = thisRepr.evalAllMonoms(xSol)
+            for k, (acstr_coeffs, acstr) in enumerate(zip(inputAll['cstr'], thisProb.constraints.s.cstrList)):
+                is_valid = acstr.isValid(zSol)
+                if not nall(is_valid):
+                    raise RuntimeError
+                try:
+                    cstr_val = acstr.poly.eval2(xSol)
+                    if nany(cstr_val<-1.e-6):
+                        raise RuntimeError
+                except AttributeError:
+                    pass
+                
             if solution['primal objective'] < -1.e-6:
                 print(f"Found critical point with {solution['primal objective']} at \n {ySol}")
             print(f"Optimal value is ")

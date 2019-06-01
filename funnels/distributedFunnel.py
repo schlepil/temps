@@ -146,7 +146,7 @@ class distributedFunnel:
         nu_ = self.dynSys.nu
         nq_ = self.dynSys.nq
         
-    
+        # TODO: Put this in the corresponding Lyapunov function, not here
         if isinstance(self.lyapFunc, Lyapunov.lyapunovFunctions):
             
             if self.opts['sphereBoundCritPoint']:
@@ -175,13 +175,16 @@ class distributedFunnel:
                 thisProbLin['obj'] = -thisCoeffs # Inverse sign to maximize divergence <-> minimize convergence
                 # 1.2 Construct the constraints
                 # 1.2.1 Confine to hypersphere
-                thisPoly.setQuadraticForm(-nidentity((nq_), dtype=nfloat), self.repr.varNumsPerDeg[1]) # Attention sign!
-                thisPoly.coeffs[0] = 1.
+                #thisPoly.setQuadraticForm(-nidentity((nq_), dtype=nfloat), self.repr.varNumsPerDeg[1]) # Attention sign!
+                #thisPoly.coeffs[0] = 1.
+                thisPoly.setEllipsoidalConstraint(nzeros((2,1), dtype=nfloat), 1.)
                 thisProbLin['probDict']['nCstrNDegType'].append( (2,'s') )
                 thisProbLin['cstr'].append( thisPoly.coeffs )
                 
                 #Set information
                 thisProbLin['probDict']['u'] = 2*nones((nu_,), dtype=nint)
+
+                PG0n = ctrlDict['PG0']/(norm(ctrlDict['PG0'],axis=0,keepdims=True)+floatEps)
                 
                 # Now loop through the critical points
                 for nPt, aCritPoint in enumerate(critPList):
@@ -189,7 +192,7 @@ class distributedFunnel:
                     thisY = aCritPoint['y']  # transformed coords of the point
                     # get the distance to all hyperplanes
                     # TODO check sign of PG0 with respect to sign of objectives
-                    yPlaneDist = ndot(thisY.T, ctrlDict['PG0']).reshape((nu_,))
+                    yPlaneDist = ndot(thisY.T, PG0n).reshape((nu_,))
     
                     if aCritPoint['strictSep'] == 0:
                         # Use the linear approximator to avoid splitting up
@@ -230,12 +233,7 @@ class distributedFunnel:
                                 thisCoeffs += ctrlDict[i][type]
                         thisProb['obj'] = -thisCoeffs # Inverse sign to maximize divergence <-> minimize convergence
                         # get the sphere
-                        # (y-thisY).T.P.(y-thisY)<=mindDist**2
-                        # thisY.T.P.thisY - 2*thisY.T.P.y + y.T.P.y - minDist**2 <= 0
-                        # thisY.T.(-P).thisY + 2*thisY.T.P.y + y.T.(-P).y + minDist**2 >= 0
-                        # with P = Id
-                        thisPoly.setQuadraticForm(-nidentity((nq_), dtype=nfloat), self.repr.varNumsPerDeg[1], 2.*thisY.squeeze(), self.repr.varNumsPerDeg[1])  # Attention sign!
-                        thisPoly.coeffs[0] += minDist**2 + mndot([thisY.T, -nidentity((nq_), dtype=nfloat), thisY])
+                        thisPoly.setEllipsoidalConstraint(thisY, minDist)
 
                         # Confine the current problem to the sphere
                         thisProb['probDict']['nCstrNDegType'].append((2, 's'))
@@ -441,6 +439,7 @@ class distributedFunnel:
             resultsLin[thisSol['probDict']['resPlacementLin']] = thisSol['sol']['primal objective']
 
             if __debug__:
+                print(f"Checking result for {[k,i,j]}")
                 testSol(thisSol, allCtrlDictsNzones[k][0])
 
             if thisSol['sol']['primal objective']>=self.opts['numericEpsPos']:
@@ -525,6 +524,10 @@ class distributedFunnel:
 
         # Back propagate
         while tC > tStart:
+            if __debug__:
+                print(f"\nAt {tC}\n")
+            
+            
             tC, nextZoneGuess = self.evolveLyap(tC, self.opts['optsEvol']['tDeltaMax'], lyapFunc_.getLyap(tC))
             tSteps = np.linspace(tL, tC, self.opts['interSteps'])
 
@@ -573,6 +576,10 @@ class distributedFunnel:
             while (alphaU-alphaL)>self.opts['convLim']*alphaL:
                 alpha = (alphaL+alphaU)/2.
                 lyapFunc_.setAlpha(alpha, 0)
+                
+                if __debug__:
+                    print(f"Bisection at {alphaL}, {alpha}, {alphaU}")
+                
                 # TODO propagate crit points
                 # TODO I'm serious here
                 if self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
