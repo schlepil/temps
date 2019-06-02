@@ -171,6 +171,23 @@ def List2Str(nDims, maxDeg, digits, monom2num, num2monom, linChangeDict, A='A', 
 
 
 
+
+def get_max_degree(dims:int, coeffs:Union[int, np.ndarray], atol:float=0.)->int:
+    try:
+        last_non_zero_nr = np.flatnonzero( nabs(coeffs) > atol )[-1]+1 if isinstance(coeffs, np.ndarray) else coeffs
+    except IndexError:
+        # All elements are zero
+        last_non_zero_nr = 0
+    
+    deg = 0
+    
+    while binom(dims+deg, dims) < last_non_zero_nr:
+        deg += 1
+    
+    return deg
+
+
+
 class polynomialRepr():
     def __init__(self, nDims:int=None, maxDegree:int=None, nbrVar0:int=0, file:str=None, digits:int=1, emptyClass:bool=False):
         

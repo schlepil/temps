@@ -34,6 +34,12 @@ class polynomial():
     def __deepcopy__(self, memodict={}):
         return polynomial(dp(self.repr, memodict), np.copy(self._coeffs), cp(self._alwaysFull))
     
+    def unlock(self):
+        self._coeffs.setflags(write=True)
+
+    def lock(self):
+        self._coeffs.setflags(write=False)
+    
     @property
     def coeffs(self):
         return self._coeffs

@@ -45,6 +45,14 @@ from scipy.linalg import expm, logm, ldl
 from scipy.linalg import norm
 from scipy.linalg import solve as ssolve
 
+from scipy.special import binom as binomF
+
+def binom(n,k):
+    assert n == int(n)
+    assert k == int(k)
+    
+    return int(binom(int(n),int(k)))
+
 from typing import List, Tuple, Callable, Union, Iterable
 
 from copy import deepcopy as dp

@@ -294,7 +294,62 @@ class workDistributorNoThread:
 # {'dimsNDeg':(nDims,nDeg)
 # {'nCstrNDegType':(nCstr,deg0,deg1,...)
 
-def workerSolve(inQueue, outQueue):
+
+def do_fill_solve(a_prob:rel.convexProg, input:dict):
+    
+    # Ensure the consistency of the used degrees
+    deg_prob = a_prob.repr.maxDeg
+    if not useSharedMem_:
+        assert a_prob.repr.nMonoms <= input['obj'].size
+        deg_input = [ var_uptodeg_a.size for var_uptodeg_a in a_prob.repr.varNumsUpToDeg ].index(input['obj'].size)
+    else:
+        deg_input = deg_prob
+    
+    # pregenerate the slices
+    slice_in = slice(0, len(a_prob.repr.varNumsUpToDeg[min(deg_input, deg_prob)]))
+    slice_prob = slice(0, len(a_prob.repr.varNumsUpToDeg[min(deg_input, deg_prob)]))
+    
+    # Fill
+    if useSharedMem_:
+        raise NotImplementedError
+    else:
+        # input corresponds to input all
+
+        probDict = input['probDict']
+        
+        # In order to be safe, no matter the input and problem degrees, always set zero first
+        # objective
+        # TODO check if it would not be better to always allow for modifications
+        a_prob.objective.unlock()
+        a_prob.objective.coeffs.fill(0.)
+        a_prob.objective.coeffs[slice_prob] = input['obj'][slice_in]
+        
+        #constraints
+        counters = {'l':0, 'q':0, 's':1 }
+        for k, (nDeg, cstrType) in enumerate(probDict['nCstrNDegType']):
+            assert cstrType in counters.keys()
+            if cstrType == 'l':
+                raise NotImplemented
+            elif cstrType == 'q':
+                raise NotImplemented
+            else:
+                thisCstr = a_prob.constraints.s.cstrList[counters[cstrType]]
+                assert thisCstr.polyDeg == nDeg
+                thisCstr.poly.unlock()
+                thisCstr.coeffs.fill(0.)
+                thisCstr.coeffs[slice_prob] = input['cstr'][k][slice_in]
+                assert thisCstr.polyDeg == nDeg
+                counters[cstrType] += 1
+        
+
+    # Check if need to transform
+    # TODO this is now done in the main program
+    
+    # solve
+    return a_prob.solve()
+
+
+def workerSolveFixed(inQueue, outQueue):
 
     #input = inQueue.get()
 
@@ -340,27 +395,27 @@ def workerSolve(inQueue, outQueue):
                 print(f"Worker {selfNr} found corresponding representation, relaxation and problem")
             
             #thisProb.objective = np.frombuffer(polyObjShared_[selfNr], nfloat, thisRepr.nMonoms)
-            if useSharedMem_:
-                thisProb.objective = polyObjSharedNP_[selfNr][:thisRepr.nMonoms].copy()
-            else:
-                thisProb.objective = inputAll['obj']
+            #if useSharedMem_:
+            #     thisProb.objective = polyObjSharedNP_[selfNr][:thisRepr.nMonoms].copy()
+            # else:
+            #     thisProb.objective = inputAll['obj']
 
-            counters = {'l':0, 'q':0, 's':1 }
-            for k, (nDeg, cstrType) in enumerate(input['nCstrNDegType']):
-                assert cstrType in counters.keys()
-                if cstrType == 'l':
-                    raise NotImplemented
-                elif cstrType == 'q':
-                    raise NotImplemented
-                else:
-                    thisCstr = thisProb.constraints.s.cstrList[counters[cstrType]]
-                    assert thisCstr.polyDeg == nDeg
-                    if useSharedMem_:
-                        thisCstr.coeffs = polyCstrSharedNP_[selfNr][k][:thisRepr.nMonoms].copy()
-                    else:
-                        thisCstr.coeffs = inputAll['cstr'][k]
-                    assert thisCstr.polyDeg == nDeg
-                    counters[cstrType] += 1
+            # counters = {'l':0, 'q':0, 's':1 }
+            # for k, (nDeg, cstrType) in enumerate(input['nCstrNDegType']):
+            #     assert cstrType in counters.keys()
+            #     if cstrType == 'l':
+            #         raise NotImplemented
+            #     elif cstrType == 'q':
+            #         raise NotImplemented
+            #     else:
+            #         thisCstr = thisProb.constraints.s.cstrList[counters[cstrType]]
+            #         assert thisCstr.polyDeg == nDeg
+            #         if useSharedMem_:
+            #             thisCstr.coeffs = polyCstrSharedNP_[selfNr][k][:thisRepr.nMonoms].copy()
+            #         else:
+            #             thisCstr.coeffs = inputAll['cstr'][k]
+            #         assert thisCstr.polyDeg == nDeg
+            #         counters[cstrType] += 1
 
         except KeyError:
             nDims, maxDeg = input['dimsNDeg']
@@ -387,22 +442,31 @@ def workerSolve(inQueue, outQueue):
 
             # Get all polynomials
             # objective
-            if useSharedMem_:
-                polyObj = poly.polynomial(thisRepr, coeffs=polyObjSharedNP_[selfNr][:thisRepr.nMonoms].copy(), alwaysFull=True)
-            else:
-                polyObj = poly.polynomial(thisRepr, coeffs=inputAll['obj'], alwaysFull=True)
+            # if useSharedMem_:
+            #     polyObj = poly.polynomial(thisRepr, coeffs=polyObjSharedNP_[selfNr][:thisRepr.nMonoms].copy(), alwaysFull=True)
+            # else:
+            #     polyObj = poly.polynomial(thisRepr, coeffs=inputAll['obj'], alwaysFull=True)
 
             # Add the objective
+            polyObj = poly.polynomial(thisRepr, alwaysFull=True)
             thisProb = rel.convexProg(thisRepr, selfSolver, objective=polyObj)
 
             # constraints
+            # thisProb.addCstr( thisRelax )
+            # for k, (nDeg, cstrType) in enumerate(input['nCstrNDegType']):
+            #     if useSharedMem_:
+            #         thisCstr = rel.lasserreConstraint(thisRelax, poly.polynomial(thisRepr, coeffs=polyCstrSharedNP_[selfNr][k][:thisRepr.nMonoms].copy(), alwaysFull=True))
+            #     else:
+            #         thisCstr = rel.lasserreConstraint(thisRelax, poly.polynomial(thisRepr, coeffs=inputAll['cstr'][k], alwaysFull=True))
+            #     assert (nDeg == thisCstr.poly.maxDeg), "Incompatible degrees"
+            #     # Add the constraints
+            #     thisProb.addCstr(thisCstr)
+            # Add empty constraints
             thisProb.addCstr( thisRelax )
             for k, (nDeg, cstrType) in enumerate(input['nCstrNDegType']):
-                if useSharedMem_:
-                    thisCstr = rel.lasserreConstraint(thisRelax, poly.polynomial(thisRepr, coeffs=polyCstrSharedNP_[selfNr][k][:thisRepr.nMonoms].copy(), alwaysFull=True))
-                else:
-                    thisCstr = rel.lasserreConstraint(thisRelax, poly.polynomial(thisRepr, coeffs=inputAll['cstr'][k], alwaysFull=True))
-                assert (nDeg == thisCstr.poly.maxDeg), "Incompatible degrees"
+                dummy = nzeros((thisRepr.nMonoms,), dtype=nfloat)
+                dummy[thisRepr.varNumsUpToDeg[nDeg]] = 1. #To enforce correct degree detection
+                thisCstr = rel.lasserreConstraint(thisRelax, poly.polynomial(thisRepr, coeffs=dummy, alwaysFull=True))
                 # Add the constraints
                 thisProb.addCstr(thisCstr)
             
@@ -413,24 +477,13 @@ def workerSolve(inQueue, outQueue):
             if __debug__:
                 print(f"Worker {selfNr} created the problem structure for {input['dimsNDeg']} and {input['nCstrNDegType']}")
 
-
-        # Check if need to transform
-        if ('toUnitCircle' in input.keys()) and (input['toUnitCircle']):
-            nDims = input['dimsNDeg'][0]
-            #P = np.frombuffer(quadraticLyapShared_[selfNr], nfloat, nDims**2).copy().reshape((nDims, nDims))
-            P = quadraticLyapSharedNP_[selfNr][:nDims**2].copy().reshape((nDims, nDims))
-            C = cholesky(P, lower=False)
-            Ci = inv(C)
-            thisProb.objective.coeffs = thisRepr.doLinCoordChange(thisProb.objective.coeffs, Ci)
-
-            assert thisProb.constraints.l.nCstr == 0, 'TODO' #TODO
-            assert thisProb.constraints.q.nCstr == 0, 'TODO' #TODO
-
-            for k in range(1,thisProb.constraints.s.nCstr):
-                thisProb.constraints.s.cstrList[k].poly.coeffs = thisRepr.doLinCoordChange(thisProb.constraints.s.cstrList[k].poly.coeffs, Ci)
-
         # Actually solve
-        solution = thisProb.solve()
+        #solution = thisProb.solve()
+        if useSharedMem_:
+            solution = do_fill_solve(thisProb, input)
+        else:
+            solution = do_fill_solve(thisProb, inputAll)
+        
         
         if doThreading_:
             if not solution['status'] == 'optimal':
@@ -455,7 +508,7 @@ def workerSolve(inQueue, outQueue):
 
         if ('toUnitCircle' in input.keys()) and (input['toUnitCircle']):
             # Add the unscaled solution
-            ySol = ndot(C, extraction[0])
+            raise RuntimeError("This is no longer supported, transformation is done in main prog")
         else:
             ySol = extraction[0]
         
@@ -500,20 +553,230 @@ def workerSolve(inQueue, outQueue):
     return 0
 
 
+def workerSolveVariable(inQueue, outQueue):
+
+    global reprDict_
+    global relaxationDict_
+    global problemDict_
+    
+
+    while True:
+
+        input = inQueue.get()
+
+        if input == "":
+            print(f"Worker {selfNr} is terminating")
+            break
+
+        if not useSharedMem_:
+            inputAll = input
+            input = input['probDict']
+
+        try:
+            selfNr = input['workerId']
+        except KeyError:
+            selfNr = input['workerId'] = os.getpid()
+        selfSolver = input['solver']
+
+        if __debug__:
+            print(f"Worker {selfNr} recieved new input")
+
+        #Figure out the needed degree
+        try:
+            # If the keyword is given then this
+            dims, deg_prob = input['dimsNDeg']
+        except KeyError:
+            if not useSharedMem_:
+                
+                dims = input['dims']
+                deg_min_relax = input['deg_relax_min']
+                
+                deg_in = poly.get_max_degree(dims, input['obj'])
+                deg_prop = deg_in
+                
+                for ((a_deg, a_type), a_cstr) in zip(input['prodict']['nCstrNDegType'], input['cstr']):
+                    if a_type == 's':
+                        a_cstr_deg = poly.get_max_degree(dims, a_cstr)
+                        assert a_cstr_deg <= a_deg
+                        
+                        deg_in = max(deg_in, a_cstr_deg)
+                        deg_prob = max(deg_prob, np.ceil(a_cstr_deg/2.)*2 + deg_min_relax)
+                    else:
+                        raise NotImplementedError
+
+                input['dimsNDeg'] = [dims, deg_prob]
+            else:
+                raise NotImplementedError
 
 
+        try:
+            thisRepr = reprDict_[input['dimsNDeg']]
+            thisRelax = relaxationDict_[input['dimsNDeg']]
+            thisProb = problemDict_[input['dimsNDeg']][tuple(input['nCstrNDegType'])]  # TODO reduce memory footprint by making it order invariant
 
-        
-        
+            if __debug__:
+                print(f"Worker {selfNr} found corresponding representation, relaxation and problem")
+
+            # thisProb.objective = np.frombuffer(polyObjShared_[selfNr], nfloat, thisRepr.nMonoms)
+            if useSharedMem_:
+                thisProb.objective = polyObjSharedNP_[selfNr][:thisRepr.nMonoms].copy()
+            else:
+                thisProb.objective = inputAll['obj']
+
+            counters = {'l':0, 'q':0, 's':1}
+            for k, (nDeg, cstrType) in enumerate(input['nCstrNDegType']):
+                assert cstrType in counters.keys()
+                if cstrType == 'l':
+                    raise NotImplemented
+                elif cstrType == 'q':
+                    raise NotImplemented
+                else:
+                    thisCstr = thisProb.constraints.s.cstrList[counters[cstrType]]
+                    assert thisCstr.polyDeg == nDeg
+                    if useSharedMem_:
+                        thisCstr.coeffs = polyCstrSharedNP_[selfNr][k][:thisRepr.nMonoms].copy()
+                    else:
+                        thisCstr.coeffs = inputAll['cstr'][k]
+                    assert thisCstr.polyDeg == nDeg
+                    counters[cstrType] += 1
+
+        except KeyError:
+            nDims, maxDeg = input['dimsNDeg']
+
+            try:
+                thisRepr = reprDict_[input['dimsNDeg']]
+                if __debug__:
+                    print(f"Worker {selfNr} found representation")
+            except KeyError:
+                thisRepr = poly.polynomialRepr(nDims, maxDeg)
+                reprDict_[input['dimsNDeg']] = thisRepr
+                if __debug__:
+                    print(f"Worker {selfNr} created representation")
+
+            try:
+                thisRelax = relaxationDict_[input['dimsNDeg']]
+                if __debug__:
+                    print(f"Worker {selfNr} found relaxation")
+            except KeyError:
+                thisRelax = rel.lasserreRelax(thisRepr)
+                relaxationDict_[input['dimsNDeg']] = thisRelax
+                if __debug__:
+                    print(f"Worker {selfNr} created relaxation")
+
+            # Get all polynomials
+            # objective
+            if useSharedMem_:
+                polyObj = poly.polynomial(thisRepr, coeffs=polyObjSharedNP_[selfNr][:thisRepr.nMonoms].copy(), alwaysFull=True)
+            else:
+                polyObj = poly.polynomial(thisRepr, coeffs=inputAll['obj'], alwaysFull=True)
+
+            # Add the objective
+            thisProb = rel.convexProg(thisRepr, selfSolver, objective=polyObj)
+
+            # constraints
+            thisProb.addCstr(thisRelax)
+            for k, (nDeg, cstrType) in enumerate(input['nCstrNDegType']):
+                if useSharedMem_:
+                    thisCstr = rel.lasserreConstraint(thisRelax, poly.polynomial(thisRepr, coeffs=polyCstrSharedNP_[selfNr][k][:thisRepr.nMonoms].copy(), alwaysFull=True))
+                else:
+                    thisCstr = rel.lasserreConstraint(thisRelax, poly.polynomial(thisRepr, coeffs=inputAll['cstr'][k], alwaysFull=True))
+                assert (nDeg == thisCstr.poly.maxDeg), "Incompatible degrees"
+                # Add the constraints
+                thisProb.addCstr(thisCstr)
+
+            # Save the problem
+            if not input['dimsNDeg'] in problemDict_.keys():
+                problemDict_[input['dimsNDeg']] = {}
+            problemDict_[input['dimsNDeg']][tuple(input['nCstrNDegType'])] = thisProb
+            if __debug__:
+                print(f"Worker {selfNr} created the problem structure for {input['dimsNDeg']} and {input['nCstrNDegType']}")
+
+        # Check if need to transform
+        if ('toUnitCircle' in input.keys()) and (input['toUnitCircle']):
+            nDims = input['dimsNDeg'][0]
+            # P = np.frombuffer(quadraticLyapShared_[selfNr], nfloat, nDims**2).copy().reshape((nDims, nDims))
+            P = quadraticLyapSharedNP_[selfNr][:nDims**2].copy().reshape((nDims, nDims))
+            C = cholesky(P, lower=False)
+            Ci = inv(C)
+            thisProb.objective.coeffs = thisRepr.doLinCoordChange(thisProb.objective.coeffs, Ci)
+
+            assert thisProb.constraints.l.nCstr == 0, 'TODO'  # TODO
+            assert thisProb.constraints.q.nCstr == 0, 'TODO'  # TODO
+
+            for k in range(1, thisProb.constraints.s.nCstr):
+                thisProb.constraints.s.cstrList[k].poly.coeffs = thisRepr.doLinCoordChange(thisProb.constraints.s.cstrList[k].poly.coeffs, Ci)
+
+        # Actually solve
+        solution = thisProb.solve()
+
+        if doThreading_:
+            if not solution['status'] == 'optimal':
+                if useSharedMem_:
+                    print(f"Failed on \n {input} \n\n with \n {solution}")
+                else:
+                    print(f"Failed on \n {inputAll} \n\n with \n {solution}")
+                outQueue.put("")
+        else:
+            if not (solution['status'] == 'optimal'):
+                print("Error in solving")
+                import plotting as plt
+                ff, aa = plt.plt.subplots(1, 1)
+                aa.set_xlim(-2, 2)
+                aa.set_ylim(-2, 2)
+                plt.plot2dCstr(thisProb, aa, {'binaryPlot':True}, fig=ff)
+        try:
+            extraction = thisProb.extractOptSol(solution)
+        except:
+            print('a')
+            extraction = thisProb.extractOptSol(solution)
+
+        if ('toUnitCircle' in input.keys()) and (input['toUnitCircle']):
+            # Add the unscaled solution
+            ySol = ndot(C, extraction[0])
+        else:
+            ySol = extraction[0]
+
+        if __debug__:
+            xSol = extraction[0]
+            if xSol is None:
+                print("What the hell")
+                import plotting as plot
+                ff, aa = plot.plt.subplots(1, 1)
+                extraction = thisProb.extractOptSol(solution)
+                aa.set_xlim(-2, 2)
+                aa.set_ylim(-2, 2)
+                xx, yy, XX = plot.ax2Grid(aa, 100, True)
+                ZZ = thisRepr.evalAllMonoms(XX)
+                thisPoly = poly.polynomial(thisRepr)
+                for acstr in inputAll['cstr']:
+                    thisPoly.coeffs = acstr
+                    z = thisPoly.eval2(ZZ).reshape((100, 100))
+                    aa.contour(xx, yy, z, levels=[-0.1, 0., 0.01])
+
+            zSol = thisRepr.evalAllMonoms(xSol)
+            for k, (acstr_coeffs, acstr) in enumerate(zip(inputAll['cstr'], thisProb.constraints.s.cstrList)):
+                is_valid = acstr.isValid(zSol)
+                if not nall(is_valid):
+                    raise RuntimeError
+                try:
+                    cstr_val = acstr.poly.eval2(xSol)
+                    if nany(cstr_val < -1.e-6):
+                        raise RuntimeError
+                except AttributeError:
+                    pass
+
+            if solution['primal objective'] < -1.e-6:
+                print(f"Found critical point with {solution['primal objective']} at \n {ySol}")
+            print(f"Optimal value is ")
+            if extraction[0].size == 0:
+                thisProb.extractOptSol(solution)
+
+        outQueue.put({'probDict':input, 'xSol':extraction[0], 'ySol':ySol, 'sol':solution, 'ext':extraction})
+
+    return 0
 
 
-
-
-
-
-
-
-
+workerSolve = workerSolveFixed
 
 
 
