@@ -51,7 +51,7 @@ def binom(n,k):
     assert n == int(n)
     assert k == int(k)
     
-    return int(binom(int(n),int(k)))
+    return int(binomF(int(n),int(k)))
 
 from typing import List, Tuple, Callable, Union, Iterable
 
