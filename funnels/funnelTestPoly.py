@@ -290,6 +290,7 @@ def doTesting(funnel:distributedFunnel):
 if __name__ == "__main__":
     
     # Complicate the problem
+    #blub
     cplx = 2
     shapeP = 2
     
