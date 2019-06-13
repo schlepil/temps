@@ -18,8 +18,8 @@ mySerializer = variableStruct()
 mySerializer.dumps = lambda x: str(x)
 #mySerializer.dumps = lambda x: ""
 
-serializer = pickle
-#serializer = mySerializer
+#serializer = pickle
+serializer = mySerializer
 
 if useSharedMem_:
     import ctypes
