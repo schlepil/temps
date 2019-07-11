@@ -169,6 +169,19 @@ def List2Str(nDims, maxDeg, digits, monom2num, num2monom, linChangeDict, A='A', 
         
     return fileAsList, pyFileName, newStyleDict
 
+def nMonoms(dim:int, *args )->int:
+
+    if len(args)==1:
+        nMinDeg = 0
+        nMaxDef = int(args[0])
+    elif len(args) == 2:
+        nMinDeg = int(args[0])-1
+        nMaxDef = int(args[1])
+        assert nMinDeg<nMaxDef
+    else:
+        raise RuntimeError
+
+    return binom(nMaxDef+dim,dim)-binom(nMinDeg+dim,dim)
 
 
 

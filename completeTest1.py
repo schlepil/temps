@@ -53,7 +53,7 @@ if __name__ == "__main__":
     
     #Get the integration function
     #def __call__(self, x:np.ndarray, u_:Union[np.ndarray,Callable], t:float=0., restrictInput:bool=True, mode:List[int]=[0,0], x0:np.ndarray=False):
-    fInt = lambda t, x: pendSys(x, u_=-K, t=t, x0=refTraj.getX(0.))
+    fInt = lambda t, x: pendSys(x, u=lambda x,t: ndot(-K, x-refTraj.getX(t)), t=t, x0=refTraj.getX(t))
     maxStep = 0.1
     
     # Define an end

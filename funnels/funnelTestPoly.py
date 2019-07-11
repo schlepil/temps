@@ -337,7 +337,7 @@ if __name__ == "__main__":
     
     # Get the polynomial representation which also decides on the maximal relaxation
     # Let use full here
-    pSys = getSysStablePos(2,6,P=P,G=G, randomize=randomize)
+    pSys = getSysStablePos(2,4,P=P,G=G, randomize=randomize)
     
     thisRepr = pSys.repr  # Todo debug digits. there is an error somewhere
 

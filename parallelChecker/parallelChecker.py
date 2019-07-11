@@ -310,6 +310,9 @@ def get_or_create(dims_deg:Tuple, cstr_deg_type:List, solver='cvxopt', id_str:st
     global relaxationDict_
     global problemDict_
 
+    if not isinstance(dims_deg, tuple):
+        dims_deg = tuple(dims_deg)
+
     try:
         this_repr = reprDict_[dims_deg]
         if __debug__:
@@ -367,14 +370,17 @@ def do_fill(a_prob:rel.convexProg, input:dict):
     # Ensure the consistency of the used degrees
     deg_prob = a_prob.repr.maxDeg
     if not useSharedMem_:
-        assert a_prob.repr.nMonoms <= input['obj'].size
         deg_input = [var_uptodeg_a.size for var_uptodeg_a in a_prob.repr.varNumsUpToDeg].index(input['obj'].size)
     else:
+        raise NotImplementedError
         deg_input = deg_prob
 
+
     # pregenerate the slices
-    slice_in = slice(0, len(a_prob.repr.varNumsUpToDeg[min(deg_input, deg_prob)]))
-    slice_prob = slice(0, len(a_prob.repr.varNumsUpToDeg[min(deg_input, deg_prob)]))
+    slice_min = slice(0, len(a_prob.repr.varNumsUpToDeg[min(deg_input, deg_prob)]))
+    if __debug__:
+        slice_excl = slice(len(a_prob.repr.varNumsUpToDeg[min(deg_input, deg_prob)]), input['obj'].size)
+        assert nall(input['obj'][slice_excl] == 0.)
 
     # Fill
     if useSharedMem_:
@@ -389,7 +395,7 @@ def do_fill(a_prob:rel.convexProg, input:dict):
         # TODO check if it would not be better to always allow for modifications
         a_prob.objective.unlock()
         a_prob.objective.coeffs.fill(0.)
-        a_prob.objective.coeffs[slice_prob] = input['obj'][slice_in]
+        a_prob.objective.coeffs[slice_min] = input['obj'][slice_min]
 
         # constraints
         counters = {'l': 0, 'q': 0, 's': 1}
@@ -400,12 +406,15 @@ def do_fill(a_prob:rel.convexProg, input:dict):
             elif cstrType == 'q':
                 raise NotImplemented
             else:
+                if __debug__:
+                    assert input['cstr'][k].size == input['obj'].size
+                    assert nall(input['cstr'][k][slice_excl]==0.)
+
                 thisCstr = a_prob.constraints.s.cstrList[counters[cstrType]]
                 assert thisCstr.polyDeg == nDeg
                 thisCstr.poly.unlock()
                 thisCstr.coeffs.fill(0.)
-                thisCstr.coeffs[slice_prob] = input['cstr'][k][slice_in]
-                assert thisCstr.polyDeg == nDeg
+                thisCstr.coeffs[slice_min] = input['cstr'][k][slice_min]
                 counters[cstrType] += 1
 
     # Check if need to transform
@@ -717,14 +726,12 @@ def workerSolveVariable(inQueue, outQueue):
             else:
                 raise NotImplementedError
 
-        thisRepr, thisRepr, thisProb = get_or_create(input['dimsNDeg'], input['nCstrNDegType'], solver = input['solver'], id_str=f"Worker {selfNr} ")
+        thisRepr, thisRelax, thisProb = get_or_create(input['dimsNDeg'], input['nCstrNDegType'], solver = input['solver'], id_str=f"Worker {selfNr} ")
 
         # Actually solve
         #solution = thisProb.solve()
-        if useSharedMem_:
-            solution = do_fill_solve(thisProb, input)
-        else:
-            solution = do_fill_solve(thisProb, inputAll)
+        solution = do_fill_solve(thisProb, input if useSharedMem_ else inputAll)
+
 
         if doThreading_:
             if not solution['status'] == 'optimal':
@@ -754,9 +761,15 @@ def workerSolveVariable(inQueue, outQueue):
                     raise RuntimeError
 
             if extraction[0] is not None:
-                # Extraction succesfull
+                # Extraction successful -> all done
                 break
-            thisProb, solution = refine_solution(solution, extraction, thisProb)
+            # refine_solution(old_sol:dict, old_extract, old_prob:rel.convexProg, input:dict):
+            try:
+                thisProb, solution = refine_solution(solution, extraction, thisProb, input if useSharedMem_ else inputAll)
+            except:
+                thisProb, solution = refine_solution(solution, extraction, thisProb, input if useSharedMem_ else inputAll)
+                print('A')
+            thisRepr = thisProb.repr
 
         # Save the final relaxation size
         solution['dimsNDeg'] = (thisProb.repr.nDims, thisProb.repr.maxDeg)

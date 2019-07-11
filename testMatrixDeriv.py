@@ -170,5 +170,4 @@ for _ in range(10):
     
     A = np.random.rand(100,100)
     print(testNumba.myFun1(A))
-    print("a")
 

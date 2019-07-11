@@ -329,7 +329,7 @@ class secondOrderSys(dynamicalSystem):
             M = self.pDerivM.M0_eval[0](*xLi) # [nq,nq,nPt] or [nq,nq]
             f = self.pDerivF.f0_eval(*xLi) # [nq,nPt] or [nq,1]
             # Ensure dimensions
-            M.resize((self.nq, self.nq, x.shape[1])) [nq,nq,nPt]
+            M.resize((self.nqv, self.nqv, x.shape[1])) #[nq,nq,nPt]
         elif mode[0] <= self.maxTaylorDeg:
             # Get partial derivs
             indexKey = f"PDeriv_to_{mode[0]:d}_eval"
@@ -351,11 +351,13 @@ class secondOrderSys(dynamicalSystem):
         # input dynamics
         if mode[1] == 0:
             xLi = [x[i,:] for i in range(self.nq)]
-            M = self.pDerivM.M0_eval[0](*xLi)  # [nq,nq,nPt] or [nq,nq]
-            G = self.pDerivG.G0_eval[0](*xLi)  # [nq,nu,nPt] or [nq,nu]
+            M = self.pDerivM.M0_eval[0](*xLi)  # [nqv,nqv,nPt] or [nqv,nqv]
+            G = self.pDerivG.G0_eval[0](*xLi)  # [nqv,nu,nPt] or [nqv,nu]
             # Ensure dimensions
-            M.resize((self.nq, self.nq, x.shape[1]))
-            G.resize((self.nq, self.nu, x.shape[1]))
+            M.resize((self.nqv, self.nqv, x.shape[1]))
+            G.resize((self.nqv, self.nu, x.shape[1]))
+            #Compute
+            g = neinsum("ijk,jk->ik", G, u)
         else:
             # Get partial derivs
             indexKey = f"PDeriv_to_{mode[1]:d}_eval"
