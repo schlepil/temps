@@ -29,23 +29,24 @@ def test2(funnel:distributedFunnel):
     repr_ = funnel.dynSys.repr
 
     relLasserre = relax.lasserreRelax(repr_)
-    thisPoly = polynomial(repr_)
+    thisPoly = poly.polynomial(repr_)
     
     center = 2.*(np.random.rand(2,1)-.5)
     P = 1.5*(np.random.rand(2,2)-.5)
     P = ndot(P.T, P) +.5*nidentity(2)
     
     thisPoly.setEllipsoidalConstraint(center, 1., P)
+    # return vecteur coeffsOut; nb de composantes est nb de variable v;par exemple: v=(0 x0 x1 x0^² x0x1 x1^2) coeffsOut=(center.T(-P)center+radius^2; h1;h2;-P1:-P2-P3;-P4)
     
     lass_cstr = relax.lasserreConstraint(relLasserre, thisPoly)
     
-    ff,aa = plot.plt.subplots(1,1)
+    ff, aa = plot.plt.subplots(1,1)
     plot.plotEllipse(aa, center, P, 1., faceAlpha=0.)
     
     aa.autoscale()
     aa.axis('equal')
     
-    xx,yy,XX = plot.ax2Grid(aa,Ngrid,True)
+    xx, yy, XX = plot.ax2Grid(aa, Ngrid,True)
     
     z = lass_cstr.poly.eval2(XX).reshape((Ngrid,Ngrid))
     
@@ -290,6 +291,7 @@ def doTesting(funnel:distributedFunnel):
 if __name__ == "__main__":
     
     # Complicate the problem
+    #blub
     cplx = 2
     shapeP = 2
     

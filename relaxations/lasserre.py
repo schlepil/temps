@@ -53,7 +53,6 @@ def evalCstrMat(listOfMonomials, cstrMat, cstrRHS, x):
 
 class lasserreRelax:
     def __init__(self, repr:polynomialRepr, emptyClass=False):
-        
         assert repr.maxDeg%2 == 0, "The representation has to be of even degree"
         
         self.repr = repr
@@ -137,7 +136,6 @@ class lasserreRelax:
         return evalCstrMat(self.listOfMonomials, *self.getCstr(isSparse=False), thisC)
     
     def isValid(self, z:np.ndarray, atol=-1e-6):
-        
         z = z.reshape((self.repr.nMonoms,-1))
         
         res = nempty((z.shape[1],), dtype=nbool)
@@ -161,15 +159,14 @@ class lasserreConstraint(constraint):
         :param poly:
         :param nRelax:
         """
-        
-        assert poly.getMaxDegree()<poly.repr.maxDeg, "Increase relaxation order of the base relaxation"
+
+        assert poly.getMaxDegree()<=poly.repr.maxDeg, "Increase relaxation order of the base relaxation"
         assert (nRelax is None) or ((poly.maxDeg+nRelax) <= poly.repr.maxDeg), "Decrease relaxation order of this constraint"
-        assert poly.getMaxDegree() < baseRelax.maxDeg, "Inconsistent"
+        assert poly.getMaxDegree() <= baseRelax.maxDeg, "Inconsistent"
 
         self.baseRelax = baseRelax
         self.poly = poly
         self.nRelax = nRelax if nRelax is not None else 2*((self.baseRelax.repr.maxDeg-poly.getMaxDegree())//2)
-
         self.polyDeg = poly.getMaxDegree()
 
         #shortcuts

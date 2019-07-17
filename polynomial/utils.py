@@ -18,12 +18,13 @@ def importDynFunc(name):
 def getListOfMonoms(nVars:int, maxDeg:int, digits:int=1)->List[np.array]:
     
     listOfMonomials = [[] for _ in range(maxDeg+1)]
+    #si MAX DEG=3, listofMonomial=[[], [], [], []]
     listOfMonomials[0] = [[0 for _ in range(nVars)]]
-    
+    #puis si nVars=3,listofMonomial=[[[0, 0, 0]], [], [], []]
     for deg in range(1,maxDeg+1):
         for aMonom in listOfMonomials[deg-1]:
             for j in range(nVars):
-                newMonom = dp(aMonom)
+                newMonom = dp(aMonom) #deepcopy
                 newMonom[j] += 1
                 if not newMonom in listOfMonomials[deg]:
                     listOfMonomials[deg].append(newMonom)
@@ -245,7 +246,8 @@ class polynomialRepr():
         
     
     def generateDict(self):
-        self.nMonoms = len(self.listOfMonomials)
+        self.nMonoms = len(self.listOfMonomials) #nb de monomials
+
 
         self.varNums = np.arange(self.nbrVar0,self.nbrVar0+self.nMonoms,dtype=nint)
         self.varNumsPerDeg = []
@@ -374,6 +376,6 @@ class polynomialRepr():
             
         
     
-    
-if __name__ == "_main_":
-    print("Polynomial utils")
+#print(getListOfMonoms(3,3))
+#if __name__ == "_main_":
+   # print("Polynomial utils")

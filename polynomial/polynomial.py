@@ -203,9 +203,9 @@ class polynomial():
         self._coeffs[:] = 0.
     
         P = nidentity(center.size, dtype=nfloat) if P is None else P
-        
         self.setQuadraticForm(-P, self.repr.varNumsPerDeg[1], 2.*ndot(center.T, P).squeeze(), self.repr.varNumsPerDeg[1])
         self._coeffs[0] += (mndot([center.T, -P, center])+radius**2)
+
         self._coeffs.flags['WRITEABLE'] = False
         return None
         
@@ -224,14 +224,15 @@ class polynomial():
         else:
             assert deg <= self.repr.maxDeg
             nMonoms_ = len(self.repr.varNumsUpToDeg[deg])
-            
+
         coeffsEval = np.reshape(self._coeffs, (1,self.repr.nMonoms))[[0],:nMonoms_]
-        
+        #print(np.reshape(self._coeffs, (1, self.repr.nMonoms)))
+        #print('coeffsEval',coeffsEval)
         if x.shape[0] >= nMonoms_:
             z = x[:nMonoms_, :]
         else:
             z = evalMonomsNumba(x, self.repr.varNum2varNumParents[:nMonoms_, :])
-        
+
         return ndot(coeffsEval, z)
 
 

@@ -85,7 +85,7 @@ class dynamicalSystem:
         
 
 class secondOrderSys(dynamicalSystem):
-    
+   # dynSys = secondOrderSys(repr, M, -F, gInput, qM, uM)
     def __init__(self, repr:polynomialRepr, massMat:sy.Matrix, f:sy.Matrix, g:sy.Matrix, q:"symbols", u:"symbols", maxTaylorDegree:int=3, ctrlInput:boxInputCstr=None, file:str=None):
         """
         represents a system of the form
@@ -328,8 +328,8 @@ class secondOrderSys(dynamicalSystem):
             xLi = [x[i,:] for i in range(self.nq)]
             M = self.pDerivM.M0_eval[0](*xLi) # [nq,nq,nPt] or [nq,nq]
             f = self.pDerivF.f0_eval(*xLi) # [nq,nPt] or [nq,1]
-            # Ensure dimensions
-            M.resize((self.nqv, self.nqv, x.shape[1])) #[nq,nq,nPt]
+            M.resize((self.nq, self.nq, x.shape[1]))#[nq,nq,nPt]
+
         elif mode[0] <= self.maxTaylorDeg:
             # Get partial derivs
             indexKey = f"PDeriv_to_{mode[0]:d}_eval"
@@ -394,31 +394,35 @@ class secondOrderSys(dynamicalSystem):
         """
     
         x = x.reshape((self.nq,-1))
+        print('this is nq',self.nq)
+        print('this is nqv', self.nqv)
+        print("this is x", x)
         if fullDeriv:
             ddx = ddx.reshape((self.nq,-1))
             ddx = ddx[self.nqv:,:]
         else:
             ddx = ddx.reshape((self.nqv,-1))
-        
+        print("this is ddx", ddx)
         m = x.shape[1]
     
         if __debug__:
             assert x.shape[1] == ddx.shape[1]
     
         uStar = np.zeros((self.nu,m),dtype=nfloat)
-    
+        print('this is uStar',uStar)
         for k in range(m):
             # Compute current mass matrix, system dynamics and input dynamics
             Mx = self.pDerivM.M0_eval[0](*x[:,k])
             fx = self.pDerivF.f0_eval(*x[:,k])
             Gx = self.pDerivG.G0_eval[0](*x[:,k])
+
             # We need to solve
             # g(x).uStar = M.ddx - f(x)
             uStar[:,[k]],res,_,_ = lstsq(Gx,ndot(Mx,ddx[:,[k]])-fx)
 
         if respectCstr:
             self.ctrlInput(uStar,t)
-    
+
         return uStar
 
 
@@ -518,7 +522,7 @@ class polynomialSys(dynamicalSystem):
 
     def getTaylorApprox(self, x: np.ndarray, maxDeg: int = None, minDeg: int = 0):
         # TODO this is a naive implementation
-    
+
         if __debug__:
             assert (maxDeg is None) or (maxDeg <= self.maxTaylorDeg)
     
@@ -551,8 +555,9 @@ class polynomialSys(dynamicalSystem):
         """
     
         x = x.reshape((self.nq, -1))
+
         dx = dx.reshape((self.nq, -1))
-    
+
         m = x.shape[1]
     
         if __debug__:

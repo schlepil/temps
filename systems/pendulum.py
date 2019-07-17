@@ -36,13 +36,13 @@ def getSys(repr: polynomialRepr, fileName:str=None):
         qM = sy.Matrix([[q[0]],[q[1]]])
 
         M = sy.Matrix([[I]])
-        F = sy.Matrix([[m*g*lc*sy.sin(qM[0,0])+b*qM[1,0]]])
+        F = sy.Matrix([[m*g*lc*sy.sin(qM[0,0])+b*qM[1,0]]]) #moment
         gInput = sy.Matrix([[1.]])
 
         dynSys = secondOrderSys(repr,M,-F,gInput,qM,uM)
     else:
         secondOrderSys.fromFileOrDict(fileName)
-    
+
     return dynSys
 
 def getSysUnstablePos(deg:int):

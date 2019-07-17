@@ -75,7 +75,10 @@ def plot(x, y=None, z=None):
 # Plot {x|x.T.P.x <= alpha} in 2d
 def getEllipse(pos, P, alpha=1., deltaPos=None):
     # center and shape to matplotlib patch
-    v, E = eigh(P)
+    v, E = eigh(P) #v: 2 valeurs propre; E:2 vecteur propre
+    #print("eigh(P)",eigh(P))
+    #print('vvvvv',v)
+    #print('EEEEE',E)
     if deltaPos is None:
         deltaPos = np.zeros((pos.shape))
     # tbd do calculations for offset
@@ -104,7 +107,6 @@ def plotEllipse(ax, pos, P, alpha, plotAx=np.array([0, 1]), deltaPos=None, color
     color = np.array(dp(color));
     color[-1] = color[-1]*faceAlpha;
     color = list(color)
-    
     if pltStyle == 'proj':
         if len(plotAx) == 2:
             T = np.zeros((P.shape[0], 2))
@@ -112,12 +114,17 @@ def plotEllipse(ax, pos, P, alpha, plotAx=np.array([0, 1]), deltaPos=None, color
             T[plotAx[1], 1] = 1.
         else:
             assert (T.shape[0] == P.shape[0] and T.shape[1] == P.shape[1]), "No valid affine 2d sub-space"
+        #print(P)
+        #print(T)
         Pt = projectEllip(P, T)
+        #print(projectEllip(P, T))
     elif pltStyle == 'inter':
         Pt = P[np.ix_(plotAx, plotAx)]
     else:
         assert 0, "No valid pltStyle for ellip given"
-    
+    #print('Pt',Pt)
+    #print('pos',pos)
+    #print('pos[plotAx]',pos[plotAx])
     e = getEllipse(pos[plotAx], Pt, alpha)
     e.set_linewidth(1.)
     e.set_edgecolor(color[:3]+[1.])

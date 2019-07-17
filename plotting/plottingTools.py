@@ -32,7 +32,7 @@ def myQuiver(ax, X, V, c=None, otherPlotOptDict={}):
 
 def ax2Grid(aa,N,returnFlattened=False):
     try:
-        xx,yy = np.meshgrid(np.linspace(aa.get_xlim()[0], aa.get_xlim()[1], N[0]), np.linspace(aa.get_ylim()[0], aa.get_ylim()[1], N[1]))
+        xx,yy = np.meshgrid(np.linspace(aa.get_xlim()[0],aa.get_xlim()[1], N[0]), np.linspace(aa.get_ylim()[0], aa.get_ylim()[1], N[1]))
     except TypeError:
         xx,yy = np.meshgrid(np.linspace(aa.get_xlim()[0],aa.get_xlim()[1],N),np.linspace(aa.get_ylim()[0],aa.get_ylim()[1],N))
 
