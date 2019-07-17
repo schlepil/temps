@@ -88,17 +88,14 @@ x1,x2 = np.meshgrid(np.linspace(-1,1, 100), np.linspace(-1, 1,100))
 #returnL = [x1,x2]
 returnL=np.vstack((x1.flatten(), x2.flatten()))
 
+returnLZ = myrepr.evalAllMonoms(returnL)
+isValid = nones(returnL.shape[1],).astype(np.bool_)
 
-c=[]
-for i in range(returnL[0].size):
-    if np.dot((np.array([[returnL[0,i]],[returnL[1,i]]])-center).T, np.dot(P,(np.array([[returnL[0,i]],[returnL[1,i]]]).reshape((2,1))-center))) >= 1.**2 :
-        c.append(i)
-    elif np.dot((np.array([[returnL[0,i]],[returnL[1,i]]])-center2).T, np.dot(P2,(np.array([[returnL[0,i]],[returnL[1,i]]]).reshape((2,1))-center2))) >= 1.**2 :
-        c.append(i)
-    elif np.dot((np.array([[returnL[0,i]],[returnL[1,i]]])-center3).T, np.dot(P3,(np.array([[returnL[0,i]],[returnL[1,i]]]).reshape((2,1))-center3))) >= 1.**2 :
-        c.append(i)
+for acstr in mycP.constraints.s.cstrList[1:]:
+    isValid = np.logical_and(isValid, acstr.poly.eval2(returnLZ).squeeze()>=0.)
 
-returnLnew = np.delete(returnL,c,1)
+returnLnew = returnL[:, isValid]
+returnLZnew = returnLZ[:, isValid]
 
 #print(returnLnew[0].shape)
 #print(returnLnew[1].shape)
@@ -109,54 +106,41 @@ xsol = list(xsol)
 xsol[0] = xsol[0][:,[0]]
 xsolnew=np.array([[xsol[0][0,0]+random()],[xsol[0][1,0]+random()]])
 
-allCstr=[None for _ in range(len(mycP.constraints.s.cstrList[1:]))]
-for i,_ in enumerate(mycP.constraints.s.cstrList[1:]):
-    #gi={'type': 'ineq', 'fun': lambda x:float(Cstr.poly.eval2(x.reshape((-1,1))))}
-    #print(f"New constraint {i} evaluated to {gi['fun'](xsolnew)}")
-    allCstr[i] = {'type': 'ineq', 'fun': lambda x:ndot(deepcopy(mycP.constraints.s.cstrList[copy(i)+1].poly.coeffs),mycP.repr.evalAllMonoms(x))}
-    #allCstr[i] = {'type': 'ineq', 'fun': lambda x: float(mycP.constraints.s.cstrList[copy(i) + 1].poly.eval2(x.reshape((-1,1))))}
-    print(f"New constraint {i} evaluated to {allCstr[i]['fun'](xsolnew)}; {id(allCstr[i]['fun'])}")
+Amat = nzeros((len(mycP.constraints.s.cstrList[1:]), coeff.size), dtype=nfloat)
 
-#mycP.constraints.s.cstrList[copy(i)+1].poly.coeffs
+for i,acstr in enumerate(mycP.constraints.s.cstrList[1:]):
+    Amat[i,:] = acstr.poly.coeffs.copy()
+
+this_cstr = {'type': 'ineq', 'fun': lambda x:ndot(Amat,mycP.repr.evalAllMonoms(x.reshape((-1,1)))).squeeze()}
 
 
 while True:
     isValid = True
     xsolnew = xsol[0] + (np.random.rand(*xsol[0].shape) - 0.5)
-    for acstr in allCstr:
-        print('QAQ',float(acstr['fun'](xsolnew)))
-        isValid = isValid and (float(acstr['fun'](xsolnew))>0.)
-        print('aoligei',isValid)
-    print('chibaba',isValid)
-    if isValid:
-        break
 
-for acstr in allCstr:
-    assert acstr['fun'](xsolnew)>0.
+    if nall(this_cstr['fun'](xsolnew)>=-0.25):
+        break
 
 newsol=ndot(coeff,myrepr.evalAllMonoms(xsolnew))
 
-for i,acstr in enumerate(allCstr):
-    print(f"Constraint {i} evaluated to {acstr['fun'](xsolnew)}, {id(acstr['fun'])}")
 #gx=lambda x: float(mycP.objective.eval2(x.reshape((-1,1))))
 gx=lambda x: ndot(mycP.objective.coeffs,mycP.repr.evalAllMonoms(x))
 #y=mycP.objective.eval2(returnLnew)
-y=ndot(coeff,mycP.repr.evalAllMonoms(returnLnew))
+y=ndot(coeff,returnLZnew)
 #bnds = ((-1, 1), (-1, 1))
 #cons = ({'type': 'ineq', 'fun': lambda x:  x[0] - 2 * x[1] + 2}, {'type': 'ineq', 'fun': lambda x: -x[0] - 2 * x[1] + 6},{'type': 'ineq', 'fun': lambda x: -x[0] + 2 * x[1] + 2})
-res=sp_minimize(gx, xsolnew, method='COBYLA', constraints=allCstr)
+res=sp_minimize(gx, xsolnew, method='COBYLA', constraints=this_cstr)
 ax=Axes3D(fig)
 ax.plot_trisurf(returnLnew[0].T,returnLnew[1].T,y)
 ax.scatter([xsol[0][0,0]], [xsol[0][1,0]], [sol['primal objective']], color="g", s=100)
 ax.scatter([xsolnew[0]], [xsolnew[1]], [newsol], color="r", s=100)
-ax.scatter([res.x[0]], [res.x[1]], [gx(res.x)], color="black", s=100)
+ax.scatter([res.x[0]], [res.x[1]], [gx(res.x)], color="black", s=100, marker='x')
 ax.set_xlabel("x1 label", color="r")
 ax.set_ylabel("x2 label", color="g")
 ax.set_zlabel("y label", color="b")
-for i,acstr in enumerate(allCstr):
-    print(f"Constraint {i} evaluated to {acstr['fun'](res.x)}")
-    if acstr['fun'](res.x) < 0:
-        print("Nope")
+
+print(this_cstr['fun'](xsolnew))
+print(this_cstr['fun'](res.x))
 
 
 plt.show()
