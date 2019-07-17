@@ -124,7 +124,10 @@ while True:
     isValid = True
     xsolnew = xsol[0] + (np.random.rand(*xsol[0].shape) - 0.5)
     for acstr in allCstr:
+        print('QAQ',float(acstr['fun'](xsolnew)))
         isValid = isValid and (float(acstr['fun'](xsolnew))>0.)
+        print('aoligei',isValid)
+    print('chibaba',isValid)
     if isValid:
         break
 
@@ -152,7 +155,7 @@ ax.set_ylabel("x2 label", color="g")
 ax.set_zlabel("y label", color="b")
 for i,acstr in enumerate(allCstr):
     print(f"Constraint {i} evaluated to {acstr['fun'](res.x)}")
-    if acstr1['fun'](res.x) < 0:
+    if acstr['fun'](res.x) < 0:
         print("Nope")
 
 
