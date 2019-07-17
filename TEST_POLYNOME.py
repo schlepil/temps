@@ -152,7 +152,7 @@ ax.set_ylabel("x2 label", color="g")
 ax.set_zlabel("y label", color="b")
 for i,acstr in enumerate(allCstr):
     print(f"Constraint {i} evaluated to {acstr['fun'](res.x)}")
-    if acstr['fun'](res.x) < 0:
+    if acstr1['fun'](res.x) < 0:
         print("Nope")
 
 
