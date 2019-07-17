@@ -102,16 +102,16 @@ class convexProg():
 
         # First check if there is only one solution stored
 
-        nMonomsH_ = self.repr.varNumsUpToDeg[self.repr.maxDeg//2].size
+        nMonomsH_ = self.repr.varNumsUpToDeg[self.repr.maxDeg//2].size # // : / et floor si 9.//2. alors 9./2.=4.5, floor(4.5)=4
 
         varMat = x_[self.repr.idxMat[:nMonomsH_, :nMonomsH_].flatten()].reshape((nMonomsH_, nMonomsH_)) # -> Matrix corresponding to the solution
-
-        v,e = eigh(varMat, check_finite=False)
+        # flatten() > ordre 1
+        v,e = eigh(varMat, check_finite=False) #VALEURS PROPRES D'UNE MATRICE SYMÉTRIQUE CARRÉE
         vMax = v[-1]
         vRel = v*(1./vMax)
 
-        if __debug__:
-            assert vRel[0] > -opts_['relTol']
+        #if __debug__:
+            #assert vRel[0] > -opts_['relTol']
 
         if (nall(vRel[:-1]<opts_['relTol'])):
             # There is only one optimal solution
@@ -125,10 +125,12 @@ class convexProg():
             #Check all constraints
             isValid = True
             zSol = self.repr.evalAllMonoms(xSol)
+
             atol = -1e-6
             while True:
                 for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
                     isValid = isValid and bool(aCstr.isValid(zSol, atol=atol))
+
                 # TODO check if this is a proper solution
                 if isValid and (atol > -1.e-1):
                     break
@@ -149,9 +151,9 @@ class convexProg():
             #First get the cholesky decomp if all positive eigenvalues
             ind = np.where(vRel>opts_['relTol'])[0]
             thisRank = ind.size
-            v2 = v[ind]**.5
+            v2 = v[ind]**.5     #(racine(lambda1), racine(lambda2)....)
             e2 = e[:, ind]
-            V = nmultiply(e2, v2)
+            V = nmultiply(e2, v2) #V* est (racine(lambda1)v1, racine(lambda2)v2....)
 
             # Get column echelon form
             # Scipy only provides row echelon form
@@ -261,8 +263,8 @@ class convexProg():
             # Therefore all optimal solutions respect some constraints, but they are not unique...
             N = nsum(NList,axis=0)/NList.shape[0]
 
-            T,Q = schur(N)
-            
+            T,Q = schur(N) #A = Z T Z^H where Z is unitary and T is either upper-triangular,
+            #Ni w = xi w , i = 1, 2, . . . , n.
             #Now compute the actual solutions or better the representations of it
             xSol = nempty((self.repr.nDims, thisRank), dtype=nfloat)
             #Sum up
@@ -316,21 +318,21 @@ class convexProg():
         else:
             x_ = narray(sol, dtype=nfloat).copy().squeeze()
 
-        print(np.inner(self.objective.coeffs, x_))
-        print(self.objective.eval2(x_[1:3].reshape((-1, 1))))
-
         nMonomsH_ = self.repr.varNumsUpToDeg[self.repr.maxDeg//2].size
 
         varMat = x_[self.repr.idxMat[:nMonomsH_, :nMonomsH_].flatten()].reshape((nMonomsH_, nMonomsH_)) # -> Matrix corresponding to the solution
 
         xStar = x_[self.repr.varNumsUpToDeg[0].size:self.repr.varNumsUpToDeg[1].size].reshape((-1,1))
+        #print('xStar',xStar)
         zHalfStar = evalMonomsNumba(xStar, self.repr.varNum2varNumParents[:nMonomsH_, :])
+        #print('zHalfStar',zHalfStar)
         zMatStar = np.outer(zHalfStar.squeeze(), zHalfStar.squeeze())
-        
+        #print('zMatStar', zMatStar)
         print(f"Difference in moment matrix is \n {varMat-zMatStar}")
         uz,sz,vz = svd(varMat-zMatStar)
-        print(f"With eigen values and vectors \n{sz}\n{sz}")
-        print(f"The resulting difference in the objective funciton is \n {np.inner(self.objective.coeffs.squeeze(), nsum(uz,sz, axis=1, keepdims=False))}")
+        print(f"With eigen values and vectors \n{sz}\n{uz}")
+       # print('nsum',nsum(uz, sz, axis=1, keepdims=False))
+       # print(f"The resulting difference in the objective funciton is \n {np.inner(self.objective.coeffs.squeeze(), nsum(uz,sz, axis=1, keepdims=False))}")
         
         return xStar
 
@@ -346,7 +348,7 @@ class convexProg():
             return None
 
     def solve_cvxopt(self,isSparse=False,primalstart=None, dualstart=None, opts={}):
-        # Currently focalised on sdp with linear constraints
+        # Currently focalised on sdp with linear constraints (sdp: solves semidefinite programs).
         _opts = {}
         _opts.update(opts)
         
@@ -356,7 +358,7 @@ class convexProg():
             raise NotImplementedError
 
         # Assemble
-        obj = matrix(self.objective.coeffs)
+        obj = matrix(self.objective.coeffs) #objective = polynomial or array; size of coeff = nb de nouvelles variables
         constantValue = 0.
         if self.firstVarIsOne:
             #The first variable corresponds to zero order polynomial -> is always zero and can be added to the constant terms
@@ -367,14 +369,12 @@ class convexProg():
         
         G = []
         h = []
-        
         if self.constraints.l.nCstr:
             for aCstr in self.constraints.l.cstrList:
                 thisGlhl = aCstr.getCstr(isSparse)
                 dims['l'] += thisGlhl[1].size
                 G.append(thisGlhl[0])
                 h.append(thisGlhl[1])
-        
         if self.constraints.q.nCstr:
             raise NotImplementedError
             
@@ -388,12 +388,13 @@ class convexProg():
         
         G = np.vstack(G)
         h = np.vstack(h)
-        
         if self.firstVarIsOne:
             # The first variable corresponds to zero order polynomial -> is always zero and can be added to the constant terms
+            #print("G[:,[0]] ",G[:,[0]] )
             h -= G[:,[0]]
             G = G[:,1:]
-        
+            #print("h  ", h)
+            #print('G', G)
         G = matrix(G)
         h = matrix(h)
         

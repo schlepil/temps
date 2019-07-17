@@ -189,6 +189,7 @@ class quadraticLyapunovFunction(LyapunovFunction):
     
     def evalV(self, x:np.ndarray, kd:bool=True):
         x = x.reshape((self.n,-1))
+
         return nsum(ndot(self.C_, x)**2,axis=0,keepdims=kd)
     
     def evalVd(self, x:np.ndarray, dx:np.ndarray, kd:bool=True):
@@ -244,9 +245,16 @@ class quadraticLyapunovFunction(LyapunovFunction):
             assert (A is None) and (B is None) and (x is not None)
         
         if A is None:
-            A = self.dynSys.getTaylorApprox(x,1,1)[0] # TODO change getTaylorApprox
-            B = self.dynSys.getTaylorApprox(x,0,0)[1][0,:,:] # Only zero order matrix
-        
+            AA=self.dynSys.getTaylorApprox(x,1,1)
+            A = AA[0] # TODO change getTaylorApprox
+            print('Hiiiii, its A',A)
+            print("self.dynSys.getTaylorApprox(x,1,1)",AA)
+            print('',AA[0].shape,AA[1].shape)
+            BB = self.dynSys.getTaylorApprox(x,0,0) # Only zero order matrix
+            print('self.dynSys.getTaylorApprox(x,0,0)', BB)
+            print('',BB[0].shape,BB[1].shape)
+            B=BB[1][0,:,:]
+            print('Hiiiii, its B', B)
         #solve lqr
         if N is None:
             K, P, _ = lqr(A, B, Q, R)
@@ -359,7 +367,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     """
     Lyapunov function of the form x'.P(t).x <= alpha(t)
     """
-    
+
     def __init__(self, dynSys: dynamicalSystem, P:np.ndarray=None, alpha:np.ndarray = None, t:np.ndarray = None):
         
         if __debug__:

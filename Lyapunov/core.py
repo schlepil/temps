@@ -37,6 +37,9 @@ class LyapunovFunction():
 
     def getObjectiveAsArray(self, fTaylor: np.ndarray = None, gTaylor: np.ndarray = None, taylorDeg: int = 3, u: np.ndarray = None, uMonom: np.ndarray = None, x0: np.ndarray = None, dx0: np.ndarray = None, t: float = 0., P=None, Pdot=None):
         raise NotImplementedError
+   #############################################################################################""
+
+    ################################################################################################
 
     def register(self, t, ShapenAlpha):
         raise NotImplementedError

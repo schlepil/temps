@@ -25,6 +25,7 @@ if __name__ == "__main__":
     
     #Get the trajectory
     xTraj = lambda t:narray([[np.pi], [0.]], dtype=nfloat)
+
     dxTraj = lambda t:narray([[0.], [0.]], dtype=nfloat)
     
     #Compute necessary input (here 0.)
@@ -53,7 +54,8 @@ if __name__ == "__main__":
     
     #Get the integration function
     #def __call__(self, x:np.ndarray, u_:Union[np.ndarray,Callable], t:float=0., restrictInput:bool=True, mode:List[int]=[0,0], x0:np.ndarray=False):
-    fInt = lambda t, x: pendSys(x, u_=-K, t=t, x0=refTraj.getX(0.))
+    gu = lambda x,t: ndot(-K,x-refTraj.getX(t))
+    fInt = lambda t, x: pendSys(x, u=gu, t=t, x0=refTraj.getX(t))
     maxStep = 0.1
     
     # Define an end

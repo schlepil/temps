@@ -127,7 +127,7 @@ def polyMulExp(c0,c1,cout,idxMat,idxMax0,idxMax1):
             for j,ac1 in enumerate(c1[idxMax1]):
                 if ac1 != 0:
                     cout[idxMat[i,j]] += ac0*ac1
-    
+
     return cp
 
 # self.coeffs = quadraticForm_Numba(Q,qMonoms, h, hMonom, self.repr.idxMat, np.zeros((self.repr.nMonoms,), dtype=nfloat))
@@ -143,13 +143,23 @@ def quadraticForm_Numba(Q,qMonoms, h, hMonom, idxMat, coeffsOut):
     :param coeffsOut:
     :return:
     """
+    #print('hMonom', hMonom)
+    #print('h', h)
     for aHMonom, aH in zip(hMonom, h):
+        #print('aHMonom',aHMonom)
+        #print('aH', aH)
         coeffsOut[aHMonom] += aH
-    
+        #print('coeffsOut[aHMonom] += aH',coeffsOut)
+    #print('qMonoms',qMonoms)
+    #print('Q',Q)
+    #print('idxMat', idxMat)
     for i,imonom in enumerate(qMonoms):
         for j, jmonom in enumerate(qMonoms):
+           # print('i',i)
+            #print('j',j)
             coeffsOut[idxMat[imonom,jmonom]] += Q[i,j]
-    
+            #print('idxMat[imonom, jmonom',idxMat[imonom, jmonom])
+            #print('coeffsOut[idxMat[imonom,jmonom]] += Q[i,j]', coeffsOut)
     return coeffsOut
 
 
@@ -190,9 +200,22 @@ def evalMonomsNumbaN(x, varNum2varNumParents):
     return z
 
 #@njit
+# def evalMonomsNumba(x, varNum2varNumParents):
+#     if len(x.shape)>1:
+#       print('its 1')
+#       if (x.shape[1]==1) :
+#          z =  evalMonomsNumba1(x, varNum2varNumParents)
+#       else:
+#          z = evalMonomsNumbaN(x, varNum2varNumParents)
+#     else:
+#         print('its 2')
+#         x = x.reshape(-1, 1)
+#         print('its 2',x.shape)
+#         z = evalMonomsNumba1(x, varNum2varNumParents)
+#     return z
 def evalMonomsNumba(x, varNum2varNumParents):
-    if(x.shape[1]==1):
-        z =  evalMonomsNumba1(x, varNum2varNumParents)
-    else:
-        z = evalMonomsNumbaN(x, varNum2varNumParents)
-    return z
+      if (x.shape[1]==1) :
+         z =  evalMonomsNumba1(x, varNum2varNumParents)
+      else:
+         z = evalMonomsNumbaN(x, varNum2varNumParents)
+      return z

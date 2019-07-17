@@ -42,7 +42,7 @@ def testSol(sol, ctrlDict:dict):
         signPlanes = np.sign(dist2Planes).astype(nint)
         signPlanes[signPlanes==0] = 1
         
-        for i,type in enumerate(sol['probDict']['u'].squeeze()):
+        for i,type in enumerate(sol['probDict']['u'].reshape((-1,))):
             if (nany(signPlanes[0,:] != signPlanes[0,0])) and not type==2:
                 print(f"Attention: minimizers are on different signs of the plane. Check wich separation is used")
             if not type in list(-signPlanes[i,:])+[2]:
@@ -53,7 +53,7 @@ def testSol(sol, ctrlDict:dict):
     thisPoly.coeffs = -ctrlDict[-1][0]
     optsVals = thisPoly.eval2(zySol).reshape((-1,))
 
-    for i,type in enumerate(sol['probDict']['u'].squeeze()):
+    for i,type in enumerate(sol['probDict']['u'].reshape((-1,))):
         thisPoly.coeffs = -ctrlDict[i][type]
         for k in range(zySol.shape[1]):
             thisVal = thisPoly.eval2(zySol[:,[k]])
