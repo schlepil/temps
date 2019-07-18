@@ -76,8 +76,6 @@ sol=mycP.solve_cvxopt()
 #print('sol',sol)
 mycP.checkSol(sol=sol)
 xsol=mycP.extractOptSol(sol=sol)
-print("extractOptSol",xsol[0])
-print("extractOptSol",xsol[0][1,0])
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D

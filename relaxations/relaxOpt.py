@@ -4,7 +4,7 @@ from relaxations.lasserre import *
 from relaxations.constraints import *
 from relaxations.optUtils import *
 from relaxations.rref import robustRREF
-
+from scipy.optimize import minimize as sp_minimize
 from scipy import optimize
 
 class convexProg():
@@ -102,16 +102,16 @@ class convexProg():
 
         # First check if there is only one solution stored
 
-        nMonomsH_ = self.repr.varNumsUpToDeg[self.repr.maxDeg//2].size # // : / et floor si 9.//2. alors 9./2.=4.5, floor(4.5)=4
+        nMonomsH_ = self.repr.varNumsUpToDeg[self.repr.maxDeg//2].size
 
         varMat = x_[self.repr.idxMat[:nMonomsH_, :nMonomsH_].flatten()].reshape((nMonomsH_, nMonomsH_)) # -> Matrix corresponding to the solution
-        # flatten() > ordre 1
-        v,e = eigh(varMat, check_finite=False) #VALEURS PROPRES D'UNE MATRICE SYMÉTRIQUE CARRÉE
+
+        v,e = eigh(varMat, check_finite=False)
         vMax = v[-1]
         vRel = v*(1./vMax)
 
-        #if __debug__:
-            #assert vRel[0] > -opts_['relTol']
+        if __debug__:
+            assert vRel[0] > -opts_['relTol']
 
         if (nall(vRel[:-1]<opts_['relTol'])):
             # There is only one optimal solution
@@ -125,17 +125,18 @@ class convexProg():
             #Check all constraints
             isValid = True
             zSol = self.repr.evalAllMonoms(xSol)
-
+            print('ohhhhhhhhh',zSol)
             atol = -1e-6
             while True:
                 for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
                     isValid = isValid and bool(aCstr.isValid(zSol, atol=atol))
-
                 # TODO check if this is a proper solution
-                if isValid and (atol > -1.e-1):
+                if isValid and (atol > -1.e-4):
                     break
                 else:
                     atol *= 2.
+                    xSol=self.recalcul(xSol)
+                    zSol=self.repr.evalAllMonoms(xSol)
                     isValid = True
                 
             assert abs(atol) < 1e-1
@@ -147,13 +148,13 @@ class convexProg():
             # Here it is more tricky
             # We will return optimal solutions, however they are not unique
             # It more that all optimal solutions lie
-
+            print('wtfffffffffffffff')
             #First get the cholesky decomp if all positive eigenvalues
             ind = np.where(vRel>opts_['relTol'])[0]
             thisRank = ind.size
-            v2 = v[ind]**.5     #(racine(lambda1), racine(lambda2)....)
+            v2 = v[ind]**.5
             e2 = e[:, ind]
-            V = nmultiply(e2, v2) #V* est (racine(lambda1)v1, racine(lambda2)v2....)
+            V = nmultiply(e2, v2)
 
             # Get column echelon form
             # Scipy only provides row echelon form
@@ -178,10 +179,11 @@ class convexProg():
 
             firstDegMonoms = self.repr.varNumsPerDeg[1]
             
-            relTol = 1e-5 #Set relative zero, increment if infeasible up to max
+            relTol = 1e-6 #Set relative zero, increment if infeasible up to max
             relTolMax = 1e-1
             isNOk_ = 1
             while ((relTol <= relTolMax) and (isNOk_!=0)):
+                relTol *= 10.
                 U = Ue.copy()
                 #Set to relative zero
                 U[nabs(U) <= nmax(nabs(U), axis=1, keepdims=True)*relTol] = 0.
@@ -244,7 +246,7 @@ class convexProg():
                                     else:
                                         # The solution/tolerance combo is not sufficient to generate the minimizer with this approach
                                         isNOk_=2
-                                        relTol *= 10.
+                                        #relTol *= 10.
                                         break
                                         
                             #Apply
@@ -263,8 +265,8 @@ class convexProg():
             # Therefore all optimal solutions respect some constraints, but they are not unique...
             N = nsum(NList,axis=0)/NList.shape[0]
 
-            T,Q = schur(N) #A = Z T Z^H where Z is unitary and T is either upper-triangular,
-            #Ni w = xi w , i = 1, 2, . . . , n.
+            T,Q = schur(N)
+            
             #Now compute the actual solutions or better the representations of it
             xSol = nempty((self.repr.nDims, thisRank), dtype=nfloat)
             #Sum up
@@ -278,16 +280,26 @@ class convexProg():
             isValid = nones((xSol.shape[1],), dtype=np.bool_)
             zSol = self.repr.evalAllMonoms(xSol)
             #Check all constraints
-            atol = -1e-6
+            print('xSol',xSol)
+            atol = -1.e-6
             while True:
+                #assert abs(atol)<1e-1
+
                 for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
                     isValid = np.logical_and(isValid, aCstr.isValid(zSol, atol=atol))
+
                 # TODO check if this is a proper solution
-                if nany(isValid) and atol > -1.e-1:
+                if nany(isValid) and atol > -1.e-4:
                     break
                 else:
                     atol *= 2.
+                    print('olaolaola')
+                    for i in range(xSol.shape[0]):
+                        xSol[i,:]=self.recalcul(xSol[i,:])
+                        #xSol_i.append(self.recalcul(xSol[i,:]))
+                    zSol=self.repr.evalAllMonoms(xSol)
                     isValid[:] = True
+                    print('ok',atol)
             if __debug__:
                 print(f"Found valid solution for atol : {atol}")
             
@@ -311,6 +323,17 @@ class convexProg():
         return xSol, optimalCstr, (varMonomBase, U, relTol)
 
 
+    def recalcul(self,xsol):
+        Amat = nzeros((len(self.constraints.s.cstrList[1:]), self.__objective.coeffs.size), dtype=nfloat)
+        for i, acstr in enumerate(self.constraints.s.cstrList[1:]):
+            Amat[i, :] = acstr.poly.coeffs.copy()
+        this_cstr = {'type': 'ineq', 'fun': lambda x: ndot(Amat, self.repr.evalAllMonoms(x.reshape((-1, 1)))).squeeze()}
+        gx = lambda x: ndot(self.objective.coeffs, self.repr.evalAllMonoms(x))
+        res = sp_minimize(gx, xsol, method='COBYLA', constraints=this_cstr)
+        return res.x
+
+
+
     def checkSol(self, sol:Union[np.ndarray, dict], **kwargs):
         
         if isinstance(sol, dict):
@@ -318,21 +341,21 @@ class convexProg():
         else:
             x_ = narray(sol, dtype=nfloat).copy().squeeze()
 
+        print(np.inner(self.objective.coeffs, x_))
+        print(self.objective.eval2(x_[1:3].reshape((-1, 1))))
+
         nMonomsH_ = self.repr.varNumsUpToDeg[self.repr.maxDeg//2].size
 
         varMat = x_[self.repr.idxMat[:nMonomsH_, :nMonomsH_].flatten()].reshape((nMonomsH_, nMonomsH_)) # -> Matrix corresponding to the solution
 
         xStar = x_[self.repr.varNumsUpToDeg[0].size:self.repr.varNumsUpToDeg[1].size].reshape((-1,1))
-        #print('xStar',xStar)
         zHalfStar = evalMonomsNumba(xStar, self.repr.varNum2varNumParents[:nMonomsH_, :])
-        #print('zHalfStar',zHalfStar)
         zMatStar = np.outer(zHalfStar.squeeze(), zHalfStar.squeeze())
-        #print('zMatStar', zMatStar)
+        
         print(f"Difference in moment matrix is \n {varMat-zMatStar}")
         uz,sz,vz = svd(varMat-zMatStar)
-        print(f"With eigen values and vectors \n{sz}\n{uz}")
-       # print('nsum',nsum(uz, sz, axis=1, keepdims=False))
-       # print(f"The resulting difference in the objective funciton is \n {np.inner(self.objective.coeffs.squeeze(), nsum(uz,sz, axis=1, keepdims=False))}")
+        print(f"With eigen values and vectors \n{sz}\n{sz}")
+        print(f"The resulting difference in the objective funciton is \n {np.inner(self.objective.coeffs.squeeze(), nsum(uz,sz, axis=1, keepdims=False))}")
         
         return xStar
 
@@ -348,7 +371,7 @@ class convexProg():
             return None
 
     def solve_cvxopt(self,isSparse=False,primalstart=None, dualstart=None, opts={}):
-        # Currently focalised on sdp with linear constraints (sdp: solves semidefinite programs).
+        # Currently focalised on sdp with linear constraints
         _opts = {}
         _opts.update(opts)
         
@@ -358,7 +381,7 @@ class convexProg():
             raise NotImplementedError
 
         # Assemble
-        obj = matrix(self.objective.coeffs) #objective = polynomial or array; size of coeff = nb de nouvelles variables
+        obj = matrix(self.objective.coeffs)
         constantValue = 0.
         if self.firstVarIsOne:
             #The first variable corresponds to zero order polynomial -> is always zero and can be added to the constant terms
@@ -369,12 +392,14 @@ class convexProg():
         
         G = []
         h = []
+        
         if self.constraints.l.nCstr:
             for aCstr in self.constraints.l.cstrList:
                 thisGlhl = aCstr.getCstr(isSparse)
                 dims['l'] += thisGlhl[1].size
                 G.append(thisGlhl[0])
                 h.append(thisGlhl[1])
+        
         if self.constraints.q.nCstr:
             raise NotImplementedError
             
@@ -388,13 +413,12 @@ class convexProg():
         
         G = np.vstack(G)
         h = np.vstack(h)
+        
         if self.firstVarIsOne:
             # The first variable corresponds to zero order polynomial -> is always zero and can be added to the constant terms
-            #print("G[:,[0]] ",G[:,[0]] )
             h -= G[:,[0]]
             G = G[:,1:]
-            #print("h  ", h)
-            #print('G', G)
+        
         G = matrix(G)
         h = matrix(h)
         
