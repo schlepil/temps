@@ -430,7 +430,7 @@ class distributedFunnel:
                     aProb['probDict']['resPlacementLin'] = resIdLin
                     resIdLin += 1
                     distributor.setProb(aProb)
-            
+
         while nany(resultsLin<self.opts['numericEpsPos']):
             thisSol = distributor.getSol()
             assert thisSol['sol']['status'] == 'optimal' #TODO make compatible with other solvers
@@ -469,7 +469,10 @@ class distributedFunnel:
                     lMax+=1
         
         doesConverge = nall(resultsLin>=self.opts['numericEpsPos'])
-        
+        #print('resultsLin',resultsLin)
+        #print('self.optsnum',self.opts['numericEpsPos'])
+
+        #print('doseConverge',doesConverge)
         distributor.reset()
 
         return doesConverge, critPoints, results, resultsLin, timePoints
@@ -560,19 +563,21 @@ class distributedFunnel:
                     alphaL = alphaU
                     alphaU *= 2.
                     lyapFunc_.setAlpha(alphaU, 0)
-            
+
             else:
                 # Make the zone smaller to find a lower bound before using dichotomic search
                 alphaU = lyapFunc_.getAlpha(0)
-                alphaL = 2.*alphaU
+                alphaL = alphaU/2.
                 lyapFunc_.setAlpha(alphaL, 0)
 
-                while self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
+                while not self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                     alphaU = alphaL
                     alphaL /= 2.
                     lyapFunc_.setAlpha(alphaL, 0)
             
             # Now we can perform dichotomic search
+            assert alphaL<alphaU
+
             while (alphaU-alphaL)>self.opts['convLim']*alphaL:
                 alpha = (alphaL+alphaU)/2.
                 lyapFunc_.setAlpha(alpha, 0)
@@ -589,9 +594,10 @@ class distributedFunnel:
                     alphaU = alpha
             
             # Conservative
-            lyapFunc_.setAlpha(alphaL, 0)
+            lyapFunc_.setAlpha(alphaL,0)
             # Additional work if seeking to store the proof
             if self.opts['storeProof']:
+
                 self.storeProof(*self.verify1(tSteps, criticalPoints, allTaylorApprox))
             
             tL = tC
