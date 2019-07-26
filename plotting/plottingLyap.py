@@ -187,8 +187,8 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
     UU = funnel.lyapFunc.getCtrl(t, opts_['modeCtrl'], XX, x0)
     
     # __call__(self, x:np.ndarray, u:np.ndarray, mode:str='OO', x0:np.ndarray=None):
-    VV = funnel.dynSys(XX, UU, opts_['modeDyn'], x0=x0, dx0=dx0)
-    
+    VV = funnel.dynSys(XX, UU, t=t,mode=opts_['modeDyn'], x0=x0, dx0=dx0)
+    print('VV',VV)
     streamColor = getStreamColor(funnel.lyapFunc, XX,VV,t,opts_)
     
     thisStream = aa.streamplot(xx,yy,VV[0,:].reshape((opts_['nGrid'],opts_['nGrid'])),VV[1,:].reshape((opts_['nGrid'],opts_['nGrid'])), color=streamColor, cmap=opts_['cmap'])

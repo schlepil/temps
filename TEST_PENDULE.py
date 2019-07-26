@@ -50,16 +50,21 @@ if __name__ == "__main__":
   # evolving the Lyapunov function along the trajectory
   thisLyapEvol = lyap.noChangeLyap()
 
-  myFunnel = distributedFunnel(pendSys, lyapF, refTraj, thisLyapEvol)
+  myFunnel = distributedFunnel(pendSys, lyapF, refTraj, thisLyapEvol,{})
 
   lyapF.P = lyapF.lqrP(np.identity(2), np.identity(1), refTraj.getX(0.))[0]
   #P=np.array([[1.,0.],[0.,1.]])
   print('aaaaaaaaaa')
   myFunnel.compute(0.0, 0.5, (lyapF.P, 100.))
   print('hei')
+  opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
+             'faceAlpha':0.0, 'linestyle':'-',
+             'plotAx':np.array([0, 1]),
+             'cmap':'viridis', 'colorStreams':'ang', 'nGrid':200, 'cbar':True,
+             'modeDyn':[0,0]}
   plot.plot2dConv(myFunnel, 0.0)
   plot.plot2dProof(myFunnel, 0.0)
-
+  #
   plot.plot2dConv(myFunnel, 0.05)
   plot.plot2dProof(myFunnel, 0.05)
   print('hello')

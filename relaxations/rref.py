@@ -92,6 +92,9 @@ def robustRREF(B, tolCalc_:float = 1e-6, tol0_:float = 1e-5, fullOut = False):
     dec = -int(log10(tol0_))
     U1r = around(U1, decimals=dec)
     U2r = around(U2, decimals=dec)
+    #print("U1r",U1r)
+    #print('U2r',U2r)
+    print('U2r-U1r',(U2r-U1r))
 
     if not all(U1r==U2r):
         raise RuntimeError

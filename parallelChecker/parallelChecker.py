@@ -801,12 +801,12 @@ def workerSolveVariable(inQueue, outQueue):
 
             zSol = thisRepr.evalAllMonoms(xSol)
             for k, (acstr_coeffs, acstr) in enumerate(zip(inputAll['cstr'], thisProb.constraints.s.cstrList)):
-                is_valid = acstr.isValid(zSol)
+                is_valid = acstr.isValid(zSol, atol=-1e-4)
                 if not nall(is_valid):
                     raise RuntimeError
                 try:
                     cstr_val = acstr.poly.eval2(xSol)
-                    if nany(cstr_val < -1.e-6):
+                    if nany(cstr_val < -1.e-4):
                         raise RuntimeError
                 except AttributeError:
                     pass

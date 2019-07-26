@@ -125,20 +125,21 @@ class convexProg():
             #Check all constraints
             isValid = True
             zSol = self.repr.evalAllMonoms(xSol)
-            print('ohhhhhhhhh',zSol)
+
             atol = -1e-6
-            while True:
-                for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
+            for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
                     isValid = isValid and bool(aCstr.isValid(zSol, atol=atol))
-                # TODO check if this is a proper solution
-                if isValid and (atol > -1.e-4):
-                    break
-                else:
-                    atol *= 2.
-                    xSol=self.recalcul(xSol)
-                    zSol=self.repr.evalAllMonoms(xSol)
-                    isValid = True
-                
+
+            if not isValid:
+                       isValid=True
+                       xSolnew=self.recalcul(xSol)
+                       zSolnew=self.repr.evalAllMonoms(xSolnew)
+                       for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
+                           isValid = isValid and bool(aCstr.isValid(zSolnew, atol=atol))
+                           if not isValid:
+                               raise RuntimeError
+                           else:
+                               xSol=xSolnew
             assert abs(atol) < 1e-1
             if __debug__:
                 print(f"Found valid solution for atol : {atol}")
@@ -158,7 +159,7 @@ class convexProg():
 
             # Get column echelon form
             # Scipy only provides row echelon form
-            #U, monomBase = sy.Matrix(V.T).rref()# <- This is shit; U, monomBase = sy.Matrix(V.T).rref(simplify=True, iszerofunc=lambda x:x**2<1e-20) #is correct but slow
+            #U, monomBase = sy.Matrix(V.T).rref()# <- This is ; U, monomBase = sy.Matrix(V.T).rref(simplify=True, iszerofunc=lambda x:x**2<1e-20) #is correct but slow
             #U = narray(U, dtype=nfloat).T
             cond_ = (v2[0]/v2[-1])
             
@@ -168,7 +169,12 @@ class convexProg():
                 try:
                     Ue, varMonomBase = robustRREF(V.T, cond_/100., tol0_=1e-8, fullOut=False)  # "Exact" rref
                 except RuntimeError:
-                    Ue, varMonomBase = robustRREF(V.T, cond_/500., tol0_=1e-7, fullOut=False)  # "Exact" rref
+                       # Ue, varMonomBase = robustRREF(V.T, cond_/500., tol0_=1e-7, fullOut=False)  # "Exact" rref
+                       try:
+                           Ue, varMonomBase = robustRREF(V.T, cond_ / 500., tol0_=1e-7, fullOut=False)
+                       except RuntimeError:
+                           Ue, varMonomBase = robustRREF(V.T, cond_ / 1., tol0_=1e-5, fullOut=False)
+                           print('cest bizzard')
             Ue = Ue.T.copy()
 
             varMonomBase = narray(varMonomBase, dtype=nintu).reshape((-1,))
@@ -278,28 +284,60 @@ class convexProg():
             
             # Check if all constraints are respected (Here it can happen that they are not)
             isValid = nones((xSol.shape[1],), dtype=np.bool_)
+            print('xSol',xSol)
             zSol = self.repr.evalAllMonoms(xSol)
             #Check all constraints
-            print('xSol',xSol)
-            atol = -1.e-6
-            while True:
-                #assert abs(atol)<1e-1
+            # atol = -1e-6
+            # for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
+            #     isValid = isValid and bool(aCstr.isValid(zSol, atol=atol))
+            #
+            # if not isValid:
+            #     isValid = True
+            #     xSolnew = self.recalcul(xSol)
+            #     zSolnew = self.repr.evalAllMonoms(xSolnew)
+            #     for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
+            #         isValid = isValid and bool(aCstr.isValid(zSolnew, atol=atol))
+            #         if not isValid:
+            #             raise RuntimeError
+            #         else:
+            #             xSol = xSolnew
+            # atol = -1.e-6
+            # while True:
+            #     #assert abs(atol)<1e-1
+            #
+            #     for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
+            #         isValid = np.logical_and(isValid, aCstr.isValid(zSol, atol=atol))
+            #
+            #     # TODO check if this is a proper solution
+            #     if nany(isValid) :
+            #         break
+            #     else:
+            #         print('olaolaola')
+            #         for i in range(xSol.shape[0]):
+            #             xSol[i,:]=self.recalcul(xSol[i,:])
+            #             #xSol_i.append(self.recalcul(xSol[i,:]))
+            #         zSol=self.repr.evalAllMonoms(xSol)
+            #         isValid[:] = True
+            #         print('ok',atol)
+            atol=-1e-6
 
-                for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
-                    isValid = np.logical_and(isValid, aCstr.isValid(zSol, atol=atol))
+            for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
+                isValid = np.logical_and(isValid, aCstr.isValid(zSol, atol=atol))
 
-                # TODO check if this is a proper solution
-                if nany(isValid) and atol > -1.e-4:
-                    break
-                else:
-                    atol *= 2.
-                    print('olaolaola')
-                    for i in range(xSol.shape[0]):
-                        xSol[i,:]=self.recalcul(xSol[i,:])
-                        #xSol_i.append(self.recalcul(xSol[i,:]))
-                    zSol=self.repr.evalAllMonoms(xSol)
-                    isValid[:] = True
-                    print('ok',atol)
+            if not nany(isValid):
+                        isValid=nones((xSol.shape[1],), dtype=np.bool_)
+                        xSolnew=nzeros(xSol.shape)
+                        for i in range(xSol.shape[1]):
+                            xSolnew[:,i]=self.recalcul(xSol[:,i])
+                            #xSol_i.append(self.recalcul(xSol[i,:]))
+                        zSolnew=self.repr.evalAllMonoms(xSolnew)
+                        for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
+                            isValid = np.logical_and(isValid, aCstr.isValid(zSolnew, atol=atol))
+                        print('hello',isValid)
+                        if not nany(isValid):
+                           raise RuntimeError
+                        else:
+                           xSol=xSolnew
             if __debug__:
                 print(f"Found valid solution for atol : {atol}")
             
@@ -326,10 +364,19 @@ class convexProg():
     def recalcul(self,xsol):
         Amat = nzeros((len(self.constraints.s.cstrList[1:]), self.__objective.coeffs.size), dtype=nfloat)
         for i, acstr in enumerate(self.constraints.s.cstrList[1:]):
+           # print("acstr.poly.coeffs",acstr.poly.coeffs)
             Amat[i, :] = acstr.poly.coeffs.copy()
         this_cstr = {'type': 'ineq', 'fun': lambda x: ndot(Amat, self.repr.evalAllMonoms(x.reshape((-1, 1)))).squeeze()}
         gx = lambda x: ndot(self.objective.coeffs, self.repr.evalAllMonoms(x))
-        res = sp_minimize(gx, xsol, method='COBYLA', constraints=this_cstr)
+      #  res = sp_minimize(gx, xsol, method='COBYLA',constraints=this_cstr,options={'rhobeg': 1.0, 'maxiter': 1000, 'disp': False, 'catol': 1e-7})
+        #res = sp_minimize(gx, xsol, method='COBYLA', constraints=this_cstr, options={'rhobeg': 1.0, 'maxiter': 1000, 'disp': False, 'tol': 1e-7})
+        res = sp_minimize(gx, xsol, method='COBYLA', tol=1e-6, constraints=this_cstr)
+        #res = sp_minimize(gx, xsol, method='COBYLA', constraints=this_cstr)
+        assert res.success
+        #cstrverif[1.979833e-01 - 1.993135e-06, 1.664354e+00 - 4.200682e-06]
+        print('cstrverif',this_cstr['fun'](res.x))
+        if not nall(this_cstr['fun'](res.x)>-1e-6):
+            print('shit')
         return res.x
 
 
