@@ -204,7 +204,12 @@ def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:i
                 tempDict[f"{aKey}_eval"] = [sy.lambdify(q, aMat, modules=array2mat) for aMat in aVal]
             elif isinstance(aVal, (sy.array.DenseNDimArray)):
                 assert aKey.find("_MAT") != -1
-                tempDict[f"{aKey}_eval"] = sy.lambdify(q, aVal, modules=array2mat)
+                # Some hack as n-dimensional arrays are not properly lambdified
+                thisShape = aVal.shape
+                thisSize = nprod(thisShape)
+                aValM = sy.Matrix(aVal.reshape((thisSize)))
+                tempDict[f"{aKey}_eval_flat"] = sy.lambdify(q, aValM, modules=array2mat)
+                tempDict[f"{aKey}_eval"] = lambda *args: tempDict[f"{aKey}_eval_flat"](*args).reshape(thisShape)
             else:
                 raise RuntimeError
         pDerivFD.update(tempDict)
