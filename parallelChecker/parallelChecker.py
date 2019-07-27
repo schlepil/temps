@@ -16,7 +16,7 @@ import os, json, pickle
 
 mySerializer = variableStruct()
 mySerializer.dumps = lambda x: str(x)
-#mySerializer.dumps = lambda x: ""
+mySerializer.dumps = lambda x: ""
 
 #serializer = pickle
 serializer = mySerializer
