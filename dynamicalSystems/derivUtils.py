@@ -199,6 +199,7 @@ def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:i
         #TODO check if creating a numba/cython file is more efficient
         tempDict = {}
         for aKey, aVal in pDerivFD.items():
+            # Fix for matrices
             tempDict[f"{aKey}_eval"] = [sy.lambdify(q, aMat, modules=array2mat) for aMat in aVal]
         pDerivFD.update(tempDict)
 

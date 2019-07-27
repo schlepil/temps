@@ -349,7 +349,7 @@ class secondOrderSys(dynamicalSystem):
             # else:
             #     MPDeriv=self.pDerivM.__dict__[f"M{indexKey}"]
             # Partial derivs to evaluated Taylor
-            z = self.repr.evalAllMonoms(x, mode[0])
+            z = self.repr.evalAllMonoms(x if x0 is None else x-x0, mode[0]) # TODO check if correct; Changed to monomials evaluated at OFFSET
             # multiply with weights
             # print('self.inversionTaylor',self.inversionTaylor)
             # print('self.inversionTaylor.weightingMonoms',self.inversionTaylor.weightingMonoms)
