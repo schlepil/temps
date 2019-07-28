@@ -314,7 +314,10 @@ class secondOrderSys(dynamicalSystem):
         else:
             # Its an actual control input
             u=u
-        
+        for i in range(x.shape[1]):
+            if -0.01<x[1,i]<0.01 and np.pi-0.1<x[0,i]<np.pi+0.1:
+                find=i
+                print('i find',find)
         if restrictInput:
             u = self.ctrlInput(u,t)
         
@@ -389,36 +392,36 @@ class secondOrderSys(dynamicalSystem):
         else:
             # Get partial derivs
             indexKey = f"PDeriv_to_{mode[1]:d}_eval"
-            GPDeriv=[]
+            GPDeriv_=[]
             for i in self.pDerivG.__dict__[f"G{indexKey}"]:
-                GPDeriv.append(i(*x0.squeeze()))
-            MPDeriv=[]
+                GPDeriv_.append(i(*x0.squeeze()))
+            MPDeriv_=[]
             for i in self.pDerivM.__dict__[f"M{indexKey}"]:
-                MPDeriv.append(i(*x0.squeeze()))
+                MPDeriv_.append(i(*x0.squeeze()))
             # GPDeriv = self.pDerivG.__dict__[f"G{indexKey}"](*x0.squeeze())  # [nq,nu,nMonoms]
             # MPDeriv = self.pDerivM.__dict__[f"M{indexKey}"](*x0.squeeze())  # [nq,nq,nMonoms]
 
             # Partial derivs to evaluated Taylor
-            z = self.repr.evalAllMonoms(x, mode[1])
+            z_ = self.repr.evalAllMonoms(x, mode[1])
             # multiply with weights
             # z *= self.inversionTaylor.weightingMonoms[:z.size]
             # z *= self.inversionTaylor.weightingMonoms[:z.shape[0]]
-            z = self.inversionTaylor.weightingMonoms * z.T
+            z_ = self.inversionTaylor.weightingMonoms * z_.T
             # (broadcast) multiply and sum up and contract
-            print('GPDeriv.shape',narray(GPDeriv).shape)
-            MPDeriv = narray(MPDeriv).reshape((1, 1, 10))
-            GPDeriv = narray(GPDeriv).reshape((1, 1, 10))
+
+            MPDeriv_ = narray(MPDeriv_).reshape((1, 1, 10))
+            GPDeriv_ = narray(GPDeriv_).reshape((1, 1, 10))
             u=u.reshape((1,40000))
-            g = neinsum("ijk,kn,jn->in", GPDeriv, z.T,u)  # ([nq,nu,nMonoms] . [nMonoms,nPt]) . (nu,nPt) -> [nq,nPt] Compute input
-            M = neinsum("ijk,kn->ijn", MPDeriv, z.T)  # [nq,nq,nMonoms] . [nMonoms,nPt] -> [nq,nq,nPt] Mass matrices stacked along third axis as above
+            g_ = neinsum("ijk,kn,jn->in", GPDeriv_, z_.T,u)  # ([nq,nu,nMonoms] . [nMonoms,nPt]) . (nu,nPt) -> [nq,nPt] Compute input
+            M_ = neinsum("ijk,kn->ijn", MPDeriv_, z_.T)  # [nq,nq,nMonoms] . [nMonoms,nPt] -> [nq,nq,nPt] Mass matrices stacked along third axis as above
 
         # Compute - input dynamics
-        if M.shape[1]==1 and g.shape[0]==1:
+        if M_.shape[1]==1 and g_.shape[0]==1:
             for i in range(x.shape[1]):
-              xd[self.nq-1, i]+=g[0,i]/M[0, 0, i]
+              xd[self.nq-1, i]+=g_[0,i]/M_[0, 0, i]
         else:
            for i in range(x.shape[1]):
-             xd[self.nq:, [i]] += ssolve(M[:, :, i], g[:, [i]], assume_a='pos')
+             xd[self.nq:, [i]] += ssolve(M_[:, :, i], g_[:, [i]], assume_a='pos')
 
         if dx0 is not None:
             # Adjust for reference

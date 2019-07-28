@@ -17,3 +17,6 @@ print(c.shape)
 d=np.array([1,2])
 print(c.reshape((-1,d.shape[0]))*d)
 print(c[1,:])
+g=np.array([0,1])
+c=g*c.T
+print('c',c)
