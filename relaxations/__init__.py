@@ -3,4 +3,5 @@ from relaxations.testRelax import *
 from relaxations.constraints import *
 from relaxations.optUtils import *
 from relaxations.relaxOpt import *
+from relaxations.propagators import *
 from relaxations.rref import rref

@@ -4,8 +4,8 @@ from Lyapunov.utils_numba import *
 from control import lqr
 
 
-
-import plotting as plot
+if coreOptions.doPlot:
+    import plotting as plot
 
 
 #Indexing
@@ -216,8 +216,8 @@ class quadraticLyapunovFunction(LyapunovFunction):
         n = neinsum( "in,ij->jn", x, P) #TODO check if correct
 
         #Normalize
-        n /= (norm(n,axis=0,keepdims=True)+floatEps)
-        xdn = xd / (norm(xd,axis=0,keepdims=True)+floatEps)
+        n /= (norm(n,axis=0,keepdims=True)+coreOptions.floatEps)
+        xdn = xd / (norm(xd,axis=0,keepdims=True)+coreOptions.floatEps)
 
         return np.arccos(nsum(-(nmultiply(n,xdn)), axis=0, keepdims=kd))
     
@@ -674,8 +674,8 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         n = neinsum( "in,nij->jn", x, P) #TODO check if correct
 
         #Normalize
-        n /= (norm(n,axis=0,keepdims=True)+floatEps)
-        xdn = xd / (norm(xd,axis=0,keepdims=True)+floatEps)
+        n /= (norm(n,axis=0,keepdims=True)+coreOptions.floatEps)
+        xdn = xd / (norm(xd,axis=0,keepdims=True)+coreOptions.floatEps)
 
         return np.arccos(nsum(-(nmultiply(n,xdn)), axis=0, keepdims=kd))
 
@@ -991,7 +991,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         allY = thisSol['ySol']
     
         # Test if any of the points is infeasible relying on optimal control
-        PG0n = ctrlDict['PG0']/(norm(ctrlDict['PG0'], axis=0, keepdims=True)+floatEps)
+        PG0n = ctrlDict['PG0']/(norm(ctrlDict['PG0'], axis=0, keepdims=True)+coreOptions.floatEps)
         for k in range(allY.shape[1]):
             thisY = allY[:, [k]]
             yPlaneDist = ndot(thisY.T, PG0n).reshape((nu_,))
@@ -1137,7 +1137,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         # Construct new problems
         # Heuristic: Find an input combination that ensures convergence but minimizes the number of separations
         # ensure correct input form (1d)
-        PG0n = ctrlDict['PG0']/(norm(ctrlDict['PG0'], axis=0, keepdims=True)+floatEps)
+        PG0n = ctrlDict['PG0']/(norm(ctrlDict['PG0'], axis=0, keepdims=True)+coreOptions.floatEps)
         probDict_['u'] = probDict_['u'].reshape((-1,))
         uLinCurrent = np.flatnonzero(probDict_['u'] == 2) # The input indexes which can be "improved"
     
