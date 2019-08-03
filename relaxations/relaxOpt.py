@@ -384,7 +384,9 @@ class convexProg():
             if not nall(this_cstr['fun'](res.x)>-absTolCstr):
                 print('shit')
         return res.x
-
+    
+    def localSolve(self, *args, **kwargs):
+        return self.recalcul(*args, **kwargs)
 
 
     def checkSol(self, sol:Union[np.ndarray, dict], **kwargs):
