@@ -184,7 +184,7 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
     x0 = funnel.dynSys.ctrlInput.refTraj.getX(t)
     dx0 = funnel.dynSys.ctrlInput.refTraj.getDX(t)
     
-    UU = funnel.lyapFunc.getCtrl(t, opts_['modeCtrl'], XX, x0)
+    UU = funnel.lyapFunc.getCtrl(t, opts_['modeCtrl'], XX-x0, x0) # Fixed : getCtrl expects offset to current origin (dX), not absolute position values)
     
     # __call__(self, x:np.ndarray, u:np.ndarray, mode:str='OO', x0:np.ndarray=None):
     VV = funnel.dynSys(XX, UU, t=t,mode=opts_['modeDyn'], x0=x0, dx0=dx0)

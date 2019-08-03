@@ -10,8 +10,8 @@ from polynomial import polynomialRepr
 
 # Zero is stable
 
-def getUlims():
-    return -2.,2.
+def getUlims(Ul=-2.,Uu=2.):
+    return Ul,Uu
 
 def getSys(repr: polynomialRepr, fileName:str=None):
     ##Taken from Drake - RobotLocomotion @ CSAIL

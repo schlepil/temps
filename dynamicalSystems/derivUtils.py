@@ -183,13 +183,13 @@ def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:i
         for k in range(0, maxPDerivDeg + 1):
             totMonoms += len( repr.listOfMonomialsPerDeg[k])
             pDerivFD[f"{fStr}PDeriv_to_{k:d}"] = pDerivFD[f"{fStr}PDeriv"][:totMonoms]
-            pDerivFD[f"{fStr}PDeriv_to_{k:d}_MAT"] = sy.Array.zeros(totMonoms,n,m).as_mutable()#tensor.array.MutableDenseNDimArray.zeros(totMonoms,n,
+            pDerivFD[f"{fStr}PDeriv_to_{k:d}_MAT"] = sy.Array.zeros(n,m,totMonoms).as_mutable()#tensor.array.MutableDenseNDimArray.zeros(totMonoms,n,
             # m)#Array.zeros(totMonoms,n,m)
             for j,aVal in enumerate(pDerivFD[f"{fStr}PDeriv_to_{k:d}"]):
                 #pDerivFD[f"{fStr}PDeriv_to_{k:d}_MAT"][j,:,:] = aVal #TODO I guess __setitem__ does not support slicing which would really sucks
                 for idxI in range(aVal.shape[0]):
                     for idxJ in range(aVal.shape[1]):
-                        pDerivFD[f"{fStr}PDeriv_to_{k:d}_MAT"][j, idxI, idxJ] = aVal[idxI, idxJ]
+                        pDerivFD[f"{fStr}PDeriv_to_{k:d}_MAT"][idxI, idxJ, j] = aVal[idxI, idxJ]
 
         # array2mat = [{'ImmutableDenseMatrix': np.matrix}, 'numpy']
         array2mat = [{'ImmutableDenseMatrix': np.array}, 'numpy']
@@ -199,7 +199,19 @@ def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:i
         #TODO check if creating a numba/cython file is more efficient
         tempDict = {}
         for aKey, aVal in pDerivFD.items():
-            tempDict[f"{aKey}_eval"] = [sy.lambdify(q, aMat, modules=array2mat) for aMat in aVal]
+            # Fix for matrices
+            if isinstance(aVal, list):
+                tempDict[f"{aKey}_eval"] = [sy.lambdify(q, aMat, modules=array2mat) for aMat in aVal]
+            elif isinstance(aVal, (sy.array.DenseNDimArray)):
+                assert aKey.find("_MAT") != -1
+                # Some hack as n-dimensional arrays are not properly lambdified
+                thisShape = aVal.shape
+                thisSize = nprod(thisShape)
+                aValM = sy.Matrix(aVal.reshape((thisSize)))
+                tempDict[f"{aKey}_eval_flat"] = sy.lambdify(q, aValM, modules=array2mat)
+                tempDict[f"{aKey}_eval"] = lambda *args: tempDict[f"{aKey}_eval_flat"](*args).reshape(thisShape)
+            else:
+                raise RuntimeError
         pDerivFD.update(tempDict)
 
     return pDerivFD

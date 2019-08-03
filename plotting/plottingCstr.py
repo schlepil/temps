@@ -25,10 +25,13 @@ def plot2dCstr(aObj:Union[rel.constraint, rel.polynomial, rel.convexProg], ax:pt
         DXX = XX - x0
     else:
         DXX = XX
-    ZZ = aObj.poly.repr.evalAllMonoms(DXX)
+    try:
+      ZZ = aObj.poly.repr.evalAllMonoms(DXX)
+    except AttributeError:
+        ZZ = aObj.repr.evalAllMonoms(DXX)
 
     if isinstance(aObj, rel.convexProg):
-        YY = sum([aCstr.poly.eval2(ZZ) for aCstr in aObj.constraints.l+aObj.constraints.q+aObj.constraints.s])
+        YY = sum([aCstr.poly.eval2(ZZ) for aCstr in aObj.constraints.l.cstrList+aObj.constraints.q.cstrList+aObj.constraints.s.cstrList[1:]])
     else:
         YY = aObj.poly.eval2(ZZ)
     

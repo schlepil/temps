@@ -16,7 +16,7 @@ import os, json, pickle
 
 mySerializer = variableStruct()
 mySerializer.dumps = lambda x: str(x)
-#mySerializer.dumps = lambda x: ""
+mySerializer.dumps = lambda x: ""
 
 #serializer = pickle
 serializer = mySerializer
@@ -747,7 +747,7 @@ def workerSolveVariable(inQueue, outQueue):
                 ff, aa = plt.plt.subplots(1, 1)
                 aa.set_xlim(-2, 2)
                 aa.set_ylim(-2, 2)
-                plt.plot2dCstr(thisProb, aa, {'binaryPlot':True}, fig=ff)
+                plt.plot2dCstr(thisProb, aa, opts={'binaryPlot':True}, fig=ff)
 
 
         while True:

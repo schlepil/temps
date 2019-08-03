@@ -298,7 +298,7 @@ class secondOrderSys(dynamicalSystem):
         :param dx0: reference velocity. If given, only the velocity difference will be returned
         :return:
         """
-        print('6324upup')
+        
         if __debug__:
             assert x.shape[0] == self.nq
             assert all([(aMode >= 0) and (aMode <=self.maxTaylorDeg) for aMode in mode ])
@@ -334,50 +334,31 @@ class secondOrderSys(dynamicalSystem):
             xLi = [x[i,:] for i in range(self.nq)]
             M = self.pDerivM.M0_eval[0](*xLi) # [nq,nq,nPt] or [nq,nq]
             f = self.pDerivF.f0_eval(*xLi) # [nq,nPt] or [nq,1]
-            M.resize((self.nq, self.nq, x.shape[1]))#[nq,nq,nPt]
+            M.resize((self.nqv, self.nqv, x.shape[1]))#[nq,nq,nPt]
 
         elif mode[0] <= self.maxTaylorDeg:
             # Get partial derivs
-            indexKey = f"PDeriv_to_{mode[0]:d}_eval"
-            # print('indexKey',indexKey)
-            # print('its pDerivF',self.pDerivF)
-            # print('its pDerivM',self.pDerivM)
-            # print('self.pDerivM.__dict__[f"M{indexKey}"]',self.pDerivM.__dict__[f"M{indexKey}"])
-            fPDeriv = self.pDerivF.__dict__[f"f{indexKey}"](*x0.squeeze())  # [nq,nMonoms]
-            # if not isinstance(self.pDerivM.__dict__[f"M{indexKey}"],list):
-            MPDeriv=[]
-            for i in self.pDerivM.__dict__[f"M{indexKey}"]:
-                MPDeriv.append(i(*x0.squeeze()))
-            # MPDeriv = self.pDerivM.__dict__[f"M{indexKey}"](*x0.squeeze())  # [nq,nq,nMonoms]
-            # else:
-            #     MPDeriv=self.pDerivM.__dict__[f"M{indexKey}"]
+            fPDeriv = self.pDerivF.__dict__[f"fPDeriv_to_{mode[0]:d}_eval"](*x0.squeeze())  # [nq,nMonoms]
+            # MPDeriv = self.pDerivM.__dict__[f"MPDeriv_to_{mode[0]:d}_MAT_eval"](*x0.squeeze())  # [nqv,nqv,nMonoms]
+            # Lambdifying tensors does not work as expected -> TODO
+            # Is returned as List of lists -> explicit conversion to np.array
+            MPDeriv = narray(self.pDerivM.__dict__[f"MPDeriv_to_{mode[0]:d}_MAT_eval"](*x0.squeeze()), dtype=nfloat)  # [nqv,nqv,nMonoms]
+            MPDeriv.resize((self.nqv, self.nqv, len(self.repr.varNumsUpToDeg[mode[0]]))) # Ensure dimension
+    
             # Partial derivs to evaluated Taylor
-            z = self.repr.evalAllMonoms(x, mode[0])
+            z = self.repr.evalAllMonoms(x if x0 is None else x-x0, mode[0]) # TODO check correctness, monoms have to be evaluated at the offset
             # multiply with weights
-            # print('self.inversionTaylor',self.inversionTaylor)
-            # print('self.inversionTaylor.weightingMonoms',self.inversionTaylor.weightingMonoms)
-            # print('z.size',z.size)
-            # print('z.shape',z.shape)
-            # print('fPDeriv', fPDeriv)
-            # z = self.inversionTaylor.weightingMonoms*z.reshape((-1, self.inversionTaylor.weightingMonoms.shape[0]))
-            # z *= self.inversionTaylor.weightingMonoms[:z.size]
-            z=self.inversionTaylor.weightingMonoms*z.T
+            z *= self.inversionTaylor.weightingMonoms[:z.shape[0]].reshape((z.shape[0],1))
             # (broadcast) multiply and sum up and contract
-            # print('MPDeriv',MPDeriv)
-            # print('MPDeriv',narray(MPDeriv).shape)
-            # print('z.shape',z.shape)
-            f = ndot(fPDeriv, z.T)
-            MPDeriv=narray(MPDeriv).reshape((1,1,10))
-            M = neinsum("ijk,kn->ijn", MPDeriv, z.T)# [nq,nq,nMonoms] . [nMonoms,nPt] -> [nq,nq,nPt] Mass matrices stacked along third axis as above
+            f = ndot(fPDeriv, z)
+            M = neinsum("ijk,kn->ijn", MPDeriv, z)  # [nqv,nqv,nMonoms] . [nMonoms,nPt] -> [nqv,nqv,nPt] Mass matrices stacked along third axis as above
         # Compute - system dynamics
-        # print('nq',self.nq)
-        if M.shape[1]==1 and f.shape[0]==1:
-            for i in range(x.shape[1]):
-              xd[self.nq-1, i] = f[0, i]/M[0, 0, i]
+        if self.nqv==1:
+            # special case: only one degree of freedom
+            xd[1,:] = np.divide(f.squeeze(), M.squeeze())
         else:
            for i in range(x.shape[1]):
               xd[self.nq:,[i]] = ssolve(M[:,:,i], f[:,[i]], assume_a='pos')
-        # print('xd',xd)
 
         # input dynamics
         if mode[1] == 0:
@@ -391,6 +372,7 @@ class secondOrderSys(dynamicalSystem):
             g = neinsum("ijk,jk->ik", G, u)
         else:
             # Get partial derivs
+# <<<<<<< HEAD
             indexKey = f"PDeriv_to_{mode[1]:d}_eval"
             GPDeriv_=[]
             for i in self.pDerivG.__dict__[f"G{indexKey}"]:
@@ -422,11 +404,35 @@ class secondOrderSys(dynamicalSystem):
         else:
            for i in range(x.shape[1]):
              xd[self.nq:, [i]] += ssolve(M_[:, :, i], g_[:, [i]], assume_a='pos')
+# =======
+            # Lambdifying tensors does not work as expected -> TODO
+            # Is returned as List of lists -> explicit conversion to np.array
+        GPDeriv = narray(self.pDerivG.__dict__[f"GPDeriv_to_{mode[1]:d}_MAT_eval"](*x0.squeeze()), dtype=nfloat)  # [nqv,nu,nMonoms]
+        MPDeriv = narray(self.pDerivM.__dict__[f"MPDeriv_to_{mode[1]:d}_MAT_eval"](*x0.squeeze()), dtype=nfloat)  # [nqv,nqv,nMonoms]
+            #Ensure dimensions
+        GPDeriv.resize((self.nqv, self.nu, len(self.repr.varNumsUpToDeg[mode[1]])))
+        MPDeriv.resize((self.nqv, self.nqv, len(self.repr.varNumsUpToDeg[mode[1]])))
+
+            # Partial derivs to evaluated Taylor
+        z = self.repr.evalAllMonoms(x if x0 is None else x-x0, mode[1]) # TODO check correctness, monoms have to be evaluated at the offset
+            # multiply with weights
+        z *= self.inversionTaylor.weightingMonoms[:z.shape[0]].reshape((z.shape[0],1))
+            # (broadcast) multiply and sum up and contract
+        g = neinsum("ijk,kn,jn->in", GPDeriv, z,u)  # ([nq,nu,nMonoms] . [nMonoms,nPt]) . (nu,nPt) -> [nq,nPt] Compute input
+        M = neinsum("ijk,kn->ijn", MPDeriv, z)  # [nq,nq,nMonoms] . [nMonoms,nPt] -> [nq,nq,nPt] Mass matrices stacked along third axis as above
+
+        # Compute - input dynamics
+        if self.nqv==1:
+            # special case
+            xd[1,:] = np.divide(g.squeeze(), M.squeeze())
+        else:
+           for i in range(x.shape[1]):
+             xd[self.nqv:, [i]] += ssolve(M[:, :, i], g[:, [i]], assume_a='pos')
+# >>>>>>> f40086b404420544b1f225d78d425ee146f7209e
 
         if dx0 is not None:
             # Adjust for reference
             xd -= dx0
-        print('holy shit',xd)
         return xd
 
     def getUopt(self,x: np.ndarray,ddx: np.ndarray,respectCstr: bool = False,t: float = 0., fullDeriv:bool=False):
@@ -469,7 +475,7 @@ class secondOrderSys(dynamicalSystem):
 
         if respectCstr:
             self.ctrlInput(uStar,t)
-        print('this is uStar', uStar)
+
         return uStar
 
 

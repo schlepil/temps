@@ -114,7 +114,6 @@ class distributedFunnel:
             # Add minimal exponential convergence rate
             thisPoly.setQuadraticForm(nidentity(self.dynSys.nq))
             ctrlDict[-1][0] -= thisPoly.coeffs*self.opts['minConvRate']
-            
             for k in range(self.dynSys.nu):
                 if __debug__:
                     assert abs(objectiveStar[k+1,0]) <= 1e-9
@@ -547,7 +546,7 @@ class distributedFunnel:
             criticalPoints = None
 
             # Step 2 check if current is feasible
-            #minConvList = self.solve1(tSteps, criticalPoints, allTaylorApprox)
+            # minConvList = self.solve1(tSteps, criticalPoints, allTaylorApprox)
             isConverging = self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]
             
             # TODO use forward propagate critical points !!!
@@ -573,6 +572,7 @@ class distributedFunnel:
                 while not self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                     alphaU = alphaL
                     alphaL /= 2.
+                    print('alphaL',alphaL)
                     lyapFunc_.setAlpha(alphaL, 0)
             
             # Now we can perform dichotomic search

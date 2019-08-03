@@ -10,7 +10,7 @@ import plotting as plot
 
 #Indexing
 
-# Interpolators
+##Interpolators
 # Common signature
 ##  self.interpolate(tIn, P_, C, Plog, t_, returnPd) ##
 

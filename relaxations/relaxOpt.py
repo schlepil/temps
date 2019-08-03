@@ -149,7 +149,6 @@ class convexProg():
             # Here it is more tricky
             # We will return optimal solutions, however they are not unique
             # It more that all optimal solutions lie
-            print('wtfffffffffffffff')
             #First get the cholesky decomp if all positive eigenvalues
             ind = np.where(vRel>opts_['relTol'])[0]
             thisRank = ind.size
@@ -388,9 +387,6 @@ class convexProg():
         else:
             x_ = narray(sol, dtype=nfloat).copy().squeeze()
 
-        print(np.inner(self.objective.coeffs, x_))
-        print(self.objective.eval2(x_[1:3].reshape((-1, 1))))
-
         nMonomsH_ = self.repr.varNumsUpToDeg[self.repr.maxDeg//2].size
 
         varMat = x_[self.repr.idxMat[:nMonomsH_, :nMonomsH_].flatten()].reshape((nMonomsH_, nMonomsH_)) # -> Matrix corresponding to the solution
@@ -455,6 +451,10 @@ class convexProg():
             for aCstr in self.constraints.s.cstrList:
                 thisGshs = aCstr.getCstr(isSparse)
                 dims['s'].append(int((thisGshs[1].size)**.5))
+                print('each G',thisGshs[0])
+                print('each G', thisGshs[0].shape)
+                print('each h',thisGshs[1])
+                print('each h', thisGshs[1].shape)
                 G.append(thisGshs[0])
                 h.append(thisGshs[1])
         
@@ -465,10 +465,15 @@ class convexProg():
             # The first variable corresponds to zero order polynomial -> is always zero and can be added to the constant terms
             h -= G[:,[0]]
             G = G[:,1:]
-        
+        print('im g', G.shape)
+        print('im h', h.shape)
         G = matrix(G)
         h = matrix(h)
         
+        print('im G',G)
+
+        print('im h',h)
+        print('objectif',obj)
         sol = solvers.conelp(obj, G,h,dims,primalstart=primalstart,dualstart=dualstart)
         
         #Add
@@ -479,7 +484,7 @@ class convexProg():
         sol['x_np'] = narray(sol['x']).astype(nfloat).reshape((1,-1))
         if self.firstVarIsOne:
             sol['x_np'] = np.hstack(([[1]],sol['x_np']))
-        
+        print('wdnmd',sol)
         return sol
         
         
