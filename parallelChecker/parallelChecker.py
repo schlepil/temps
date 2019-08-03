@@ -624,12 +624,12 @@ def workerSolveFixed(inQueue, outQueue):
                     raise RuntimeError
                 try:
                     cstr_val = acstr.poly.eval2(xSol)
-                    if nany(cstr_val<-1.e-6):
+                    if nany(cstr_val<-absTolCstr):
                         raise RuntimeError
                 except AttributeError:
                     pass
                 
-            if solution['primal objective'] < -1.e-6:
+            if solution['primal objective'] < numericEpsPos:
                 print(f"Found critical point with {solution['primal objective']} at \n {ySol}")
             print(f"Optimal value is ")
             if extraction[0].size == 0:
@@ -811,7 +811,7 @@ def workerSolveVariable(inQueue, outQueue):
                 except AttributeError:
                     pass
 
-            if solution['primal objective'] < -1.e-6:
+            if solution['primal objective'] < numericEpsPos:
                 print(f"Found critical point with {solution['primal objective']} at \n {ySol}")
             print(f"Optimal value is ")
             if extraction[0].size == 0:

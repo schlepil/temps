@@ -55,6 +55,7 @@ if __name__ == "__main__":
   lyapF.P = lyapF.lqrP(np.identity(2), np.identity(1), refTraj.getX(0.))[0]
   #P=np.array([[1.,0.],[0.,1.]])
 
+
   myFunnel.compute(0.0, 0.01, (lyapF.P, 100.))
   opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
              'faceAlpha':0.0, 'linestyle':'-',
@@ -71,3 +72,25 @@ if __name__ == "__main__":
 
   print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")
   plot.plt.show()
+
+  print('aaaaaaaaaa')
+  myFunnel.compute(0.0, 0.5, (lyapF.P, 100.))
+
+    # Disable plot for timing
+
+# opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
+#         'faceAlpha':0.0, 'linestyle':'-',
+#         'plotAx':np.array([0, 1]),
+#         'cmap':'viridis', 'colorStreams':'ang', 'nGrid':200, 'cbar':True,
+#         'modeDyn':[0,0]}
+  plot.plot2dConv(myFunnel, 0.0)
+  plot.plot2dProof(myFunnel, 0.0)
+    #
+  plot.plot2dConv(myFunnel, 0.05)
+  plot.plot2dProof(myFunnel, 0.05)
+
+  distributor.terminate()
+  
+  print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")
+  plot.plt.show()
+

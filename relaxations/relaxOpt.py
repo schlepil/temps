@@ -126,13 +126,13 @@ class convexProg():
             isValid = True
             zSol = self.repr.evalAllMonoms(xSol)
 
-            atol = -1e-6
+            atol = -absTolCstr #make a global variable
             for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
                     isValid = isValid and bool(aCstr.isValid(zSol, atol=atol))
 
             if not isValid:
                        isValid=True
-                       xSolnew=self.recalcul(xSol)
+                       xSolnew=self.localSolve(xSol)
                        zSolnew=self.repr.evalAllMonoms(xSolnew)
                        for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
                            isValid = isValid and bool(aCstr.isValid(zSolnew, atol=atol))
@@ -292,7 +292,7 @@ class convexProg():
             #
             # if not isValid:
             #     isValid = True
-            #     xSolnew = self.recalcul(xSol)
+            #     xSolnew = self.localSolve(xSol)
             #     zSolnew = self.repr.evalAllMonoms(xSolnew)
             #     for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
             #         isValid = isValid and bool(aCstr.isValid(zSolnew, atol=atol))
@@ -313,8 +313,8 @@ class convexProg():
             #     else:
             #         print('olaolaola')
             #         for i in range(xSol.shape[0]):
-            #             xSol[i,:]=self.recalcul(xSol[i,:])
-            #             #xSol_i.append(self.recalcul(xSol[i,:]))
+            #             xSol[i,:]=self.localSolve(xSol[i,:])
+            #             #xSol_i.append(self.localSolve(xSol[i,:]))
             #         zSol=self.repr.evalAllMonoms(xSol)
             #         isValid[:] = True
             #         print('ok',atol)
@@ -327,8 +327,8 @@ class convexProg():
                         isValid=nones((xSol.shape[1],), dtype=np.bool_)
                         xSolnew=nzeros(xSol.shape)
                         for i in range(xSol.shape[1]):
-                            xSolnew[:,i]=self.recalcul(xSol[:,i])
-                            #xSol_i.append(self.recalcul(xSol[i,:]))
+                            xSolnew[:,i]=self.localSolve(xSol[:, i])
+                            #xSol_i.append(self.localSolve(xSol[i,:]))
                         zSolnew=self.repr.evalAllMonoms(xSolnew)
                         for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
                             isValid = np.logical_and(isValid, aCstr.isValid(zSolnew, atol=atol))
@@ -360,27 +360,29 @@ class convexProg():
         return xSol, optimalCstr, (varMonomBase, U, relTol)
 
 
-    def recalcul(self,xsol):
+    def localSolve(self, xsol):
+        # TODO @xiao take into account possible linear / socp constraints
+        # TODO @xiao reduce the computational complexity by only taking non-zero coefficients (monomials up to the highest polynomial in the constraints)
+        # TODO @xiao make this more generic, so that solvers can be easily exchanged, maybe by creating a local-solver object "sugar-coating" existing solvers
+        
         Amat = nzeros((len(self.constraints.s.cstrList[1:]), self.__objective.coeffs.size), dtype=nfloat)
         for i, acstr in enumerate(self.constraints.s.cstrList[1:]):
            # print("acstr.poly.coeffs",acstr.poly.coeffs)
-            Amat[i, :] = acstr.poly.coeffs.copy()
+            #Amat[i, :] = acstr.poly.coeffs.copy() #Unnecessary copy, will be copied anyways
+            Amat[i, :] = acstr.poly.coeffs
         this_cstr = {'type': 'ineq', 'fun': lambda x: ndot(Amat, self.repr.evalAllMonoms(x.reshape((-1, 1)))).squeeze()}
         gx = lambda x: ndot(self.objective.coeffs, self.repr.evalAllMonoms(x))
       #  res = sp_minimize(gx, xsol, method='COBYLA',constraints=this_cstr,options={'rhobeg': 1.0, 'maxiter': 1000, 'disp': False, 'catol': 1e-7})
         #res = sp_minimize(gx, xsol, method='COBYLA', constraints=this_cstr, options={'rhobeg': 1.0, 'maxiter': 1000, 'disp': False, 'tol': 1e-7})
-        res = sp_minimize(gx, xsol, method='COBYLA', tol=1e-6, constraints=this_cstr)
+        res = sp_minimize(gx, xsol, method='COBYLA', tol=0.9*absTolCstr, constraints=this_cstr) #Leave some margin
         #res = sp_minimize(gx, xsol, method='COBYLA', constraints=this_cstr)
         assert res.success
         #cstrverif[1.979833e-01 - 1.993135e-06, 1.664354e+00 - 4.200682e-06]
-        print('cstrverif',this_cstr['fun'](res.x))
-        if not nall(this_cstr['fun'](res.x)>-1e-6):
-            print('shit')
+        if __debug__:
+            print('cstrverif',this_cstr['fun'](res.x))
+            if not nall(this_cstr['fun'](res.x)>-absTolCstr):
+                print('shit')
         return res.x
-    
-    def localSolve(self, *args, **kwargs):
-        return self.recalcul(*args, **kwargs)
-
 
     def checkSol(self, sol:Union[np.ndarray, dict], **kwargs):
         
