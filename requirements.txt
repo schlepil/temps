@@ -1,0 +1,10 @@
+# requirements.txt
+numpy
+scipy
+sympy
+control
+numba
+pyqt5
+matplotlib
+multivar-horner
+slycot

@@ -18,7 +18,7 @@ def testSol(sol, ctrlDict:dict):
     zySol = thisRepr.evalAllMonoms(ySol)
     
     try:
-        PG0n = ctrlDict['PG0']/(norm(ctrlDict['PG0'], axis=0, keepdims=True)+floatEps)
+        PG0n = ctrlDict['PG0']/(norm(ctrlDict['PG0'], axis=0, keepdims=True)+coreOptions.floatEps)
     except KeyError:
         pass
 

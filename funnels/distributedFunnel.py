@@ -16,11 +16,12 @@ from funnels.testUtils import testSol
 
 class distributedFunnel:
 
-    def __init__(self, dynSys:dynamicalSystem, lyapFunc:LyapunovFunction, traj:referenceTrajectory, evolveLyap:lyapEvol, opts={}):
+    def __init__(self, dynSys:dynamicalSystem, lyapFunc:LyapunovFunction, traj:referenceTrajectory, evolveLyap:lyapEvol, propagator:relax.propagators, opts={}):
         self.dynSys = dynSys
         self.lyapFunc = lyapFunc
         self.traj = traj
         self.evolveLyap = evolveLyap
+        self.propagator = propagator
         
         self.repr = self.lyapFunc.repr
 
@@ -28,6 +29,7 @@ class distributedFunnel:
                      'minDistToSep':"0.1+0.25/self.dynSys.nu", #When to use linear feedback and "ignore" separation
                      'sphereBoundCritPoint':True, # Whether to use separation or spheric confinement
                      'interSteps':3, # How many points to check per interval
+                     'interStepsPropCrit':5, #How many local searches have to be performed
                      'projection':'sphere',
                      'solver':'cvxopt',
                      'numericEpsPos':-1.e-6,
@@ -183,7 +185,7 @@ class distributedFunnel:
                 #Set information
                 thisProbLin['probDict']['u'] = 2*nones((nu_,), dtype=nint)
 
-                PG0n = ctrlDict['PG0']/(norm(ctrlDict['PG0'],axis=0,keepdims=True)+floatEps)
+                PG0n = ctrlDict['PG0']/(norm(ctrlDict['PG0'],axis=0,keepdims=True)+coreOptions.floatEps)
                 
                 # Now loop through the critical points
                 for nPt, aCritPoint in enumerate(critPList):
@@ -523,6 +525,8 @@ class distributedFunnel:
 
         lyapFunc_.reset()
         lyapFunc_.register(tStop, initZone)
+        
+        criticalPoints = None
 
         # Back propagate
         while tC > tStart:
@@ -532,6 +536,16 @@ class distributedFunnel:
             
             tC, nextZoneGuess = self.evolveLyap(tC, self.opts['optsEvol']['tDeltaMax'], lyapFunc_.getLyap(tC))
             tSteps = np.linspace(tL, tC, self.opts['interSteps'])
+            
+            
+            # Step 1 - critical points
+            # TODO retropropagate the trajectory of the current crit points for 
+            # current guess of the zone. For this only the very last criticalPoints are necessary
+            if criticalPoints is not None:
+                criticalPoints[1:] = (len(crtitical)-1)*[None]
+                criticalPoints, critIsConverging = self.propagator.doPropagate(tSteps,self,criticalPoints,self.opts['interStepsPropCrit'])
+            else:
+                critIsConverging = True #Dummy to force search
 
             # Get the current taylor series
             allTaylorApprox = [ self.dynSys.getTaylorApprox(self.traj.getX(aT)) for aT in tSteps ]
@@ -539,15 +553,20 @@ class distributedFunnel:
             # TODO this is too long and should be seperated
             
             lyapFunc_.register(tC, nextZoneGuess)
-            
-            # Step 1 - critical points
-            # TODO forward calculate the trajectory of the current crit points
-            #criticalPoints = [[] for _ in range(self.opts['interSteps'])]
-            criticalPoints = None
 
             # Step 2 check if current is feasible
+
             # minConvList = self.solve1(tSteps, criticalPoints, allTaylorApprox)
             isConverging = self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]
+
+            if critIsConverging:
+                # minConvList = self.solve1(tSteps, criticalPoints, allTaylorApprox)
+                isConverging = self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]
+            else:
+                # We already posses provably non-converging points
+                isConverging = False
+                    
+
             
             # TODO use forward propagate critical points !!!
             # TODO really do it
