@@ -973,7 +973,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
 
         return U
 
-    def analyzeSolSphereLinCtrl(self, thisSol, ctrlDict, critPoints, opts):
+    def analyzeSolSphereLinCtrl(self, thisSol, ctrlDictIn, critPoints, opts):
         nq_ = self.nq
         nu_ = self.nu
     
@@ -991,7 +991,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         allY = thisSol['ySol']
     
         # Test if any of the points is infeasible relying on optimal control
-        PG0n = ctrlDict['PG0']/(norm(ctrlDict['PG0'], axis=0, keepdims=True)+coreOptions.floatEps)
+        PG0n = ctrlDictIn['PG0']/(norm(ctrlDictIn['PG0'], axis=0, keepdims=True)+coreOptions.floatEps)
         for k in range(allY.shape[1]):
             thisY = allY[:, [k]]
             yPlaneDist = ndot(thisY.T, PG0n).reshape((nu_,))
@@ -999,10 +999,10 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             yPlaneSign[yPlaneSign == 0] = 1
             yPlaneSign = np.require(yPlaneSign, dtype=nint)
         
-            thisCoeffs = ctrlDict[-1][0].copy()
+            thisCoeffs = ctrlDictIn[-1][0].copy()
         
             for i in range(nu_):
-                thisCoeffs += ctrlDict[i][-yPlaneSign[i]]
+                thisCoeffs += ctrlDictIn[i][-yPlaneSign[i]]
         
             # Get the poly and eval
             thisPoly.coeffs = -thisCoeffs
@@ -1060,14 +1060,14 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             thisProb['probDict']['center'] = thisY.copy()
             
             # Rescale the control dict
-            ctrlDict = rescaleLinCtrlDict(ctrlDict, thisProb['probDict']["scaleFacK"], True) #Rescale a deepcopy'
+            ctrlDict = rescaleLinCtrlDict(ctrlDictIn, thisProb['probDict']["scaleFacK"], True) #Rescale a deepcopy
             
             # Now we have the necessary information and we can construct the actual problem
             thisCoeffs = ctrlDict[-1][0].copy()  # Objective resulting from system dynamics
             if __debug__:
                 thisProb[f"obj_-1,0"] = ctrlDict[-1][0].copy()
             for i, type in enumerate(thisCtrlType.reshape((-1,))):
-                thisCoeffs += ctrlDict[i][type]
+                thisCoeffs += ctrlDict[i][type] # Part resulting from input dynamics and applying i-th control type
                 if __debug__:
                     thisProb[f"obj_{i},{type}"] = ctrlDict[i][type].copy()
                     
@@ -1081,31 +1081,38 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             thisProb['cstr'].append(thisPoly.coeffs.copy())
             
             
-            # Add
-            # Here it can happen that the control law around the point is indeed unchanged
-            # or that the control law is not able to stabilize to "old" minimizer
-            # In these cases we can directly construct finer problems without reoptimizing
-            # TODO check if really works
-            if 0:
-                if self.checkProbFeasibility(thisSol, thisProb, opts):
+            # Exclude the sphere from linear control prob
+            thisProbLin['probDict']['nCstrNDegType'].append((2, 's'))
+            thisProbLin['cstr'].append(-thisPoly.coeffs.copy())
+            
+            # Add the new problem
+            if 1:
+                newSol = dp(thisSol)
+                newSol['ySol'] = newSol['ySol'][:,[k]]
+                newSol['xSol'] = newSol['xSol'][:,[k]]
+                # TODO check if sth is missing
+                
+                if self.checkProbFeasibility(newSol, thisProb, opts):
+                    # The old point is now stabilizable -> Use "global" search
                     probList.append(thisProb)
                 else:
-                    probList.extend(self.analyzeSolSphereDiscreteCtrl(thisSol, ctrlDict, critPoints, opts))
-                # Exclude the sphere from linear control prob
-                thisProbLin['probDict']['nCstrNDegType'].append((2, 's'))
-                thisProbLin['cstr'].append(-thisPoly.coeffs.copy())
+                    # This point does not converge with respect to the Lyapunov function under the new control law
+                    # -> Directly resplit the problem
+                    thisSubProbList = self.analyzeSolSphereDiscreteCtrl(newSol, ctrlDictIn, critPoints, opt) # Pass the unscaled version of the ctrlDict
+                    if not thisSubProbList:
+                        # Even when splitted this point remains infeasible -> proof of non-convergence -> return empty list
+                        if __debug__:
+                            print(f"The solution {newSol} cannot be stabilized -> early exit")
+                    probList.extend(thisSubProbList)
             else:
-                # Exclude the sphere from linear control prob
-                thisProbLin['probDict']['nCstrNDegType'].append((2, 's'))
-                thisProbLin['cstr'].append(-thisPoly.coeffs.copy())
                 # Append the new problem
                 probList.append(thisProb)
         
             # Done for one point
-    
+        # All sub-problems created
         return probList
 
-    def analyzeSolSphereDiscreteCtrl(self, thisSol, ctrlDict, critPoints, opts):
+    def analyzeSolSphereDiscreteCtrl(self, thisSol, ctrlDictIn, critPoints, opts):
         
         # Deep copy control dict as the scaling of the linear feedback control law depends
         # on the size of the restricting hypersphere
@@ -1119,8 +1126,8 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
         probList = []
         
-        # Rescale
-        ctrlDict = rescaleLinCtrlDict(ctrlDict, probDict_["scaleFacK"], True)
+        # Rescale without modifying the original
+        ctrlDict = rescaleLinCtrlDict(ctrlDictIn, probDict_["scaleFacK"], True)
     
         #thisProbLin = thisSol['origProb'] # Replaced by all (suitable) combinations
         #probList.append(thisProbLin)
@@ -1159,7 +1166,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
         allChangeSign = [a != b for a, b in zip(allYPlaneSign, allYSurfaceSign)]
     
-        ## check if convergence can be assured relying on the optimal input
+        # check if convergence can be assured relying on the optimal input
         # Compute the convergence portion for system dynamics and each control input
         convDict = {}
         for aKey, aVal in ctrlDict.items():
@@ -1172,7 +1179,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             except:
                 if __debug__:
                     print(f"Unable to eval {aKey} with {aVal}")
-        # Compute convergence (OPtimal control input with respect to separating hypersurface)
+        # Compute convergence (Optimal control input with respect to separating hypersurface)
         allRes = nzeros((allY.shape[1],), dtype=nfloat)
         for k in range(allY.shape[1]):
             thisRes = convDict[-1][0][k]
@@ -1295,6 +1302,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
     def checkProbFeasibility(self, oldSol:dict, newProb:dict, opts:dict)->Union[bool, List[bool]]:
         """
+        TODO maybe deprecated
         (Among others) Check if the minimizers of the old solution converge now in the new problem(s)
         :param newProb:
         :return:
@@ -1323,6 +1331,41 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             return isFeas[0]
         else:
             return isFeas
+    
+    def checkProbFeasibility1(self, oldSol:dict, newProb:dict, opts:dict)->bool:
+        """
+        Asserts if the old solution satisfies the new constraints and whether or not it is stabilizable under the
+        new control input. This avoids unnecessary global polynomial optimizations.
+        :param oldSol:
+        :param newProb:
+        :param opts:
+        :return: bool
+        """
+        # ATTENTION: Currently 'ySol' is also the SCALED solution, that is, it is the point lying within the
+        # (unit) hypersphere
+        
+        thisPoly = polynomial(self.repr)
+        
+        isFeas = True
+        
+        assert oldSol['ySol'].shape[1] == 1, "Only one point is expected here"
+        yStarOld = oldSol['ySol']
+        zStarOld = self.repr.evalAllMonoms(yStarOld)
+        
+        if __debug__:
+            # Check if the point is inside all constraints
+            for aCstr in newProb['cstr'][1:]: # First constraint is lasserre constraint
+                thisPoly.coeffs = aCstr
+                if thisPoly.eval2(zStarOld) <= -coreOptions.absTolCstr:
+                    # Constraint violated -> this should not happen
+                    raise RuntimeError("Violated constrainted that is suppossed to be ok")
+        # Check if it is stabilizable according to the new objective
+        # TODO is it a good idea to do a local search with respect to the new objective?
+        thisPoly.coeffs = newProb['obj']
+        return bool(thisPoly.eval2(zStarOld) >= -coreOptions.absTolCstr)
+        
+        
+        
 
 class piecewiseQuadraticLyapunovFunction(LyapunovFunction):
     """

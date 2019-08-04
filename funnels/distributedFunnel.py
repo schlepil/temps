@@ -337,6 +337,7 @@ class distributedFunnel:
         
         if thisSol['origProb']['probDict']['isTerminal'] >= self.opts['minFinalValue']:
             # Thats it, this part of the state-space is proven to be non-stabilizable
+            # Correctly: to contain at least one non-stabilizable point
             return []
         
         newProbList = self.lyapFunc.analyzeSol(thisSol, ctrlDict, critPoints, opts=self.opts)
