@@ -36,16 +36,21 @@ if useSharedMem_:
 
 if waitingListType_ == 'heap':
     from heapq import heappush, heappop
+    
+    class heapStoreClass(tuple):
+        def __lt__(self, other):
+            return self[0] < other[0]
+    
     class waitingListClass:
-        def __init__():
+        def __init__(self):
             self.container = []
         def push(self, *args):
             if len(args) == 2:
                 #Explicit value is given
-                heappush(self.container, (args[0], args[1]))
+                heappush(self.container, heapStoreClass(args))
             else:
                 #Use the (negated) sum over the control indices -> the higher the indices the more specific the problem -> the higher the chance to fail
-                heappush(self.container, (-nsum(args[0]['probDict']['u']), args[0]))
+                heappush(self.container, heapStoreClass((int(-nsum(args[0]['probDict']['u'])), args[0])))
         
         def pop(self):
             return heappop(self.container)[1]
@@ -651,12 +656,12 @@ def workerSolveFixed(inQueue, outQueue):
                     raise RuntimeError
                 try:
                     cstr_val = acstr.poly.eval2(xSol)
-                    if nany(cstr_val<-absTolCstr):
+                    if nany(cstr_val<-coreOptions.absTolCstr):
                         raise RuntimeError
                 except AttributeError:
                     pass
                 
-            if solution['primal objective'] < numericEpsPos:
+            if solution['primal objective'] < coreOptions.numericEpsPos:
                 print(f"Found critical point with {solution['primal objective']} at \n {ySol}")
             print(f"Optimal value is ")
             if extraction[0].size == 0:
@@ -838,7 +843,7 @@ def workerSolveVariable(inQueue, outQueue):
                 except AttributeError:
                     pass
 
-            if solution['primal objective'] < numericEpsPos:
+            if solution['primal objective'] < coreOptions.numericEpsPos:
                 print(f"Found critical point with {solution['primal objective']} at \n {ySol}")
             print(f"Optimal value is ")
             if extraction[0].size == 0:

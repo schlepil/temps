@@ -126,7 +126,7 @@ class convexProg():
             isValid = True
             zSol = self.repr.evalAllMonoms(xSol)
 
-            atol = -absTolCstr #make a global variable
+            atol = -coreOptions.absTolCstr #make a global variable
             for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
                     isValid = isValid and bool(aCstr.isValid(zSol, atol=atol))
 
@@ -375,13 +375,13 @@ class convexProg():
         gx = lambda x: ndot(self.objective.coeffs, self.repr.evalAllMonoms(x))
       #  res = sp_minimize(gx, xsol, method='COBYLA',constraints=this_cstr,options={'rhobeg': 1.0, 'maxiter': 1000, 'disp': False, 'catol': 1e-7})
         #res = sp_minimize(gx, xsol, method='COBYLA', constraints=this_cstr, options={'rhobeg': 1.0, 'maxiter': 1000, 'disp': False, 'tol': 1e-7})
-        res = sp_minimize(gx, xsol, method='COBYLA', tol=0.9*absTolCstr, constraints=this_cstr) #Leave some margin
+        res = sp_minimize(gx, xsol, method='COBYLA', tol=0.9*coreOptions.absTolCstr, constraints=this_cstr) #Leave some margin
         #res = sp_minimize(gx, xsol, method='COBYLA', constraints=this_cstr)
         assert res.success
         #cstrverif[1.979833e-01 - 1.993135e-06, 1.664354e+00 - 4.200682e-06]
         if __debug__:
             print('cstrverif',this_cstr['fun'](res.x))
-            if not nall(this_cstr['fun'](res.x)>-absTolCstr):
+            if not nall(this_cstr['fun'](res.x)>-coreOptions.absTolCstr):
                 print('shit')
         return res.x
 

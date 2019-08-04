@@ -32,7 +32,7 @@ class distributedFunnel:
                      'interStepsPropCrit':5, #How many local searches have to be performed
                      'projection':'sphere',
                      'solver':'cvxopt',
-                     'numericEpsPos':numericEpsPos,
+                     'numericEpsPos':coreOptions.numericEpsPos,
                      'minFinalValue':1,
                      'earlyExit':True,
                      'minConvRate':-0.,

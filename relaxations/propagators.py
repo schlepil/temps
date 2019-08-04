@@ -18,5 +18,5 @@ class localFixedPropagator(propagators):
         """
         \brief: function that computes the trajectory of the old criticalPoints and checks wether they are stabilizable
         """
-        
-        if 
+        pass
+        #if

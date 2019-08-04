@@ -11,7 +11,7 @@ class constraint:
         # Evaluates the error at given points
         raise NotImplementedError
 
-    def isValid(self, z: np.ndarray, atol=-absTolCstr):
+    def isValid(self, z: np.ndarray, atol=-coreOptions.absTolCstr):
         # Checks if constraint is verified for a certain points
         raise NotImplementedError
     
