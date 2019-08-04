@@ -80,6 +80,7 @@ class distributedFunnel:
                             else:
                                 print(f"key:{aKey} and val:{aVal} are not affected from projection")
                 if criticalPoints is not None:
+                    # Map the critical points from unit-sphere (solution x) to "real" point (denoted y) 
                     for aCritPoint in criticalPoints:
                         if not 'y' in aCritPoint.keys():
                             aCritPoint['y'] = ndot(Ci, aCritPoint['x'])
