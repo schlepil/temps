@@ -225,9 +225,9 @@ class quadraticLyapunovFunction(LyapunovFunction):
         x = x.reshape((self.n, -1))
         return ndot(self.Ci_,x)
     
-    def ellip2Sphere(self, x):
-        x = x.reshape((self.n, -1))
-        return ndot(self.C_, x)
+    def ellip2Sphere(self, y):
+        y = y.reshape((self.n, -1))
+        return ndot(self.C_, y)
     
     def lqrP(self, Q:np.ndarray, R:np.ndarray, x:np.ndarray=None, A:np.ndarray=None, B:np.ndarray=None, N:np.ndarray=None):
         """
@@ -706,7 +706,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         else:
             x = np.empty_like(y)
             for k in range(y.shape[1]):
-                x[:, [k]] = ndot(inv(cholesky(P[k, :, :])), y[:, [k]])
+                x[:, [k]] = ndot(cholesky(P[k, :, :]), y[:, [k]])
     
         return x
     
@@ -973,7 +973,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
 
         return U
 
-    def analyzeSolSphereLinCtrl(self, thisSol, ctrlDictIn, critPoints, opts):
+    def analyzeSolSphereLinCtrl(self, thisSol, ctrlDictIn, opts):
         nq_ = self.nq
         nu_ = self.nu
     
@@ -1007,7 +1007,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             # Get the poly and eval
             thisPoly.coeffs = -thisCoeffs
         
-            if thisPoly.eval2(thisY) < -opts['numericEpsPos']:
+            if thisPoly.eval2(thisY) < opts['numericEpsPos']:
                 # This point is not stabilizable using optimal control input
                 if __debug__:
                     print(f"""Point \n{thisY}\n is not stabilizable with eps {opts["numericEpsPos"]}""")
@@ -1024,11 +1024,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             thisY = allY[:, [k]]
         
             thisProb = dp(thisProbBase)
-            thisProb['probDict']['nPt'] = len(critPoints)-1
-            
-            critPoints.append({'y':thisY.copy(), 'strictSep':0, 'currU':thisSol['probDict']['u'] })
-            # TODO double storage
-            thisProb['probDict']['critPoint'] = critPoints[-1]
+            thisProb['probDict']['critPointOrigin'] = {'y':thisY.copy(), 'strictSep':0, 'currU':thisSol['probDict']['u'] }
             
             thisProb['probDict']['isTerminal'] = 0  # Convergence can be improved but only by increasing the computation load
             thisProb['strictSep'] = 0
@@ -1101,7 +1097,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 else:
                     # This point does not converge with respect to the Lyapunov function under the new control law
                     # -> Directly resplit the problem
-                    thisSubProbList = self.analyzeSolSphereDiscreteCtrl(newSol, ctrlDictIn, critPoints, opt) # Pass the unscaled version of the ctrlDict
+                    thisSubProbList = self.analyzeSolSphereDiscreteCtrl(newSol, ctrlDictIn, opt) # Pass the unscaled version of the ctrlDict
                     if not thisSubProbList:
                         # Even when splitted this point remains infeasible -> proof of non-convergence -> return empty list
                         if __debug__:
@@ -1115,7 +1111,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         # All sub-problems created
         return probList
 
-    def analyzeSolSphereDiscreteCtrl(self, thisSol, ctrlDictIn, critPoints, opts):
+    def analyzeSolSphereDiscreteCtrl(self, thisSol, ctrlDictIn, opts):
         
         # Deep copy control dict as the scaling of the linear feedback control law depends
         # on the size of the restricting hypersphere
@@ -1248,10 +1244,8 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         for i, input in enumerate(inputs):
             thisProb = dp(thisProbBase)
             probList.append(thisProb)
-            # Store in critpoints
-            # TODO for the moment they are stored in both, critpoints and the problems -> to be changed
-            critPoints.append({'y':allY[:,[i]].copy(), 'strictSep':0, 'currU':thisSol['probDict']['u'] })
-            thisProb['probDict']['critPoint'] = critPoints[-1]
+            # Store critpoints
+            thisProb['probDict']['critPointOrigin'] = {'y':allY[:,[i]].copy(), 'strictSep':0, 'currU':thisSol['probDict']['u'] }
             
             thisCoeffs = ctrlDict[-1][0].copy()
             
@@ -1281,7 +1275,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             # Done
         return probList
 
-    def analyzeSol(self, thisSol, ctrlDict, critPoints, opts):
+    def analyzeSol(self, thisSol, ctrlDict, opts):
     
         if thisSol['origProb']['probDict']['isTerminal'] == -1:
             # Using linear control everywhere
@@ -1290,7 +1284,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             if opts['sphereBoundCritPoint']:
                 assert thisSol['probDict']['nPt'] == -1
                 assert opts['projection'] == 'sphere'
-                probList = self.analyzeSolSphereLinCtrl(thisSol, ctrlDict, critPoints, opts)
+                probList = self.analyzeSolSphereLinCtrl(thisSol, ctrlDict, opts)
             else:
                 raise NotImplementedError
     
@@ -1302,7 +1296,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
             if opts['sphereBoundCritPoint']:
                 assert opts['projection'] == 'sphere'
-                probList = self.analyzeSolSphereDiscreteCtrl(thisSol, ctrlDict, critPoints, opts)
+                probList = self.analyzeSolSphereDiscreteCtrl(thisSol, ctrlDict, opts)
             else:
                 raise NotImplementedError
     
@@ -1333,7 +1327,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 idxOk = np.logical_and( idxOk, (thisPoly.eval2(zStarOld)>=0.).reshape((-1,)) )
             # Get the value
             thisPoly.coeffs = aProb['obj']
-            isFeas.append( bool(nall( thisPoly.eval2(zStarOld[:,idxOk])  > opts['numericEpsPos']) ) )
+            isFeas.append( bool(nall( thisPoly.eval2(zStarOld[:,idxOk])  > -opts['numericEpsPos']) ) ) # numericEps is negative; here the objective was not inversed; sign ok
         
         if len(isFeas)==1:
             return isFeas[0]

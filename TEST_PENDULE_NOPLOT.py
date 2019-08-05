@@ -57,7 +57,7 @@ if __name__ == "__main__":
 
   lyapF.P = lyapF.lqrP(np.identity(2), np.identity(1), refTraj.getX(0.))[0]
   #P=np.array([[1.,0.],[0.,1.]])
-  print('aaaaaaaaaa')
+  
   myFunnel.compute(0.0, 0.5, (lyapF.P, 100.))
   print('hei')
   if coreOptions.doPlot:

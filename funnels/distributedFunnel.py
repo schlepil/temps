@@ -50,8 +50,9 @@ class distributedFunnel:
         
         self.proof_ = {}
 
-    def doProjection(self, zone, criticalPoints:List[dict]=None, ctrlDict:dict=None):
+    def doProjection(self, zone, aSubProof:List[dict]=None, ctrlDict:dict=None):
         """
+        # TODO move this to Lyapunov function?
         Simplifying the problem using some projection.
         Currently only the mapping between ellipsoids and unit-spheres is implemented
         :param zonesToCheck:
@@ -79,11 +80,13 @@ class distributedFunnel:
                                 ctrlDict['PG0'] = ndot(Ci_inv.T, ctrlDict['PG0'])
                             else:
                                 print(f"key:{aKey} and val:{aVal} are not affected from projection")
-                if criticalPoints is not None:
-                    # Map the critical points from unit-sphere (solution x) to "real" point (denoted y) 
-                    for aCritPoint in criticalPoints:
-                        if not 'y' in aCritPoint.keys():
-                            aCritPoint['y'] = ndot(Ci, aCritPoint['x'])
+                if aSubProof is not None:
+                    #SubProof is [i][j]
+                    for aSubProofList in aSubProof:
+                        for aProof in aSubProofList:
+                            # TODO check if only critical points need to be projected
+                            # This is ellip2sphere
+                            aProof['critPoints']['xCrit'] = ndot(Ci, aProof['critPoints']['yCrit'])
             else:
                 raise NotImplementedError
         elif self.opts['projection'] in (None, 'None', False):
@@ -92,6 +95,41 @@ class distributedFunnel:
             raise NotImplementedError
         
         return None
+    
+    def doInvProjection(self, zone, aSubProof:List[dict]=None, ctrlDict:dict=None):
+        """
+        # TODO move this to Lyapunov function?
+        :param zone:
+        :param result:
+        :return:
+        """
+        if self.opts['projection'] == "sphere":
+            if isinstance(self.lyapFunc, Lyapunov.lyapunovFunctions):
+            
+                Ci = cholesky(zone[0]/zone[1])
+                Ci_inv = inv(Ci)  # aZone=(P_i, alpha_i)
+                if ctrlDict is not None:
+                    ctrlDict['sphereProj'] = True
+                    for aKey, aVal in ctrlDict.items():
+                        try:
+                            for bKey, bVal in aVal.items():
+                                aVal[bKey] = self.repr.doLinCoordChange(bVal, Ci)
+                        except:
+                            if aKey == 'PG0':
+                                # change y = P^{1/2}.x; P = P^{1/2}^T.P^{1/2}
+                                # x.T.P.G.x.u -> x.T.P^{1/2}^T.P^{1/2}.G.P^{-1/2}.y.u -> y.T.P^{-1/2}^T."PG0".P^{-1/2}.y.u
+                                # P.G = P^{1/2}^T.P^{1/2}.G
+                                ctrlDict['PG0'] = ndot(Ci.T, ctrlDict['PG0'])
+                            else:
+                                print(f"key:{aKey} and val:{aVal} are not affected from projection")
+                if aSubProof is not None:
+                    #SubProof is [i][j]
+                    for aSubProofList in aSubProof:
+                        for aProof in aSubProofList:
+                            # TODO check if only critical points need to be projected
+                            # This is sphere2ellip
+                            aProof['critPoints']['yCrit'] = ndot(Ci_inv, aProof['critPoints']['xCrit'])
+        
     
     def getCtrlDict(self, t, fTaylorApprox, gTaylorApprox, returnZone=True):
         
@@ -327,7 +365,7 @@ class distributedFunnel:
         
         return probList
     
-    def analyzeSol(self, thisSol:dict, ctrlDict, critPoints):
+    def analyzeSol(self, thisSol:dict, ctrlDict):
         
         """
         Analyze a solution and check if a better approximation can be found
@@ -340,7 +378,7 @@ class distributedFunnel:
             # Correctly: to contain at least one non-stabilizable point
             return []
         
-        newProbList = self.lyapFunc.analyzeSol(thisSol, ctrlDict, critPoints, opts=self.opts)
+        newProbList = self.lyapFunc.analyzeSol(thisSol, ctrlDict, opts=self.opts)
         
         for aProb in newProbList:
             aProb['probDict']['resPlacementParent'] = thisSol['origProb']['probDict']['resPlacement']
@@ -394,34 +432,36 @@ class distributedFunnel:
 
         return allSolutionsPerGroup
     
-    def verify1(self, timePoints, critPoints, allTaylorApprox):
+    def verify1(self, timePoints, lastProofInfo, allTaylorApprox):
         
         """
         
         :param timePoints:
-        :param critPoints:
+        :param lastProofInfo: (results, resultsLin)
         :param allTaylorApprox:
         :return:
         """
-        
-        critPoints = [[] for _ in range(len(timePoints))] if critPoints is None else critPoints
         
         results = []
         resultsLin = -np.Inf*nones((0,), dtype=nfloat)
         resIdLin = 0
         doesConverge = None
         
+        oldResults = lastProofInfo[0]
+        if oldResults is None:
+            oldResults = len(timePoints)*[None]
+        
         # Get all zones to be checked
         allCtrlDictsNzones = [self.lyapFunc.getCtrlDict(at, aTaylorApprox[0], aTaylorApprox[1], returnZone=True, opts=self.opts) for at, aTaylorApprox in zip(timePoints, allTaylorApprox)]
         # Project
-        for at, aPointList, aCtrlNZone in zip(timePoints, critPoints, allCtrlDictsNzones):
-            self.doProjection(aCtrlNZone[1], aPointList, aCtrlNZone[0])
+        for at, aSubProof, aCtrlNZone in zip(timePoints, oldResults, allCtrlDictsNzones):
+            self.doProjection(aCtrlNZone[1], aSubProof, aCtrlNZone[0])
         
         
         #Set initial problems
-        for k, (aCtrlNZone, aCritPList) in enumerate(zip(allCtrlDictsNzones, critPoints)):
+        for k, (aCtrlNZone, aSubProof) in enumerate(zip(allCtrlDictsNzones, oldResults)):
             results.append([])
-            thisProbList = self.ZoneNPoints2Prob(aCtrlNZone[1], aCritPList, aCtrlNZone[0])
+            thisProbList = self.ZoneNPoints2Prob(aCtrlNZone[1], (lastProofInfo[1], aSubProof), aCtrlNZone[0])
             #results.append([[None for _ in range(len(aSubProbList))] for aSubProbList in thisProbList ])
             for i, aSubProbList in enumerate(thisProbList):
                 results[-1].append([])
@@ -433,15 +473,20 @@ class distributedFunnel:
                     aProb['probDict']['resPlacement'] = (k,i,j)
                     aProb['probDict']['resPlacementLin'] = resIdLin
                     resIdLin += 1
+                    if np.allclose(aProb['cstr'][0], 0):
+                        print("a")
                     distributor.setProb(aProb)
 
         while nany(resultsLin<self.opts['numericEpsPos']):
             thisSol = distributor.getSol()
             assert thisSol['sol']['status'] == 'optimal' #TODO make compatible with other solvers
+            # Store the critical points within the result
+            # TODO improve structure -> Works only if projection is done in main program not by the worker!
+            thisSol['critPoints'] = {'xCrit':thisSol['sol']['x_np'].copy(), 'currU':thisSol['probDict']['u'].copy()}
+            # Store the proof
             k, i, j = thisSol['probDict']['resPlacement']
             results[k][i][j] = dp(thisSol)
             resultsLin[thisSol['probDict']['resPlacementLin']] = thisSol['sol']['primal objective']
-
             if __debug__:
                 print(f"Checking result for {[k,i,j]}")
                 testSol(thisSol, allCtrlDictsNzones[k][0])
@@ -450,7 +495,7 @@ class distributedFunnel:
                 # Proves convergence for the sub region treated
                 pass
             else:
-                newProbList = self.analyzeSol(thisSol, allCtrlDictsNzones[k][0], critPoints[k])
+                newProbList = self.analyzeSol(thisSol, allCtrlDictsNzones[k][0])
                 if not len(newProbList):
                     # this region is a proof for non-convergence
                     if self.opts['earlyExit']:
@@ -468,9 +513,16 @@ class distributedFunnel:
                     results[k][i].append(None)
                     aProb['probDict']['resPlacement'] = (k,i,jMax)
                     aProb['probDict']['resPlacementLin'] = lMax
+                    if np.allclose(aProb['cstr'][0], 0):
+                        print("a")
                     distributor.setProb(aProb)
                     jMax+=1
                     lMax+=1
+        
+        # Inverse projection to get actual critical points
+        # TODO check if this is the best place to do this and if the structure is sufficiently generic
+        for at, aSubProof, aCtrlNZone in zip(timePoints, results, allCtrlDictsNzones):
+            self.doInvProjection(aCtrlNZone[1], aSubProof, None)
         
         doesConverge = nall(resultsLin>=self.opts['numericEpsPos'])
         #print('resultsLin',resultsLin)
@@ -479,15 +531,15 @@ class distributedFunnel:
         #print('doseConverge',doesConverge)
         distributor.reset()
 
-        return doesConverge, critPoints, results, resultsLin, timePoints
+        return doesConverge, results, resultsLin, timePoints
     
     
-    def storeProof(self, doesConverge, critPoints, results, resultsLin, timePoints):
+    def storeProof(self, doesConverge, results, resultsLin, timePoints):
         
         assert doesConverge
         
         for k, at in enumerate(timePoints):
-            thisSubProof =  {'t':at, 'critPoints':dp(critPoints[k]), 'sigProbAndVals':[], 'origProb':[]}
+            thisSubProof =  {'t':at, 'sigProbAndVals':[], 'origProb':[]}
             for aSubList in results[k]:
                 for aProb in aSubList: # To each crtitical point a list is associated
                     if np.isfinite( resultsLin[results[0][0][0]['probDict']['resPlacementLin']] ):
@@ -529,7 +581,8 @@ class distributedFunnel:
         lyapFunc_.reset()
         lyapFunc_.register(tStop, initZone)
         
-        criticalPoints = None
+        results = None
+        resultsLin = None
 
         # Back propagate
         while tC > tStart:
@@ -545,8 +598,7 @@ class distributedFunnel:
             # TODO retropropagate the trajectory of the current crit points for 
             # current guess of the zone. For this only the very last criticalPoints are necessary
             if criticalPoints is not None:
-                criticalPoints[1:] = (len(crtitical)-1)*[None]
-                criticalPoints, critIsConverging = self.propagator.doPropagate(tSteps,self,criticalPoints,self.opts['interStepsPropCrit'])
+                critIsConverging, results, resultsLin = self.propagator.doPropagate(tSteps,self, results,resultsLin,self.opts['interStepsPropCrit'])
             else:
                 critIsConverging = True #Dummy to force search
 
@@ -560,14 +612,10 @@ class distributedFunnel:
             # Step 2 check if current is feasible
             if critIsConverging:
                 # minConvList = self.solve1(tSteps, criticalPoints, allTaylorApprox)
-                isConverging, criticalPoints, results, resultsLin, timePoints = self.verify1(tSteps, criticalPoints, allTaylorApprox) #Change to store all in order to exploit the last proof
+                isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
             else:
                 # We already posses provably non-converging points
                 isConverging = False
-                    
-            
-            # TODO use forward propagate critical points !!!
-            # TODO really do it
             
             if isConverging:
                 # Make the zone bigger to find an upper bound before using dichotomic search
@@ -577,7 +625,7 @@ class distributedFunnel:
                 
                 #while self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                 while True:
-                    isConverging, criticalPoints, results, resultsLin, timePoints = self.verify1(tSteps, criticalPoints, allTaylorApprox) #Change to store all in order to exploit the last proof
+                    isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
                     if not isConverging:
                         # Break if first not converging size is found
                         break
@@ -593,7 +641,7 @@ class distributedFunnel:
 
                 #while not self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                 while True:
-                    isConverging, criticalPoints, results, resultsLin, timePoints = self.verify1(tSteps, criticalPoints, allTaylorApprox) #Change to store all in order to exploit the last proof
+                    isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
                     if isConverging:
                         # Break at first converging size
                         break
@@ -603,7 +651,10 @@ class distributedFunnel:
             
             # Now we can perform dichotomic search
             assert alphaL<alphaU
-
+            
+            # Last positive proof
+            proofDataLargest = None
+            
             while (alphaU-alphaL)>self.opts['convLim']*alphaL:
                 alpha = (alphaL+alphaU)/2.
                 lyapFunc_.setAlpha(alpha, 0)
@@ -612,19 +663,22 @@ class distributedFunnel:
                     print(f"Bisection at {alphaL}, {alpha}, {alphaU}")
                 
                 #if self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
-                isConverging, criticalPoints, results, resultsLin, timePoints = self.verify1(tSteps, criticalPoints, allTaylorApprox) #Change to store all in order to exploit the last proof
+                isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
                 if isConverging:
                     # Converges
                     alphaL = alpha
+                    proofDataLargest = (isConverging, results, resultsLin, timePoints)
                 else:
                     alphaU = alpha
+            
+            assert proofDataLargest is not None, "Never found a proof for convergence"
             
             # Conservative -> Choose the largest converging value found
             lyapFunc_.setAlpha(alphaL,0)
             # Additional work if seeking to store the proof
             if self.opts['storeProof']:
                 # Necessary to ensure that the proof for alphaL is stored
-                self.storeProof(*self.verify1(tSteps, criticalPoints, allTaylorApprox))
+                self.storeProof(*proofDataLargest)
             
             tL = tC
             
