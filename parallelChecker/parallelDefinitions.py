@@ -11,3 +11,5 @@ solver_ = 'cvxopt'
 useSharedMem_ = False
 
 printProbNSol_ = True
+
+waitingListType_ = 'heap' # list or heap

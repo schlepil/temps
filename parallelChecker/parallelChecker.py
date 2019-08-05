@@ -34,6 +34,35 @@ if useSharedMem_:
     polyObjSharedNP_ = [ np.frombuffer(aS, dtype=nfloat, count=lenBuffer_) for aS in polyObjShared_ ]
     polyCstrSharedNP_ = [ [np.frombuffer(aS, dtype=nfloat, count=lenBuffer_) for aS in aSL]  for aSL in polyCstrShared_ ]
 
+if waitingListType_ == 'heap':
+    from heapq import heappush, heappop
+    
+    class heapStoreClass(tuple):
+        def __lt__(self, other):
+            return self[0] < other[0]
+    
+    class waitingListClass:
+        def __init__(self):
+            self.container = []
+        def push(self, *args):
+            if len(args) == 2:
+                #Explicit value is given
+                heappush(self.container, heapStoreClass(args))
+            else:
+                #Use the (negated) sum over the control indices -> the higher the indices the more specific the problem -> the higher the chance to fail
+                heappush(self.container, heapStoreClass((int(-nsum(args[0]['probDict']['u'])), args[0])))
+        
+        def pop(self):
+            return heappop(self.container)[1]
+            
+elif waitingListType_ == 'list':
+    class waitingListClass(list):
+        def push(self, val):
+            self.append(val)
+else:
+    raise RuntimeError("list or heap")
+        
+
 # Dict to store representations and others to avoid recomputation
 reprDict_ = {}
 relaxationDict_ = {}
@@ -114,7 +143,7 @@ def solGetter(solQueues: List[Queue], workerId: int = None, block=True, timeout=
 class workDistributor:
     def __init__(self, probQueues:List[Queue], solQueues:List[Queue]):
         self.inUse = narray([0 for _ in range(nThreads_)]).astype(np.bool_)
-        self.waitingList = []
+        self.waitingList = waitingListClass()
         
         self.probQ = probQueues
         self.solQ = solQueues
@@ -134,7 +163,7 @@ class workDistributor:
         return None
     
     def reset(self):
-        self.waitingList = []
+        self.waitingList = waitingListClass()
         self.nbrOfUnreturnedPbr = 0
         
         while any(self.inUse):
@@ -169,7 +198,7 @@ class workDistributor:
             problem['probDict']['probIdStore__'] = id
             self.probStore_[id] = dp(problem)
         
-        self.waitingList.append(problem)
+        self.waitingList.push(problem)
         self.spin()
         
         if __debug__ and printProbNSol_:
@@ -212,11 +241,14 @@ class workDistributor:
             print(f"Returning: \n {serializer.dumps(sol)}")
         
         return sol
+        
+
+
 
 # No threading
 class workDistributorNoThread:
     def __init__(self, probQueues: List[Queue], solQueues: List[Queue]):
-        self.waitingList = []
+        self.waitingList = waitingListClass()
         
         self.probQ = probQueues
         self.solQ = solQueues
@@ -230,7 +262,7 @@ class workDistributorNoThread:
         pass
     
     def reset(self):
-        self.waitingList = []
+        self.waitingList = waitingListClass()
         self.nbrOfUnreturnedPbr = 0
         
         if self.doStoreOrig:
@@ -265,7 +297,7 @@ class workDistributorNoThread:
             problem['probDict']['probIdStore__'] = id
             self.probStore_[id] = dp(problem)
         
-        self.waitingList.append(problem)
+        self.waitingList.push(problem)
         
         if __debug__ and printProbNSol_:
             print(f"Appending: \n {serializer.dumps(problem)}")
@@ -624,12 +656,12 @@ def workerSolveFixed(inQueue, outQueue):
                     raise RuntimeError
                 try:
                     cstr_val = acstr.poly.eval2(xSol)
-                    if nany(cstr_val<-absTolCstr):
+                    if nany(cstr_val<-coreOptions.absTolCstr):
                         raise RuntimeError
                 except AttributeError:
                     pass
                 
-            if solution['primal objective'] < numericEpsPos:
+            if solution['primal objective'] < coreOptions.numericEpsPos:
                 print(f"Found critical point with {solution['primal objective']} at \n {ySol}")
             print(f"Optimal value is ")
             if extraction[0].size == 0:
@@ -811,7 +843,7 @@ def workerSolveVariable(inQueue, outQueue):
                 except AttributeError:
                     pass
 
-            if solution['primal objective'] < numericEpsPos:
+            if solution['primal objective'] < coreOptions.numericEpsPos:
                 print(f"Found critical point with {solution['primal objective']} at \n {ySol}")
             print(f"Optimal value is ")
             if extraction[0].size == 0:

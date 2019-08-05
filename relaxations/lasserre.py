@@ -135,7 +135,7 @@ class lasserreRelax:
             thisC = polyListEval(self.repr.listOfMonomials, x)
         return evalCstrMat(self.listOfMonomials, *self.getCstr(isSparse=False), thisC)
     
-    def isValid(self, z:np.ndarray, atol=-absTolCstr):
+    def isValid(self, z:np.ndarray, atol=-coreOptions.absTolCstr):
         z = z.reshape((self.repr.nMonoms,-1))
         
         res = nempty((z.shape[1],), dtype=nbool)
@@ -258,7 +258,7 @@ class lasserreConstraint(constraint):
             thisC = polyListEval(self.listOfMonomials, x)
         return evalCstrMat(self.listOfMonomials, *self.getCstr(isSparse=False), thisC)
 
-    def isValid(self, z: np.ndarray, atol=-absTolCstr, simpleEval=True):
+    def isValid(self, z: np.ndarray, atol=-coreOptions.absTolCstr, simpleEval=True):
 
         if simpleEval:
             res = (self.poly.eval2(z).reshape((-1,))>atol).astype(np.bool_)
