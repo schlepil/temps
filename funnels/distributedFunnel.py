@@ -11,7 +11,7 @@ from trajectories import referenceTrajectory
 
 from polynomial import polynomialRepr, polynomial
 import relaxations as relax
-
+relax.propagators.propagators
 from funnels.testUtils import testSol
 
 class distributedFunnel:
@@ -597,7 +597,7 @@ class distributedFunnel:
             # Step 1 - critical points
             # TODO retropropagate the trajectory of the current crit points for 
             # current guess of the zone. For this only the very last criticalPoints are necessary
-            if criticalPoints is not None:
+            if results is not None:
                 critIsConverging, results, resultsLin = self.propagator.doPropagate(tSteps,self, results,resultsLin,self.opts['interStepsPropCrit'])
             else:
                 critIsConverging = True #Dummy to force search

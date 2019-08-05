@@ -12,11 +12,11 @@ class propagators:
 
 class localFixedPropagator(propagators):
     def __init__(self):
+        super(type(self), self).__init__()
         pass
     
-    def doPropagate(self,tLower:float, tUpper:float, criticalPointsOld:List, nSteps:int=10):
+    def doPropagate(self,tSteps,funnelInstance:"funnels.distributedFunnel", oldResults,oldResultsLin, interStepsPropCrit:int=5):
         """
-        \brief: function that computes the trajectory of the old criticalPoints and checks wether they are stabilizable
+        \brief: propagate the critical point of each indidual proof
         """
         pass
-        #if
