@@ -1,5 +1,5 @@
 from coreUtils import *
-
+absTolCstr=1E-6
 class constraint:
     def __init__(self):
         pass

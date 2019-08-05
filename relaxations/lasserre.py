@@ -1,7 +1,7 @@
 from coreUtils import *
 from polynomial import *
 from relaxations.constraints import constraint
-
+absTolCstr=1E-6
 # Implements base relaxations and constraints
 
 
