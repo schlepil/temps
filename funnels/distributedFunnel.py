@@ -560,7 +560,7 @@ class distributedFunnel:
             # Step 2 check if current is feasible
             if critIsConverging:
                 # minConvList = self.solve1(tSteps, criticalPoints, allTaylorApprox)
-                isConverging = self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]
+                isConverging, criticalPoints, results, resultsLin, timePoints = self.verify1(tSteps, criticalPoints, allTaylorApprox) #Change to store all in order to exploit the last proof
             else:
                 # We already posses provably non-converging points
                 isConverging = False
@@ -575,7 +575,12 @@ class distributedFunnel:
                 alphaU = 2.*alphaL
                 lyapFunc_.setAlpha(alphaU, 0)
                 
-                while self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
+                #while self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
+                while True:
+                    isConverging, criticalPoints, results, resultsLin, timePoints = self.verify1(tSteps, criticalPoints, allTaylorApprox) #Change to store all in order to exploit the last proof
+                    if not isConverging:
+                        # Break if first not converging size is found
+                        break
                     alphaL = alphaU
                     alphaU *= 2.
                     lyapFunc_.setAlpha(alphaU, 0)
@@ -586,7 +591,12 @@ class distributedFunnel:
                 alphaL = alphaU/2.
                 lyapFunc_.setAlpha(alphaL, 0)
 
-                while not self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
+                #while not self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
+                while True:
+                    isConverging, criticalPoints, results, resultsLin, timePoints = self.verify1(tSteps, criticalPoints, allTaylorApprox) #Change to store all in order to exploit the last proof
+                    if isConverging:
+                        # Break at first converging size
+                        break
                     alphaU = alphaL
                     alphaL /= 2.
                     lyapFunc_.setAlpha(alphaL, 0)
@@ -601,24 +611,21 @@ class distributedFunnel:
                 if __debug__:
                     print(f"Bisection at {alphaL}, {alpha}, {alphaU}")
                 
-                # TODO propagate crit points
-                # TODO I'm serious here
-                if self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
+                #if self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
+                isConverging, criticalPoints, results, resultsLin, timePoints = self.verify1(tSteps, criticalPoints, allTaylorApprox) #Change to store all in order to exploit the last proof
+                if isConverging:
                     # Converges
                     alphaL = alpha
                 else:
                     alphaU = alpha
             
-            # Conservative
+            # Conservative -> Choose the largest converging value found
             lyapFunc_.setAlpha(alphaL,0)
             # Additional work if seeking to store the proof
             if self.opts['storeProof']:
-
+                # Necessary to ensure that the proof for alphaL is stored
                 self.storeProof(*self.verify1(tSteps, criticalPoints, allTaylorApprox))
             
             tL = tC
             
         return None
-
-
-

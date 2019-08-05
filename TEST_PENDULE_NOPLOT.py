@@ -4,8 +4,6 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from coreUtils import *
-# No plot
-coreOptions.doPlot = False
 
 from systems.polySysTest import getSysStablePos, getUlims
 import polynomial as poly

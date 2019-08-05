@@ -1022,11 +1022,14 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         thisProbBase['probDict']['resPlacement'] = thisSol['probDict']['resPlacement']
         for k in range(allY.shape[1]):
             thisY = allY[:, [k]]
-            critPoints.append({'y':thisY.copy(), 'strictSep':0})
         
             thisProb = dp(thisProbBase)
             thisProb['probDict']['nPt'] = len(critPoints)-1
-
+            
+            critPoints.append({'y':thisY.copy(), 'strictSep':0, 'currU':thisSol['probDict']['u'] })
+            # TODO double storage
+            thisProb['probDict']['critPoint'] = critPoints[-1]
+            
             thisProb['probDict']['isTerminal'] = 0  # Convergence can be improved but only by increasing the computation load
             thisProb['strictSep'] = 0
         
@@ -1242,9 +1245,14 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
         inputs = itertools.product(*inputProduct)
     
-        for input in inputs:
+        for i, input in enumerate(inputs):
             thisProb = dp(thisProbBase)
             probList.append(thisProb)
+            # Store in critpoints
+            # TODO for the moment they are stored in both, critpoints and the problems -> to be changed
+            critPoints.append({'y':allY[:,[i]].copy(), 'strictSep':0, 'currU':thisSol['probDict']['u'] })
+            thisProb['probDict']['critPoint'] = critPoints[-1]
+            
             thisCoeffs = ctrlDict[-1][0].copy()
             
             if __debug__:

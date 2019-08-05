@@ -613,12 +613,15 @@ def workerSolveFixed(inQueue, outQueue):
                 outQueue.put("")
         else:
             if not (solution['status'] == 'optimal'):
-                print("Error in solving")
-                import plotting as plt
-                ff,aa = plt.plt.subplots(1,1)
-                aa.set_xlim(-2,2)
-                aa.set_ylim(-2,2)
-                plt.plot2dCstr(thisProb, aa, {'binaryPlot':True}, fig=ff)
+                print(solution)
+                if coreOptions.doPlot:
+                    print("Error in solving")
+                    import plotting as plt
+                    ff,aa = plt.plt.subplots(1,1)
+                    aa.set_xlim(-2,2)
+                    aa.set_ylim(-2,2)
+                    plt.plot2dCstr(thisProb, aa, {'binaryPlot':True}, fig=ff)
+                raise RuntimeError('non-optimal solution')
         try:
             extraction = thisProb.extractOptSol(solution)
         except:
@@ -775,11 +778,17 @@ def workerSolveVariable(inQueue, outQueue):
         else:
             if not (solution['status'] == 'optimal'):
                 print("Error in solving")
-                import plotting as plt
-                ff, aa = plt.plt.subplots(1, 1)
-                aa.set_xlim(-2, 2)
-                aa.set_ylim(-2, 2)
-                plt.plot2dCstr(thisProb, aa, {'binaryPlot':True}, fig=ff)
+                print("Solution is")
+                print(solution)
+                print("Problem is")
+                print(thisProb)
+                if coreOptions.doPlot:
+                    import plotting as plt
+                    ff, aa = plt.plt.subplots(1, 1)
+                    aa.set_xlim(-2, 2)
+                    aa.set_ylim(-2, 2)
+                    plt.plot2dCstr(thisProb, aa, {'binaryPlot':True}, fig=ff)
+                raise RuntimeError("Non optimal solution")
 
 
         while True:
