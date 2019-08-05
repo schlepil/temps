@@ -632,12 +632,12 @@ def workerSolveFixed(inQueue, outQueue):
             # Add the unscaled solution
             raise RuntimeError("This is no longer supported, transformation is done in main prog")
         else:
-            xSol = extraction[0]
+            ySol = extraction[0]
         
         
         if __debug__:
-            xSol = extraction[0]
-            if xSol is None:
+            ySol = extraction[0]
+            if ySol is None:
                 print("What the hell")
                 import plotting as plot
                 ff, aa = plot.plt.subplots(1, 1)
@@ -665,12 +665,12 @@ def workerSolveFixed(inQueue, outQueue):
                     pass
                 
             if solution['primal objective'] < coreOptions.numericEpsPos:
-                print(f"Found critical point with {solution['primal objective']} at \n {xSol}")
+                print(f"Found critical point with {solution['primal objective']} at \n {ySol}")
             print(f"Optimal value is ")
             if extraction[0].size == 0:
                 thisProb.extractOptSol(solution)
 
-        outQueue.put({'probDict':input, 'xSol':extraction[0], 'xSol':xSol, 'sol':solution, 'ext':extraction})
+        outQueue.put({'probDict':input, 'xSol':extraction[0], 'ySol':ySol, 'sol':solution, 'ext':extraction})
 
     return 0
 
@@ -820,7 +820,7 @@ def workerSolveVariable(inQueue, outQueue):
             # Add the unscaled solution
             raise NotImplementedError('Moved to main program')
         else:
-            xSol = extraction[0]
+            ySol = extraction[0]
 
         #Testing
         if __debug__:
@@ -853,12 +853,12 @@ def workerSolveVariable(inQueue, outQueue):
                     pass
 
             if solution['primal objective'] < coreOptions.numericEpsPos:
-                print(f"Found critical point with {solution['primal objective']} at \n {xSol}")
+                print(f"Found critical point with {solution['primal objective']} at \n {ySol}")
             print(f"Optimal value is ")
             if extraction[0].size == 0:
                 thisProb.extractOptSol(solution)
 
-        outQueue.put({'probDict':input, 'xSol':extraction[0], 'xSol':xSol, 'sol':solution, 'ext':extraction})
+        outQueue.put({'probDict':input, 'xSol':extraction[0], 'ySol':ySol, 'sol':solution, 'ext':extraction})
 
     return 0
 

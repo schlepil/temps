@@ -990,7 +990,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
         # Create the subset to exclude
         # There might be multiple critical points, in this case they have the same value for the primal objective
-        allY = thisSol['xSol']
+        allY = thisSol['ySol']
     
         # Test if any of the points is infeasible relying on optimal control
         PG0n = ctrlDictIn['PG0']/(norm(ctrlDictIn['PG0'], axis=0, keepdims=True)+coreOptions.floatEps)
@@ -1089,7 +1089,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             # Add the new problem
             if 1:
                 newSol = dp(thisSol)
-                newSol['xSol'] = newSol['xSol'][:,[k]]
+                newSol['ySol'] = newSol['ySol'][:,[k]]
                 newSol['xSol'] = newSol['xSol'][:,[k]]
                 # TODO check if sth is missing
                 
@@ -1135,7 +1135,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
         # Create the subset to exclude
         # There might be multiple critical points, in this case they have the same value for the primal objective
-        allY = thisSol['xSol']
+        allY = thisSol['ySol']
     
         # Test if the solution can be improved
         if nall(np.logical_or(probDict_['u'].flatten() == -1, probDict_['u'].flatten() == 1)):
