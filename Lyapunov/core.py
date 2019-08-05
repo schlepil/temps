@@ -73,5 +73,8 @@ class LyapunovFunction():
 
     def convAng(self, x: np.ndarray, t: np.ndarray, kd: bool = True):
         raise NotImplementedError
+    
+    def Proofs2Prob(self, aZone:List, resultsLin:List, aSubProofList:List[dict], aCtrlDict:dict, opts:dict={}):
+        raise NotImplementedError
 
 lyapunovFunctions = ()

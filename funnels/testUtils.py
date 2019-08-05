@@ -13,9 +13,9 @@ def testSol(sol, ctrlDict:dict):
     thisPoly = poly.polynomial(thisRepr)
 
     # Test if solution(s) is(are) valid
-    ySol = sol['ySol']
-    print(f"Minimizers are:\n{ySol}")
-    zySol = thisRepr.evalAllMonoms(ySol)
+    xSol = sol['xSol'] #At
+    print(f"Minimizers are:\n{xSol}")
+    zxSol = thisRepr.evalAllMonoms(xSol)
     
     try:
         PG0n = ctrlDict['PG0']/(norm(ctrlDict['PG0'], axis=0, keepdims=True)+coreOptions.floatEps)
@@ -25,20 +25,23 @@ def testSol(sol, ctrlDict:dict):
     # Loop over constraint polynomials
     for k, acstr in enumerate(sol['origProb']['cstr']):
         thisPoly.coeffs = acstr
-        for i in range(zySol.shape[1]):
-            if not thisPoly.eval2(zySol[:,[i]])>=0.:
+        for i in range(zxSol.shape[1]):
+            if not thisPoly.eval2(zxSol[:,[i]])>=0.:
                 thisRelax = relax.lasserreRelax(thisRepr)
-                print(f"Failed on cstr {k} with {thisPoly.eval2(thisPoly.eval2(zySol[:,[i]]))} for point {i}")
+                print(f"Failed on cstr {k} with {thisPoly.eval2(thisPoly.eval2(zxSol[:,[i]]))} for point {i}")
                 thisCstr = relax.lasserreConstraint(thisRelax, thisPoly)
                 print(f"Original sol with {sol['sol']['x_np']} is valid : {thisCstr.isValid(sol['sol']['x_np'].T, simpleEval=False)}")
-                print(f"Reconstructed sol with {ySol} is valid : {thisCstr.isValid(ySol, simpleEval=False)}")
+                print(f"Reconstructed sol with {xSol} is valid : {thisCstr.isValid(xSol, simpleEval=False)}")
                 
-                if nany(thisCstr.isValid(sol['sol']['x_np'].T, simpleEval=False) != thisCstr.isValid(ySol, simpleEval=False)):
-                    raise RuntimeError
+                print(f"Constraint is {acstr}")
+                print(f"Points are {acstr}")
+                
+                if nany(thisCstr.isValid(sol['sol']['x_np'].T, simpleEval=False) != thisCstr.isValid(xSol, simpleEval=False)):
+                    raise RuntimeError("constraint violated")
 
     # Check if minimizer is compatible with control law definition
     if 'PG0' in ctrlDict.keys():
-        dist2Planes = ndot(PG0n.T, ySol)
+        dist2Planes = ndot(PG0n.T, xSol)
         signPlanes = np.sign(dist2Planes).astype(nint)
         signPlanes[signPlanes==0] = 1
         
@@ -51,12 +54,12 @@ def testSol(sol, ctrlDict:dict):
 
     # Check if minimal value corresponds to ctrlDict value
     thisPoly.coeffs = -ctrlDict[-1][0]
-    optsVals = thisPoly.eval2(zySol).reshape((-1,))
+    optsVals = thisPoly.eval2(zxSol).reshape((-1,))
 
     for i,type in enumerate(sol['probDict']['u'].reshape((-1,))):
         thisPoly.coeffs = -ctrlDict[i][type]
-        for k in range(zySol.shape[1]):
-            thisVal = thisPoly.eval2(zySol[:,[k]])
+        for k in range(zxSol.shape[1]):
+            thisVal = thisPoly.eval2(zxSol[:,[k]])
             optsVals[k] += thisVal
             if thisVal <= 0.:
                 print(f"The control type {type} for input {i} failed on minimizer {k}")
