@@ -1099,7 +1099,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 else:
                     # This point does not converge with respect to the Lyapunov function under the new control law
                     # -> Directly resplit the problem
-                    thisSubProbList = self.analyzeSolSphereDiscreteCtrl(newSol, ctrlDictIn, opts) # Pass the unscaled version of the ctrlDict
+                    thisSubProbList = self.analyzeSolSphereDiscreteCtrl(newSol, ctrlDictIn, opt) # Pass the unscaled version of the ctrlDict
                     if not thisSubProbList:
                         # Even when splitted this point remains infeasible -> proof of non-convergence -> return empty list
                         if __debug__:
@@ -1243,11 +1243,17 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
         inputs = itertools.product(*inputProduct)
     
+        maxDegCstr = nmax(inputSepDeg)
+        allYZ = self.repr.evalAllMonoms(allY, maxDegCstr) # Take only the necessary monomials
+        thisPoly = polynomial.polynomial(self.repr) # Helper
+    
         for i, input in enumerate(inputs):
             thisProb = dp(thisProbBase)
             probList.append(thisProb)
-            # Store critpoints
-            thisProb['probDict']['critPointOrigin'] = {'y':allY.copy(), 'strictSep':0, 'currU':thisSol['probDict']['u'] }
+            thisProb['probDict']['critPointOrigin'] = {'y':allY[:,[i]].copy(), 'strictSep':0, 'currU':thisSol['probDict']['u'] }
+            
+            # Which original crit point is contained
+            isContained = nones((allY.shape[1],), dtype=np.bool_)
             
             thisCoeffs = ctrlDict[-1][0].copy()
             
@@ -1256,6 +1262,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
             for k in range(nu_):
                 thisCoeffs += ctrlDict[k][input[k]]
+                
                 if __debug__:
                     thisProb[f'obj_{k},{input[k]}'] = ctrlDict[k][input[k]].copy()
                     
@@ -1269,11 +1276,20 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                         # Now we have split up the hypersphere into smaller parts
                         thisProb['probDict']['nCstrNDegType'].append((inputSepDeg[k], 's'))  # TODO adjust degree of relaxation if increasing degree of separating surface
                         thisProb['cstr'].append(thisCoeffsSep)
+                        
+                        # Store critpoints
+                        # Check which (if any) of the critical points are contained in this regions
+                        # -> that is if all constraints are positive
+                        thisPoly.coeffs = thisCoeffsSep
+                        isContained = np.logical_and(isContained, thisPoly.eval2(allYZ, maxDegCstr).reshape((allY.shape[1],))>=-coreOptions.absTolCstr)
+                        
                 except IndexError:
                     # Was already linear
                     pass
             thisProb['obj'] = -thisCoeffs
             thisProb['probDict']['u'] = narray(input, dtype=nint).reshape((-1,1))
+            # Store origin points
+            thisProb['probDict']['critPointOrigin'] = {'y':allY[:, isContained].copy(), 'strictSep':0, 'currU':thisSol['probDict']['u']}
             # Done
         return probList
 
@@ -1284,9 +1300,8 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             # We can simply put a new sphere around the minimal point
         
             if opts['sphereBoundCritPoint']:
-                #assert thisSol['probDict']['nPt'] == -1
+                assert thisSol['probDict']['nPt'] == -1
                 assert opts['projection'] == 'sphere'
-                assert nall(thisSol['probDict']['u'] == 2)
                 probList = self.analyzeSolSphereLinCtrl(thisSol, ctrlDict, opts)
             else:
                 raise NotImplementedError
@@ -1320,7 +1335,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         if isinstance(newProb, dict):
             newProb = [newProb]
         
-        yStarOld = oldSol['xSol']
+        yStarOld = oldSol['ySol']
         zStarOld = self.repr.evalAllMonoms(yStarOld)
         idxOk = nones((yStarOld.shape[1],)).astype(np.bool_)
         for aProb in newProb:
@@ -1346,15 +1361,15 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         :param opts:
         :return: bool
         """
-        # ATTENTION: Currently 'xSol' is also the SCALED solution, that is, it is the point lying within the
+        # ATTENTION: Currently 'ySol' is also the SCALED solution, that is, it is the point lying within the
         # (unit) hypersphere
         
         thisPoly = polynomial(self.repr)
         
         isFeas = True
         
-        assert oldSol['xSol'].shape[1] == 1, "Only one point is expected here"
-        yStarOld = oldSol['xSol']
+        assert oldSol['ySol'].shape[1] == 1, "Only one point is expected here"
+        yStarOld = oldSol['ySol']
         zStarOld = self.repr.evalAllMonoms(yStarOld)
         
         if __debug__:
@@ -1374,9 +1389,6 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         # \brief Converts a subproof to a set of "suitable" problems, which are likely to reduce overall computation time
         """
         
-        nu_ = self.dynSys.nu
-        nq_ = self.dynSys.nq
-        
         def createBaseProb(self, opts):
             return {'probDict':{'solver':opts['solver'], 'minDist':1., 'scaleFacK':1., 'dimsNDeg':(self.dynSys.nq, self.repr.maxDeg), 'nCstrNDegType':[]}, 'cstr':[]}
         
@@ -1387,9 +1399,9 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             
             # 1.1.1 Construct the objective
             thisPoly = polynomial(self.repr) #Helper
-            thisCoeffs = aCtrlDict[-1][0].copy() # Objective resulting from system dynamics
+            thisCoeffs = ctrlDict[-1][0].copy() # Objective resulting from system dynamics
             for k in range(nu_):
-                thisCoeffs += aCtrlDict[k][2] # Objective from input and linear control
+                thisCoeffs += ctrlDict[k][2] # Objective from input and linear control
             thisProbLin['obj'] = -thisCoeffs # Inverse sign to maximize divergence <-> minimize convergence
             # 1.2 Construct the constraints
             # 1.2.1 Confine to hypersphere
@@ -1407,10 +1419,10 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             if opts['sphereBoundCritPoint']:
                 
                 # check if the ctrl dict is already projected
-                if not aCtrlDict['sphereProj']:
+                if not ctrlDict['sphereProj']:
                     raise NotImplementedError
     
-                probList = [[getLinProb(self, opts)]]
+                probList = [getLinProb(self, opts)]
             else:
                 raise NotImplementedError
         
