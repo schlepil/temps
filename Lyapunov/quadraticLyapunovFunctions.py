@@ -1384,10 +1384,13 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         thisPoly.coeffs = newProb['obj']
         return bool(thisPoly.eval2(zStarOld) >= -coreOptions.absTolCstr)
         
-    def Proofs2Prob(self, aZone:List, resultsLin:List, aSubProofList:List[dict], aCtrlDict:dict, opts:dict={}):
+    def Proofs2Prob(self, aZone:List, resultsLin:List, aSubProof:List[List[dict]], aCtrlDict:dict, opts:dict={}):
         """
         # \brief Converts a subproof to a set of "suitable" problems, which are likely to reduce overall computation time
         """
+        
+        nu_ = self.dynSys.nu
+        nq_ = self.dynSys.nq
         
         def createBaseProb(self, opts):
             return {'probDict':{'solver':opts['solver'], 'minDist':1., 'scaleFacK':1., 'dimsNDeg':(self.dynSys.nq, self.repr.maxDeg), 'nCstrNDegType':[]}, 'cstr':[]}
@@ -1399,9 +1402,9 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             
             # 1.1.1 Construct the objective
             thisPoly = polynomial(self.repr) #Helper
-            thisCoeffs = ctrlDict[-1][0].copy() # Objective resulting from system dynamics
+            thisCoeffs = aCtrlDict[-1][0].copy() # Objective resulting from system dynamics
             for k in range(nu_):
-                thisCoeffs += ctrlDict[k][2] # Objective from input and linear control
+                thisCoeffs += aCtrlDict[k][2] # Objective from input and linear control
             thisProbLin['obj'] = -thisCoeffs # Inverse sign to maximize divergence <-> minimize convergence
             # 1.2 Construct the constraints
             # 1.2.1 Confine to hypersphere
@@ -1419,7 +1422,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             if opts['sphereBoundCritPoint']:
                 
                 # check if the ctrl dict is already projected
-                if not ctrlDict['sphereProj']:
+                if not aCtrlDict['sphereProj']:
                     raise NotImplementedError
     
                 probList = [getLinProb(self, opts)]
@@ -1428,7 +1431,21 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
         elif self.opts_['zoneCompLvl'] == 2:
             # Use the information of the critical points
-            raise NotImplementedError
+            # All problems that have a finite optimal value have been necessary for the proof
+            # -> Add the original point and create a corresponding pseaudo solution
+            
+            thisLinProb = getLinProb(self, opts)
+            
+            # Loop through all single proofs
+            # aSubProof[i][j]
+            for aSubProofList in aSubProof:
+                for aProof in aSubProofList:
+                    # Check result value
+                    if np.isfinite(resultsLin[aProof['resPlacementLin']]):
+                        # Check if parent was already added
+                
+            
+            
         else:
             raise RuntimeError('Unknown')
         
