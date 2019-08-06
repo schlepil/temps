@@ -636,8 +636,8 @@ def workerSolveFixed(inQueue, outQueue):
         
         
         if __debug__:
-            ySol = extraction[0]
-            if ySol is None:
+            xSol = extraction[0]
+            if xSol is None:
                 print("What the hell")
                 import plotting as plot
                 ff, aa = plot.plt.subplots(1, 1)
