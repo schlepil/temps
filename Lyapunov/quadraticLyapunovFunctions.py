@@ -1432,19 +1432,43 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         elif self.opts_['zoneCompLvl'] == 2:
             # Use the information of the critical points
             # All problems that have a finite optimal value have been necessary for the proof
-            # -> Add the original point and create a corresponding pseaudo solution
+            # -> Add the original point and create a corresponding pseudo solution
+            # This function does not seek to modify the point -> Only useful with suitable propagation / scaling
+            
+            probList = []
             
             thisLinProb = getLinProb(self, opts)
+            probList.append(thisLinProb)
+            
+            # Already treated parents
+            parentsAdded = []
             
             # Loop through all single proofs
             # aSubProof[i][j]
             for aSubProofList in aSubProof:
                 for aProof in aSubProofList:
                     # Check result value
-                    if np.isfinite(resultsLin[aProof['resPlacementLin']]):
+                    if np.isfinite(resultsLin[aProof['probDict']['resPlacementLin']]):
+                        # The initial linear control prob has the parent None
+                        # It does not have to be added as it will be recreated
+                        if aProof['probDict']['resPlacementParent'] is None:
+                            continue
                         # Check if parent was already added
-                
-            
+                        if aProof['probDict']['resPlacementParent'] in parentsAdded:
+                            continue
+                        parentsAdded.append(aProof['probDict']['resPlacementParent'])
+                        
+                        _, ip, jp = aProof['probDict']['resPlacementParent']
+                        parentProof = aSubProof[ip][jp]
+                        
+                        # -> construct
+                        subProofList = self.analyzeSolSphereDiscreteCtrl(parentProof, aCtrlDict, opts)
+                        probList.extend(subProofList)
+                        # -> remove zone from linear prob
+                        # TODO make more generic. Here first constraint is confine to hypersphere, second is confine to smallerr bounding ellip
+                        thisLinProb['probDict']['nCstrNDegType'].append( parentProof['probDict']['nCstrNDegType'][1] ) 
+                        thisLinProb['cstr'].append( -parentProof['cstr'][1] )
+                        # TODO done?
             
         else:
             raise RuntimeError('Unknown')

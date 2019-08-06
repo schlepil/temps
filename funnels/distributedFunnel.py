@@ -11,11 +11,12 @@ from trajectories import referenceTrajectory
 
 from polynomial import polynomialRepr, polynomial
 import relaxations as relax
+relax.propagators.propagators
 from funnels.testUtils import testSol
 
 class distributedFunnel:
 
-    def __init__(self, dynSys:dynamicalSystem, lyapFunc:LyapunovFunction, traj:referenceTrajectory, evolveLyap:lyapEvol, propagator:relax.propagators.propagators=relax.propagators.dummyPropagator(), opts={}):
+    def __init__(self, dynSys:dynamicalSystem, lyapFunc:LyapunovFunction, traj:referenceTrajectory, evolveLyap:lyapEvol, propagator:relax.propagators, opts={}):
         self.dynSys = dynSys
         self.lyapFunc = lyapFunc
         self.traj = traj
@@ -83,21 +84,9 @@ class distributedFunnel:
                     #SubProof is [i][j]
                     for aSubProofList in aSubProof:
                         for aProof in aSubProofList:
-                            if aProof is None:
-                                if __debug__:
-                                    print("Skipping transformation to sphere of None")
-                                continue
                             # TODO check if only critical points need to be projected
                             # This is ellip2sphere
-                            try:
-                                aProof['critPoints']['xCrit'] = ndot(Ci, aProof['critPoints']['yCrit'])
-                            except KeyError:
-                                if __debug__:
-                                    print("No critical point to be transformed to sphere")
-                            except:
-                                if __debug__:
-                                    print(f"Failed on {aProof}")
-                                raise RuntimeError
+                            aProof['critPoints']['xCrit'] = ndot(Ci, aProof['critPoints']['yCrit'])
             else:
                 raise NotImplementedError
         elif self.opts['projection'] in (None, 'None', False):
@@ -137,21 +126,9 @@ class distributedFunnel:
                     #SubProof is [i][j]
                     for aSubProofList in aSubProof:
                         for aProof in aSubProofList:
-                            if aProof is None:
-                                if __debug__:
-                                    print("Skipping transformation to ellip of None")
-                                continue
                             # TODO check if only critical points need to be projected
                             # This is sphere2ellip
-                            try:
-                                aProof['critPoints']['yCrit'] = ndot(Ci_inv, aProof['critPoints']['xCrit'])
-                            except KeyError:
-                                if __debug__:
-                                    print("No critical point to be mapped to ellip")
-                            except:
-                                if __debug__:
-                                    print(f"Snap {aProof}")
-                                raise RuntimeError
+                            aProof['critPoints']['yCrit'] = ndot(Ci_inv, aProof['critPoints']['xCrit'])
         
     
     def getCtrlDict(self, t, fTaylorApprox, gTaylorApprox, returnZone=True):
@@ -485,7 +462,7 @@ class distributedFunnel:
         #Set initial problems
         for k, (aCtrlNZone, aSubProof) in enumerate(zip(allCtrlDictsNzones, oldResults)):
             results.append([])
-            thisProbList = self.lyapFunc.Proofs2Prob(aCtrlNZone[1], oldResultsLin, aSubProof, aCtrlNZone[0], self.opts)
+            thisProbList = self.lyapFunc.Proofs2Prob(aCtrlNZone[1], oldResultsLin, aSubProof, aCtrlNZone[0])
             #results.append([[None for _ in range(len(aSubProbList))] for aSubProbList in thisProbList ])
             for i, aSubProbList in enumerate(thisProbList):
                 results[-1].append([])
@@ -506,7 +483,7 @@ class distributedFunnel:
             assert thisSol['sol']['status'] == 'optimal' #TODO make compatible with other solvers
             # Store the critical points within the result
             # TODO improve structure -> Works only if projection is done in main program not by the worker!
-            thisSol['critPoints'] = {'xCrit':thisSol['xSol'].copy(), 'currU':thisSol['probDict']['u'].copy()}
+            thisSol['critPoints'] = {'xCrit':thisSol['sol']['x_np'].copy(), 'currU':thisSol['probDict']['u'].copy()}
             # Store the proof
             k, i, j = thisSol['probDict']['resPlacement']
             results[k][i][j] = dp(thisSol)
@@ -682,9 +659,6 @@ class distributedFunnel:
             proofDataLargest = None
             
             while (alphaU-alphaL)>self.opts['convLim']*alphaL:
-                if alphaL <= 1e-12:
-                    raise RuntimeError("Non-converging")
-                
                 alpha = (alphaL+alphaU)/2.
                 lyapFunc_.setAlpha(alpha, 0)
                 
