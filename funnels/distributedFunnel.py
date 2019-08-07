@@ -487,12 +487,12 @@ class distributedFunnel:
             # Store the proof
             k, i, j = thisSol['probDict']['resPlacement']
             results[k][i][j] = dp(thisSol)
-            resultsLin[thisSol['probDict']['resPlacementLin']] = thisSol['sol']['primal objective']
+            resultsLin[thisSol['probDict']['resPlacementLin']] = thisSol['obj']
             if __debug__:
                 print(f"Checking result for {[k,i,j]}")
                 testSol(thisSol, allCtrlDictsNzones[k][0])
 
-            if thisSol['sol']['primal objective']>=self.opts['numericEpsPos']:
+            if thisSol['obj']>=self.opts['numericEpsPos']:
                 # Proves convergence for the sub region treated
                 pass
             else:

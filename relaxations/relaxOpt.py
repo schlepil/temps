@@ -319,30 +319,45 @@ class convexProg():
             #         zSol=self.repr.evalAllMonoms(xSol)
             #         isValid[:] = True
             #         print('ok',atol)
-            atol=-1e-6
-
+            
+            atol=-coreOptions.absTolCstr
             for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
                 isValid = np.logical_and(isValid, aCstr.isValid(zSol, atol=atol))
 
-            if not nany(isValid):
-                        isValid=nones((xSol.shape[1],), dtype=np.bool_)
-                        xSolnew=nzeros(xSol.shape)
-                        for i in range(xSol.shape[1]):
-                            xSolnew[:,i]=self.localSolve(xSol[:, i])
-                            #xSol_i.append(self.localSolve(xSol[i,:]))
-                        zSolnew=self.repr.evalAllMonoms(xSolnew)
-                        for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
-                            isValid = np.logical_and(isValid, aCstr.isValid(zSolnew, atol=atol))
-                        print('hello',isValid)
-                        if not nany(isValid):
-                           raise RuntimeError
-                        else:
-                           xSol=xSolnew
+            #Actually we only need to reoptimize the solutions that do actually violate a constraint
+            # if not nany(isValid):
+            #             isValid=nones((xSol.shape[1],), dtype=np.bool_)
+            #             xSolnew=nzeros(xSol.shape)
+            #             for i in range(xSol.shape[1]):
+            #                 xSolnew[:,i]=self.localSolve(xSol[:, i])
+            #                 #xSol_i.append(self.localSolve(xSol[i,:]))
+            #             zSolnew=self.repr.evalAllMonoms(xSolnew)
+            #             for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
+            #                 isValid = np.logical_and(isValid, aCstr.isValid(zSolnew, atol=atol))
+            #             print('hello',isValid)
+            #             if not nany(isValid):
+            #                raise RuntimeError
+            #             else:
+            #                xSol=xSolnew
+            for i in range(xSol.shape[1]):
+                if isValid[i]:
+                    continue
+                # Do the local search
+                xSol[:,[i]] = self.localSolve(xSol[:,i]) #localSolve expects 1d vector
+                # Check if now ok
+                thisIsValid = True
+                zSolNew = self.repr.evalAllMonoms(xSol[:,[i]])
+                for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
+                    thisIsValid &= aCstr.isValid(zSolnew, atol=atol)
+                assert thisIsValid, "Ups local solve failed"
+                isValid[i] = True
+            
             if __debug__:
                 print(f"Found valid solution for atol : {atol}")
             
-            #Only return valid ones
-            xSol = xSol[:, isValid]
+            # Only return valid ones
+            # Became redundant due to localSove
+            # xSol = xSol[:, isValid]
             
             #Finally construct the constraint polynomials
             if U.shape[1] == 1:
@@ -359,30 +374,34 @@ class convexProg():
                         idxC += 1
             
         return xSol, optimalCstr, (varMonomBase, U, relTol)
+    
+    def localSolveDict(self,xSol, method='COBYLA', tol:float=0.9*coreOptions.absTolCstr, options:dict={})->dict:
+        """
+        # Create a dict that can be passed to sp_minimize
+        :param xSol:
+        :return:
+        """
+        Amat = nzeros((len(self.constraints.s.cstrList[1:]), self.__objective.coeffs.size), dtype=nfloat)
+        for i, acstr in enumerate(self.constraints.s.cstrList[1:]):
+            Amat[i, :] = acstr.poly.coeffs
+        this_cstr = {'type':'ineq', 'fun':lambda x:ndot(Amat, self.repr.evalAllMonoms(x.reshape((-1, 1)))).squeeze()}
+        gx = lambda x:ndot(self.objective.coeffs, self.repr.evalAllMonoms(x))
+        options_ = {}
+        options_.update(options)
+        return {'fun':gx, 'x0':xSol.reshape((-1,)), 'method':method, 'tol':tol, 'constraints':this_cstr, 'options':options_ }
 
-
-    def localSolve(self, xsol):
+    def localSolve(self, xSol:np.ndarray)->np.ndarray:
         # TODO @xiao take into account possible linear / socp constraints
         # TODO @xiao reduce the computational complexity by only taking non-zero coefficients (monomials up to the highest polynomial in the constraints)
         # TODO @xiao make this more generic, so that solvers can be easily exchanged, maybe by creating a local-solver object "sugar-coating" existing solvers
         
-        Amat = nzeros((len(self.constraints.s.cstrList[1:]), self.__objective.coeffs.size), dtype=nfloat)
-        for i, acstr in enumerate(self.constraints.s.cstrList[1:]):
-           # print("acstr.poly.coeffs",acstr.poly.coeffs)
-            #Amat[i, :] = acstr.poly.coeffs.copy() #Unnecessary copy, will be copied anyways
-            Amat[i, :] = acstr.poly.coeffs
-        this_cstr = {'type': 'ineq', 'fun': lambda x: ndot(Amat, self.repr.evalAllMonoms(x.reshape((-1, 1)))).squeeze()}
-        gx = lambda x: ndot(self.objective.coeffs, self.repr.evalAllMonoms(x))
-      #  res = sp_minimize(gx, xsol, method='COBYLA',constraints=this_cstr,options={'rhobeg': 1.0, 'maxiter': 1000, 'disp': False, 'catol': 1e-7})
-        #res = sp_minimize(gx, xsol, method='COBYLA', constraints=this_cstr, options={'rhobeg': 1.0, 'maxiter': 1000, 'disp': False, 'tol': 1e-7})
-        res = sp_minimize(gx, xsol, method='COBYLA', tol=0.9*coreOptions.absTolCstr, constraints=this_cstr) #Leave some margin
-        #res = sp_minimize(gx, xsol, method='COBYLA', constraints=this_cstr)
+        res = sp_minimize(**self.localSolveDict(xSol))
         assert res.success
-        #cstrverif[1.979833e-01 - 1.993135e-06, 1.664354e+00 - 4.200682e-06]
         if __debug__:
             print('cstrverif',this_cstr['fun'](res.x))
             if not nall(this_cstr['fun'](res.x)>-coreOptions.absTolCstr):
                 print('shit')
+        
         return res.x
 
     def checkSol(self, sol:Union[np.ndarray, dict], **kwargs):
@@ -480,6 +499,7 @@ class convexProg():
             sol['primal objective'] += constantValue
             sol['dual objective'] += constantValue
         
+        sol['obj'] = sol['primal objective']
         sol['x_np'] = narray(sol['x']).astype(nfloat).reshape((1,-1))
         if self.firstVarIsOne:
             sol['x_np'] = np.hstack(([[1]],sol['x_np']))

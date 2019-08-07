@@ -64,7 +64,7 @@ def testSol(sol, ctrlDict:dict):
             if thisVal <= 0.:
                 print(f"The control type {type} for input {i} failed on minimizer {k}")
 
-    print(f"global minimum was \n{sol['sol']['primal objective']}\n, computed values from ctrlDict are \n{optsVals}")
+    print(f"global minimum was \n{sol['obj']}\n, computed values from ctrlDict are \n{optsVals}")
 
 
 

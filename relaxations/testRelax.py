@@ -54,7 +54,7 @@ def funcTestFirstOpt(relaxOrder=4):
     
     thisOpt.addCstr(thisRelax)
     sol = thisOpt.solve()
-    print("Analytic solution is 0. obtained {0}".format(sol['primal objective']))
+    print("Analytic solution is 0. obtained {0}".format(sol['obj']))
     print("Analytic minimizer is (-1,-1) obtained {0}".format(sol['x_np'][0,1:3]))
     print("relax mat is \n {0}".format(thisRelax.evalCstr(sol['x_np'])))
     print("With eigvals \n {0} \n and eigvec \n{1}".format(*eigh(thisRelax.evalCstr(sol['x_np']))))

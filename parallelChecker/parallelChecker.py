@@ -664,8 +664,8 @@ def workerSolveFixed(inQueue, outQueue):
                 except AttributeError:
                     pass
                 
-            if solution['primal objective'] < coreOptions.numericEpsPos:
-                print(f"Found critical point with {solution['primal objective']} at \n {ySol}")
+            if solution['obj'] < coreOptions.numericEpsPos:
+                print(f"Found critical point with {solution['obj']} at \n {ySol}")
             print(f"Optimal value is ")
             if extraction[0].size == 0:
                 thisProb.extractOptSol(solution)
@@ -852,13 +852,13 @@ def workerSolveVariable(inQueue, outQueue):
                 except AttributeError:
                     pass
 
-            if solution['primal objective'] < coreOptions.numericEpsPos:
-                print(f"Found critical point with {solution['primal objective']} at \n {ySol}")
+            if solution['obj'] < coreOptions.numericEpsPos:
+                print(f"Found critical point with {solution['obj']} at \n {ySol}")
             print(f"Optimal value is ")
             if extraction[0].size == 0:
                 thisProb.extractOptSol(solution)
 
-        outQueue.put({'probDict':input, 'xSol':extraction[0], 'ySol':ySol, 'sol':solution, 'ext':extraction})
+        outQueue.put({'probDict':input, 'xSol':extraction[0], 'ySol':ySol, 'obj':solution['obj'], 'sol':solution, 'ext':extraction})
 
     return 0
 

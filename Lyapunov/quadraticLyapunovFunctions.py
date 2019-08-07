@@ -1090,6 +1090,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             if 0:
                 # TODO this needs to move elsewhere.
                 # It is useful but seriously messes up the way the problems refer to each other
+                # Also attention that the new worst solution is respecting the new constraints
                 newSol = dp(thisSol)
                 newSol['ySol'] = newSol['ySol'][:,[k]]
                 newSol['xSol'] = newSol['xSol'][:,[k]]
