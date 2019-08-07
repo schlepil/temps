@@ -7,6 +7,10 @@ from relaxations.rref import robustRREF
 from scipy.optimize import minimize as sp_minimize
 from scipy import optimize
 
+# TODO is this ok?
+# Parameter to switch??
+localSolve = sp_minimize
+
 class convexProg():
 
     def __init__(self, repr:polynomialRepr, solver:str='cvxopt', objective:polynomial=None, firstVarIsOne:bool=True):
@@ -395,7 +399,7 @@ class convexProg():
         # TODO @xiao reduce the computational complexity by only taking non-zero coefficients (monomials up to the highest polynomial in the constraints)
         # TODO @xiao make this more generic, so that solvers can be easily exchanged, maybe by creating a local-solver object "sugar-coating" existing solvers
         
-        res = sp_minimize(**self.localSolveDict(xSol))
+        res = localSolve(**self.localSolveDict(xSol))
         assert res.success
         if __debug__:
             print('cstrverif',this_cstr['fun'](res.x))

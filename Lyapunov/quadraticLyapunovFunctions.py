@@ -1,8 +1,9 @@
 from Lyapunov.core import *
 from Lyapunov.utils_numba import *
 
-from control import lqr
+import polynomial
 
+from control import lqr
 
 if coreOptions.doPlot:
     import plotting as plot
@@ -524,6 +525,17 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         P,Pd = self.getPnPdot(t, True)
         alpha = 1. if len(P.shape) == 2 else nones((P.shape[0],), nfloat)
         return [P,alpha, Pd]
+    
+    def zone2Cstr(self,aZone, offset:np.ndarray=None):
+        """
+        Transforms a aZone into a polynomial constraint
+        :param aZone:
+        :param offset:
+        :return:
+        """
+        thisPoly = polynomial.polynomial(self.dynSys.repr)
+        thisPoly.setEllipsoidalConstraint(offset=nzeros((self.dynSys.nq,1),dtype=nfloat) if offset is None else offset, radius=aZone[1], P=aZone[0])
+        return thisPoly
     
     def getLyap(self, t):
         P = self.getPnPdot(t, False)

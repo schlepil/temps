@@ -242,11 +242,13 @@ class polyFunction():
         self.repr = repr
         self.shape_ = narray(shape, ndmin=1)
         self.f = np.ndarray(self.shape_, dtype=object)
+        self.maxDeg = None
         
     def setVal(self, new:np.ndarray):
         assert self.f.shape == new.shape
         
         self.f = new
+        self.getMaxDeg()
         return None
     
     def __getitem__(self, key):
@@ -254,6 +256,7 @@ class polyFunction():
     
     def __setitem__(self, key, item):
         self.f[key] = item
+        self.maxDeg = max(self.maxDeg, item.getMaxDegree())
         return None
         
     def eval(self, x:np.ndarray):
@@ -266,7 +269,8 @@ class polyFunction():
         xs1 = x.shape[1]
         prodSpace = [[slice(0,xs1)]] + [range(a) for a in self.shape_]
 
-        z = x if (x.shape[0] == self.repr.nMonoms) else evalMonomsNumba(x, self.repr.varNum2varNumParents)
+        #z = x if (x.shape[0] == self.repr.nMonoms) else evalMonomsNumba(x, self.repr.varNum2varNumParents)
+        z = x if (x.shape[0] >= len(self.repr.varNumsUpToDeg[self.maxDeg])) else self.repr.evalAllMonoms(x, self.maxDeg)
         
         y = nzeros([xs1]+list(self.shape_), dtype=nfloat)
         
