@@ -442,13 +442,15 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         else:
             return self.alpha[idx]
     
-    def setAlpha(self, newAlpha, idx=None):
+    def setAlpha(self, newAlpha, idx=None, returnInfo=False):
         if idx is None:
-            self.alpha = newAlpha
+            alphaFromTo = [dp(self.alpha_), dp(newAlpha)]
+            self.alpha_ = newAlpha
         else:
+            alphaFromTo = [dp(self.alpha_[idx]), dp(newAlpha)]
             self.alpha_[idx] = newAlpha
             self.computeK_(idx)
-        return None
+        return None if not returnInfo else alphaFromTo
     
     def reset(self):
         self.P_ = None

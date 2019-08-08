@@ -35,7 +35,7 @@ class distributedFunnel:
                      'numericEpsPos':coreOptions.numericEpsPos,
                      'minFinalValue':1,
                      'earlyExit':True,
-                     'minConvRate':-0.,
+                     'minConvRate':-0., #TODO this does not seem to be propagated correctly
                      'optsEvol':{
                                     'tDeltaMax':.1
                                 },
@@ -592,21 +592,20 @@ class distributedFunnel:
             
             
             tC, nextZoneGuess = self.evolveLyap(tC, self.opts['optsEvol']['tDeltaMax'], lyapFunc_.getLyap(tC))
-            tSteps = np.linspace(tL, tC, self.opts['interSteps'])
-            
+            tSteps = np.linspace(tC, tL, self.opts['interSteps']) # TODO check order; Does the order play a role here?
             
             # Step 1 - critical points
             # TODO retropropagate the trajectory of the current crit points for 
             # current guess of the zone. For this only the very last criticalPoints are necessary
             if results is not None:
-                critIsConverging, results, resultsLin = self.propagator.doPropagate(tSteps,self, results,resultsLin,self.opts['interStepsPropCrit'])
+                critIsConverging, results, resultsLin = self.propagator.doPropagate(tSteps, self, results, resultsLin, self.opts['interStepsPropCrit'])
             else:
                 critIsConverging = True #Dummy to force search
 
             # Get the current taylor series
             allTaylorApprox = [ self.dynSys.getTaylorApprox(self.traj.getX(aT)) for aT in tSteps ]
             
-            # TODO this is too long and should be seperated
+            # TODO this is too long and should be separated
             
             lyapFunc_.register(tC, nextZoneGuess)
 
@@ -622,35 +621,35 @@ class distributedFunnel:
                 # Make the zone bigger to find an upper bound before using dichotomic search
                 alphaL = lyapFunc_.getAlpha(0)
                 alphaU = 2.*alphaL
-                lyapFunc_.setAlpha(alphaU, 0)
+                alphaFromTo = lyapFunc_.setAlpha(alphaU, 0, returnInfo=True)
                 
                 #while self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                 while True:
-                    critIsConverging, results, resultsLin = self.propagator.doRescale(tSteps, self, results, resultsLin, self.opts['interStepsPropCrit'])
+                    critIsConverging, results, resultsLin = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
                     isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
                     if not isConverging:
                         # Break if first not converging size is found
                         break
                     alphaL = alphaU
                     alphaU *= 2.
-                    lyapFunc_.setAlpha(alphaU, 0)
+                    alphaFromTo = lyapFunc_.setAlpha(alphaU, 0, returnInfo=True)
 
             else:
                 # Make the zone smaller to find a lower bound before using dichotomic search
                 alphaU = lyapFunc_.getAlpha(0)
                 alphaL = alphaU/2.
-                lyapFunc_.setAlpha(alphaL, 0)
+                alphaFromTo = lyapFunc_.setAlpha(alphaL, 0, returninfo=True)
 
                 #while not self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                 while True:
-                    critIsConverging, results, resultsLin = self.propagator.doRescale(tSteps, self, results, resultsLin, self.opts['interStepsPropCrit'])
+                    critIsConverging, results, resultsLin = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
                     isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
                     if isConverging:
                         # Break at first converging size
                         break
                     alphaU = alphaL
                     alphaL /= 2.
-                    lyapFunc_.setAlpha(alphaL, 0)
+                    alphaFromTo = lyapFunc_.setAlpha(alphaL, 0, returnInfo=True)
             
             # Now we can perform dichotomic search
             assert alphaL<alphaU
@@ -660,13 +659,13 @@ class distributedFunnel:
             
             while (alphaU-alphaL)>self.opts['convLim']*alphaL:
                 alpha = (alphaL+alphaU)/2.
-                lyapFunc_.setAlpha(alpha, 0)
+                alphaFromTo = lyapFunc_.setAlpha(alpha, 0, returnInfo=True)
                 
                 if __debug__:
                     print(f"Bisection at {alphaL}, {alpha}, {alphaU}")
                 
                 #if self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
-                critIsConverging, results, resultsLin = self.propagator.doRescale(tSteps, self, results, resultsLin, self.opts['interStepsPropCrit'])
+                critIsConverging, results, resultsLin = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
                 isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
                 if isConverging:
                     # Converges
