@@ -460,9 +460,9 @@ class distributedFunnel:
         
         
         #Set initial problems
-        for k, (aCtrlNZone, aSubProof) in enumerate(zip(allCtrlDictsNzones, oldResults)):
+        for k, (at, aCtrlNZone, aSubProof) in enumerate(zip(timePoints, allCtrlDictsNzones, oldResults)):
             results.append([])
-            thisProbList = self.lyapFunc.Proofs2Prob(aCtrlNZone[1], oldResultsLin, aSubProof, aCtrlNZone[0])
+            thisProbList = self.lyapFunc.Proofs2Prob(at, aCtrlNZone[1], oldResultsLin, aSubProof, aCtrlNZone[0])
             #results.append([[None for _ in range(len(aSubProbList))] for aSubProbList in thisProbList ])
             for i, aSubProbList in enumerate(thisProbList):
                 results[-1].append([])
@@ -584,6 +584,8 @@ class distributedFunnel:
         
         results = None
         resultsLin = None
+        resultsProp = None # Propagated result structure do not possess the tree structure
+        resultsLinProp = None
 
         # Back propagate
         while tC > tStart:
@@ -598,7 +600,7 @@ class distributedFunnel:
             # TODO retropropagate the trajectory of the current crit points for 
             # current guess of the zone. For this only the very last criticalPoints are necessary
             if results is not None:
-                critIsConverging, results, resultsLin = self.propagator.doPropagate(tSteps, self, results, resultsLin, self.opts['interStepsPropCrit'])
+                critIsConverging, resultsProp, resultsLinProp = self.propagator.doPropagate(tSteps, self, results, resultsLin, self.opts['interStepsPropCrit'])
             else:
                 critIsConverging = True #Dummy to force search
 
@@ -612,7 +614,7 @@ class distributedFunnel:
             # Step 2 check if current is feasible
             if critIsConverging:
                 # minConvList = self.solve1(tSteps, criticalPoints, allTaylorApprox)
-                isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
+                isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp), allTaylorApprox) #Change to store all in order to exploit the last proof
             else:
                 # We already posses provably non-converging points
                 isConverging = False
@@ -625,8 +627,11 @@ class distributedFunnel:
                 
                 #while self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                 while True:
-                    critIsConverging, results, resultsLin = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
-                    isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
+                    critIsConverging, resultsProp, resultsLinProp = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
+                    if critIsConverging:
+                        isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
+                    else:
+                        isConverging = False
                     if not isConverging:
                         # Break if first not converging size is found
                         break
@@ -643,7 +648,10 @@ class distributedFunnel:
                 #while not self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                 while True:
                     critIsConverging, results, resultsLin = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
-                    isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
+                    if critIsConverging:
+                        isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
+                    else:
+                        isConverging = False
                     if isConverging:
                         # Break at first converging size
                         break
@@ -666,7 +674,10 @@ class distributedFunnel:
                 
                 #if self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                 critIsConverging, results, resultsLin = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
-                isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
+                if critIsConverging:
+                    isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
+                else:
+                    isConverging = False
                 if isConverging:
                     # Converges
                     alphaL = alpha

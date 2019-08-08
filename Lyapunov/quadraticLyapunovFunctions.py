@@ -1400,8 +1400,10 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         # TODO is it a good idea to do a local search with respect to the new objective?
         thisPoly.coeffs = newProb['obj']
         return bool(thisPoly.eval2(zStarOld) >= -coreOptions.absTolCstr)
-        
-    def Proofs2Prob(self, aZone:List, resultsLin:List, aSubProof:List[List[dict]], aCtrlDict:dict, opts:dict={}):
+    
+    
+    
+    def Proofs2Prob(self, at:float, aZone:List, resultsLin:List, aSubProof:List[List[dict]], aCtrlDict:dict, opts:dict={}):
         """
         # \brief Converts a subproof to a set of "suitable" problems, which are likely to reduce overall computation time
         """
@@ -1409,88 +1411,14 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         nu_ = self.dynSys.nu
         nq_ = self.dynSys.nq
         
-        def createBaseProb(self, opts):
-            return {'probDict':{'solver':opts['solver'], 'minDist':1., 'scaleFacK':1., 'dimsNDeg':(self.dynSys.nq, self.repr.maxDeg), 'nCstrNDegType':[]}, 'cstr':[]}
-        
-        def getLinProb(self, opts):
-            # Only the linear control prob has to be created
-            thisProbLin = createBaseProb(self, opts)
-            thisProbLin['probDict']['isTerminal']=-1 # Base case, non-convergence is "treatable" via critPoints
-            
-            # 1.1.1 Construct the objective
-            thisPoly = polynomial(self.repr) #Helper
-            thisCoeffs = aCtrlDict[-1][0].copy() # Objective resulting from system dynamics
-            for k in range(nu_):
-                thisCoeffs += aCtrlDict[k][2] # Objective from input and linear control
-            thisProbLin['obj'] = -thisCoeffs # Inverse sign to maximize divergence <-> minimize convergence
-            # 1.2 Construct the constraints
-            # 1.2.1 Confine to hypersphere
-            thisPoly.setEllipsoidalConstraint(nzeros((2,1), dtype=nfloat), 1.)
-            thisProbLin['probDict']['nCstrNDegType'].append( (2,'s') )
-            thisProbLin['cstr'].append( thisPoly.coeffs )
-            
-            #Set information
-            thisProbLin['probDict']['u'] = 2*nones((nu_,), dtype=nint)
-            
-            return thisProbLin
-            
         if self.opts_['zoneCompLvl'] == 1:
-            # Return basic zone that use linear control everywhere
-            if opts['sphereBoundCritPoint']:
-                
-                # check if the ctrl dict is already projected
-                if not aCtrlDict['sphereProj']:
-                    raise NotImplementedError
-    
-                probList = [getLinProb(self, opts)]
-            else:
-                raise NotImplementedError
-        
+            raise NotImplementedError
         elif self.opts_['zoneCompLvl'] == 2:
-            # Use the information of the critical points
-            # All problems that have a finite optimal value have been necessary for the proof
-            # -> Add the original point and create a corresponding pseudo solution
-            # This function does not seek to modify the point -> Only useful with suitable propagation / scaling
-            
-            probList = []
-            
-            thisLinProb = getLinProb(self, opts)
-            probList.append(thisLinProb)
-            
-            # Already treated parents
-            parentsAdded = []
-            
-            # Loop through all single proofs
-            # aSubProof[i][j]
-            for aSubProofList in aSubProof:
-                for aProof in aSubProofList:
-                    # Check result value
-                    if np.isfinite(resultsLin[aProof['probDict']['resPlacementLin']]):
-                        # The initial linear control prob has the parent None
-                        # It does not have to be added as it will be recreated
-                        if aProof['probDict']['resPlacementParent'] is None:
-                            continue
-                        # Check if parent was already added
-                        if aProof['probDict']['resPlacementParent'] in parentsAdded:
-                            continue
-                        parentsAdded.append(aProof['probDict']['resPlacementParent'])
-                        
-                        _, ip, jp = aProof['probDict']['resPlacementParent']
-                        parentProof = aSubProof[ip][jp]
-                        
-                        # -> construct
-                        subProofList = self.analyzeSolSphereDiscreteCtrl(parentProof, aCtrlDict, opts)
-                        probList.extend(subProofList)
-                        # -> remove zone from linear prob
-                        # TODO make more generic. Here first constraint is confine to hypersphere, second is confine to smallerr bounding ellip
-                        thisLinProb['probDict']['nCstrNDegType'].append( parentProof['probDict']['nCstrNDegType'][1] ) 
-                        thisLinProb['cstr'].append( -parentProof['cstr'][1] )
-                        # TODO done?
-            
+            raise NotImplementedError
+        elif self.opts_['zoneCompLvl'] == 3:
+            return self.Proofs2Prob3(at, aZone, resultsLin, aSubProof, aCtrlDict, opts)
         else:
-            raise RuntimeError('Unknown')
-        
-        return probList
+            raise RuntimeError
         
 
 class piecewiseQuadraticLyapunovFunction(LyapunovFunction):
