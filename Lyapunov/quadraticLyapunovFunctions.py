@@ -399,7 +399,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
         self.interpolate = None #Callable for interpolation
         
-        self.opts_ = {'zoneCompLvl':1}
+        self.opts_ = {'zoneCompLvl':3}
     
     @property
     def Ps(self):
@@ -553,7 +553,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
         ctrlDict = {}  # Return value
     
-        thisPoly = polynomial(self.dynSys.repr)  # Helper
+        thisPoly = polynomial.polynomial(self.dynSys.repr)  # Helper
     
         allU = [self.dynSys.ctrlInput.getMinU(t), self.dynSys.ctrlInput.refTraj.getU(t), self.dynSys.ctrlInput.getMaxU(t)]
         allDeltaU = [allU[0]-allU[1], allU[2]-allU[1]]
@@ -1004,6 +1004,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
         # Create the subset to exclude
         # There might be multiple critical points, in this case they have the same value for the primal objective
+        # TODO -> attention to notation of ySol and xSol; Currently not really coherent
         allY = thisSol['ySol']
     
         # Test if any of the points is infeasible relying on optimal control
@@ -1317,7 +1318,8 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             # We can simply put a new sphere around the minimal point
         
             if opts['sphereBoundCritPoint']:
-                assert thisSol['probDict']['nPt'] == -1
+                # assert thisSol['probDict']['nPt'] == -1
+                assert thisSol['probDict']['resPlacementParent'] is None
                 assert opts['projection'] == 'sphere'
                 probList = self.analyzeSolSphereLinCtrl(thisSol, ctrlDict, opts)
             else:
@@ -1400,16 +1402,66 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         # TODO is it a good idea to do a local search with respect to the new objective?
         thisPoly.coeffs = newProb['obj']
         return bool(thisPoly.eval2(zStarOld) >= -coreOptions.absTolCstr)
+
+    def createBaseProb_(self, opts):
+        return {'probDict':{'solver':opts['solver'], 'minDist':1., 'scaleFacK':1., 'dimsNDeg':(self.dynSys.nq, self.repr.maxDeg), 'nCstrNDegType':[]}, 'cstr':[]}
+
+    def getLinProb_(self, ctrlDict, opts):
+        # Only the linear control prob has to be created
+        thisProbLin = self.createBaseProb_(opts)
+        thisProbLin['probDict']['isTerminal']=-1 # Base case, non-convergence is "treatable" via critPoints
+
+        # 1.1.1 Construct the objective
+        thisPoly = polynomial.polynomial(self.repr) #Helper
+        thisCoeffs = ctrlDict[-1][0].copy() # Objective resulting from system dynamics
+        for k in range(self.dynSys.nu):
+            thisCoeffs += ctrlDict[k][2] # Objective from input and linear control
+        thisProbLin['obj'] = -thisCoeffs # Inverse sign to maximize divergence <-> minimize convergence
+        # 1.2 Construct the constraints
+        # 1.2.1 Confine to hypersphere
+        thisPoly.setEllipsoidalConstraint(nzeros((2,1), dtype=nfloat), 1.)
+        thisProbLin['probDict']['nCstrNDegType'].append( (2,'s') )
+        thisProbLin['cstr'].append( thisPoly.coeffs )
+
+        #Set information
+        thisProbLin['probDict']['u'] = 2*nones((self.dynSys.nu,), dtype=nint)
+
+        return thisProbLin
+
     
-    
+    def Proofs2Prob3(self, at:float, aZone:List, resultsLin:List, aSubProof:List[List[dict]], aCtrlDict:dict, opts:dict={}):
+        """
+        # Get the corresponding problems; aSubProof containts only critical proofs
+        :param at:
+        :param aZone:
+        :param resultsLin:
+        :param aSubProof:
+        :param aCtrlDict:
+        :param opts:
+        :return:
+        """
+        
+        # TODO once returned, the parent index has to be set manually
+        
+        thisLinProb = self.getLinProb_(aCtrlDict, opts)
+        probList = [thisLinProb]
+        
+        # Now add all critical points
+        for aSubProofList in aSubProof:
+            for aProof in aSubProofList:
+                # Map to sphere
+                aProof['ySol'] = self.ellip2Sphere(at, aProof['critPoints']['yCrit'])
+                aProof['origProb'] = thisLinProb
+                newProbList = self.analyzeSolSphereLinCtrl(aProof, aCtrlDict, opts)
+                # Add all except first which is the linear prob
+                probList.extend(newProbList[1:])
+        
+        return [probList]
     
     def Proofs2Prob(self, at:float, aZone:List, resultsLin:List, aSubProof:List[List[dict]], aCtrlDict:dict, opts:dict={}):
         """
         # \brief Converts a subproof to a set of "suitable" problems, which are likely to reduce overall computation time
         """
-        
-        nu_ = self.dynSys.nu
-        nq_ = self.dynSys.nq
         
         if self.opts_['zoneCompLvl'] == 1:
             raise NotImplementedError
@@ -1419,7 +1471,6 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             return self.Proofs2Prob3(at, aZone, resultsLin, aSubProof, aCtrlDict, opts)
         else:
             raise RuntimeError
-        
 
 class piecewiseQuadraticLyapunovFunction(LyapunovFunction):
     """

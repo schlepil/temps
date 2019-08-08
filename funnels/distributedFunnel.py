@@ -462,7 +462,7 @@ class distributedFunnel:
         #Set initial problems
         for k, (at, aCtrlNZone, aSubProof) in enumerate(zip(timePoints, allCtrlDictsNzones, oldResults)):
             results.append([])
-            thisProbList = self.lyapFunc.Proofs2Prob(at, aCtrlNZone[1], oldResultsLin, aSubProof, aCtrlNZone[0])
+            thisProbList = self.lyapFunc.Proofs2Prob(at, aCtrlNZone[1], oldResultsLin, aSubProof, aCtrlNZone[0], self.opts)
             #results.append([[None for _ in range(len(aSubProbList))] for aSubProbList in thisProbList ])
             for i, aSubProbList in enumerate(thisProbList):
                 results[-1].append([])
@@ -490,7 +490,7 @@ class distributedFunnel:
             resultsLin[thisSol['probDict']['resPlacementLin']] = thisSol['obj']
             if __debug__:
                 print(f"Checking result for {[k,i,j]}")
-                testSol(thisSol, allCtrlDictsNzones[k][0])
+                testSol(thisSol, allCtrlDictsNzones[k][0]) # TODO sth is wrong here
 
             if thisSol['obj']>=self.opts['numericEpsPos']:
                 # Proves convergence for the sub region treated
@@ -584,8 +584,8 @@ class distributedFunnel:
         
         results = None
         resultsLin = None
-        resultsProp = None # Propagated result structure do not possess the tree structure
-        resultsLinProp = None
+        resultsProp = [[[]] for _ in range(self.opts['interSteps'])] # Propagated result structure do not possess the tree structure
+        resultsLinProp = []
 
         # Back propagate
         while tC > tStart:

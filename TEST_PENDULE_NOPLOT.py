@@ -52,8 +52,11 @@ if __name__ == "__main__":
 
   # evolving the Lyapunov function along the trajectory
   thisLyapEvol = lyap.noChangeLyap()
+  
+  # Get the propagator of critical solutions
+  thisPropagator = relax.propagators.localFixedPropagator()
 
-  myFunnel = distributedFunnel(pendSys, lyapF, refTraj, thisLyapEvol, opts={})
+  myFunnel = distributedFunnel(dynSys=pendSys, lyapFunc=lyapF, traj=refTraj, evolveLyap=thisLyapEvol, propagator=thisPropagator, opts={})
 
   lyapF.P = lyapF.lqrP(np.identity(2), np.identity(1), refTraj.getX(0.))[0]
   #P=np.array([[1.,0.],[0.,1.]])
