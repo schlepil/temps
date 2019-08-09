@@ -536,7 +536,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         :return:
         """
         thisPoly = polynomial.polynomial(self.dynSys.repr)
-        thisPoly.setEllipsoidalConstraint(offset=nzeros((self.dynSys.nq,1),dtype=nfloat) if offset is None else offset, radius=aZone[1], P=aZone[0])
+        thisPoly.setEllipsoidalConstraint(center=nzeros((self.dynSys.nq,1),dtype=nfloat) if offset is None else offset, radius=aZone[1], P=aZone[0])
         return thisPoly
     
     def getLyap(self, t):
@@ -993,7 +993,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         nq_ = self.nq
         nu_ = self.nu
     
-        thisPoly = polynomial(self.repr)  # Helper
+        thisPoly = polynomial.polynomial(self.repr)  # Helper
     
         probDict_ = thisSol['origProb']['probDict']
     

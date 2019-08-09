@@ -84,9 +84,15 @@ class distributedFunnel:
                     #SubProof is [i][j]
                     for aSubProofList in aSubProof:
                         for aProof in aSubProofList:
+                            if aProof is None:
+                                continue
                             # TODO check if only critical points need to be projected
                             # This is ellip2sphere
-                            aProof['critPoints']['xCrit'] = ndot(Ci, aProof['critPoints']['yCrit'])
+                            try:
+                                if aProof['critPoints']['yCrit'] is not None:
+                                    aProof['critPoints']['xCrit'] = ndot(Ci, aProof['critPoints']['yCrit'])
+                            except:
+                                print('a')
             else:
                 raise NotImplementedError
         elif self.opts['projection'] in (None, 'None', False):
@@ -126,10 +132,15 @@ class distributedFunnel:
                     #SubProof is [i][j]
                     for aSubProofList in aSubProof:
                         for aProof in aSubProofList:
+                            if aProof is None:
+                                continue
                             # TODO check if only critical points need to be projected
                             # This is sphere2ellip
-                            aProof['critPoints']['yCrit'] = ndot(Ci_inv, aProof['critPoints']['xCrit'])
-        
+                            try:
+                                if aProof['critPoints']['xCrit'] is not None:
+                                    aProof['critPoints']['yCrit'] = ndot(Ci_inv, aProof['critPoints']['xCrit'])
+                            except:
+                                print('a')
     
     def getCtrlDict(self, t, fTaylorApprox, gTaylorApprox, returnZone=True):
         
@@ -483,7 +494,7 @@ class distributedFunnel:
             assert thisSol['sol']['status'] == 'optimal' #TODO make compatible with other solvers
             # Store the critical points within the result
             # TODO improve structure -> Works only if projection is done in main program not by the worker!
-            thisSol['critPoints'] = {'xCrit':thisSol['sol']['x_np'].copy(), 'currU':thisSol['probDict']['u'].copy()}
+            thisSol['critPoints'] = {'xCrit':thisSol['xSol'].copy(), 'currU':thisSol['probDict']['u'].copy()}
             # Store the proof
             k, i, j = thisSol['probDict']['resPlacement']
             results[k][i][j] = dp(thisSol)
@@ -497,10 +508,9 @@ class distributedFunnel:
                 pass
             else:
                 newProbList = self.analyzeSol(thisSol, allCtrlDictsNzones[k][0])
-                if not len(newProbList):
+                if (not len(newProbList)) and self.opts['earlyExit']:
                     # this region is a proof for non-convergence
-                    if self.opts['earlyExit']:
-                        break
+                    break
                 # New (less conservative) problems could be derived
                 # "Accept" this solution and place the new problems
                 resultsLin[thisSol['probDict']['resPlacementLin']] = np.Inf
@@ -627,9 +637,11 @@ class distributedFunnel:
                 
                 #while self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                 while True:
-                    critIsConverging, resultsProp, resultsLinProp = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
+                    # TODO-> use allAlpha info
+                    (critIsConverging, allAlphas), resultsProp, resultsLinProp = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
+                    critIsConverging = critIsConverging[0]
                     if critIsConverging:
-                        isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
+                        isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp), allTaylorApprox) #Change to store all in order to exploit the last proof
                     else:
                         isConverging = False
                     if not isConverging:
@@ -643,13 +655,14 @@ class distributedFunnel:
                 # Make the zone smaller to find a lower bound before using dichotomic search
                 alphaU = lyapFunc_.getAlpha(0)
                 alphaL = alphaU/2.
-                alphaFromTo = lyapFunc_.setAlpha(alphaL, 0, returninfo=True)
+                alphaFromTo = lyapFunc_.setAlpha(alphaL, 0, returnInfo=True)
 
                 #while not self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                 while True:
-                    critIsConverging, results, resultsLin = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
+                    (critIsConverging, allAlphas), resultsProp, resultsLinProp = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
+                    critIsConverging = critIsConverging[-1] # Last is convergence for new alpha
                     if critIsConverging:
-                        isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
+                        isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp), allTaylorApprox) #Change to store all in order to exploit the last proof
                     else:
                         isConverging = False
                     if isConverging:
@@ -673,9 +686,10 @@ class distributedFunnel:
                     print(f"Bisection at {alphaL}, {alpha}, {alphaU}")
                 
                 #if self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
-                critIsConverging, results, resultsLin = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
+                (critIsConverging, allAlphas), resultsProp, resultsLinProp = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
+                critIsConverging = critIsConverging[-1] # Last is convergence for new alpha
                 if critIsConverging:
-                    isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (results, resultsLin), allTaylorApprox) #Change to store all in order to exploit the last proof
+                    isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp), allTaylorApprox) #Change to store all in order to exploit the last proof
                 else:
                     isConverging = False
                 if isConverging:

@@ -242,7 +242,7 @@ class polyFunction():
         self.repr = repr
         self.shape_ = narray(shape, ndmin=1)
         self.f = np.ndarray(self.shape_, dtype=object)
-        self.maxDeg = None
+        self.maxDeg = -1
         
     def setVal(self, new:np.ndarray):
         assert self.f.shape == new.shape
