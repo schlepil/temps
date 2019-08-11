@@ -28,8 +28,8 @@ if __name__ == "__main__":
   # Get the trajectory
   #xTraj = lambda t: narray([[np.pi*0.1*t], [np.pi*0.1]], dtype=nfloat)
   #dxTraj = lambda t: narray([[np.pi*0.1], [0.]], dtype=nfloat)
-  xTraj = lambda t: narray([[0.5*np.pi*t], [0.5*np.pi]], dtype=nfloat)
-  dxTraj = lambda t: narray([[0.5*np.pi], [0.]], dtype=nfloat)
+  xTraj = lambda t: narray([[0.5*np.pi], [0.]], dtype=nfloat)
+  dxTraj = lambda t: narray([[0.], [0.]], dtype=nfloat)
   # Compute necessary input (here 0.)
   #uRefTmp = pendSys.getUopt(xTraj(0), dxTraj(0), respectCstr=False, fullDeriv=True)
   uRefTmp = lambda t: pendSys.getUopt(xTraj(t), dxTraj(t), respectCstr=False, fullDeriv=True)
@@ -62,35 +62,35 @@ if __name__ == "__main__":
              'plotAx':np.array([0, 1]),
              'cmap':'viridis', 'colorStreams':'ang', 'nGrid':200, 'cbar':True,
              'modeDyn':[0,0]}
-  plot.plot2dConv(myFunnel, 0.0)
-  plot.plot2dProof(myFunnel, 0.0)
+  # plot.plot2dConv(myFunnel, 0.0)
+  # plot.plot2dProof(myFunnel, 0.0)
   #
+  plot.plot2dConv(myFunnel, 0.01)
+  plot.plot2dProof(myFunnel, 0.01)
+  # plot.plot2DCONV_and_2Dproof(plot.plot2dConv(myFunnel, 0.01),plot.plot2dProof(myFunnel, 0.01))
+  distributor.terminate()
+
+  print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")
+  plot.plt.show()
+
+
+#   myFunnel.compute(0.0, 0.5, (lyapF.P, 100.))
+#
+#     # Disable plot for timing
+#
+# # opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
+# #         'faceAlpha':0.0, 'linestyle':'-',
+# #         'plotAx':np.array([0, 1]),
+# #         'cmap':'viridis', 'colorStreams':'ang', 'nGrid':200, 'cbar':True,
+# #         'modeDyn':[0,0]}
+#   plot.plot2dConv(myFunnel, 0.0)
+#   plot.plot2dProof(myFunnel, 0.0)
+    #
   # plot.plot2dConv(myFunnel, 0.05)
   # plot.plot2dProof(myFunnel, 0.05)
-  print('hello')
-  distributor.terminate()
 
-  print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")
-  plot.plt.show()
-
-  print('aaaaaaaaaa')
-  myFunnel.compute(0.0, 0.5, (lyapF.P, 100.))
-
-    # Disable plot for timing
-
-# opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
-#         'faceAlpha':0.0, 'linestyle':'-',
-#         'plotAx':np.array([0, 1]),
-#         'cmap':'viridis', 'colorStreams':'ang', 'nGrid':200, 'cbar':True,
-#         'modeDyn':[0,0]}
-  plot.plot2dConv(myFunnel, 0.0)
-  plot.plot2dProof(myFunnel, 0.0)
-    #
-  plot.plot2dConv(myFunnel, 0.05)
-  plot.plot2dProof(myFunnel, 0.05)
-
-  distributor.terminate()
-  
-  print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")
-  plot.plt.show()
+  # distributor.terminate()
+  #
+  # print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")
+  # plot.plt.show()
 

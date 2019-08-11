@@ -122,9 +122,6 @@ def plotEllipse(ax, pos, P, alpha, plotAx=np.array([0, 1]), deltaPos=None, color
         Pt = P[np.ix_(plotAx, plotAx)]
     else:
         assert 0, "No valid pltStyle for ellip given"
-    #print('Pt',Pt)
-    #print('pos',pos)
-    #print('pos[plotAx]',pos[plotAx])
     e = getEllipse(pos[plotAx], Pt, alpha)
     e.set_linewidth(1.)
     e.set_edgecolor(color[:3]+[1.])
@@ -304,7 +301,10 @@ def plot2dProof(funnel:fn.distributedFunnel, t=0.0, opts={}):
     return allDict
 
 
-
+def plot2DCONV_and_2Dproof(conv={},proof={}):
+   for i in range(len(proof)):
+      conv['ax'].__add__(proof[i]['ax'])
+   return conv
 
 
 
