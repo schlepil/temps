@@ -1,26 +1,29 @@
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from coreUtils import *
-
-from systems.polySysTest import getSysStablePos, getUlims
-import polynomial as poly
-import dynamicalSystems as dynSys
-import trajectories as traj
-import Lyapunov as lyap
-import relaxations as relax
-from systems.pendulum import getSys, getUlims
-
-if coreOptions.doPlot:
-  import plotting as plot
-  from plotting import plt
-
-from scipy.integrate import solve_ivp
-
-from funnels import *
 if __name__ == "__main__":
+  
+  import sys
+  import os
+  
+  sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+  
+  from coreUtils import *
+  
+  from systems.polySysTest import getSysStablePos, getUlims
+  import polynomial as poly
+  import dynamicalSystems as dynSys
+  import trajectories as traj
+  import Lyapunov as lyap
+  import relaxations as relax
+  from systems.pendulum import getSys, getUlims
+  
+  if coreOptions.doPlot:
+    import plotting as plot
+    from plotting import plt
+  
+  from scipy.integrate import solve_ivp
+  
+  from funnels import *
+
+
   #from parallelChecker import probSetter, solGetter, probQueues, solQueues
   # Complicate the problem
   thisRepr = poly.polynomialRepr(2, 4)
@@ -75,7 +78,7 @@ if __name__ == "__main__":
     plot.plot2dConv(myFunnel, 0.05)
     plot.plot2dProof(myFunnel, 0.05)
     print('hello')
-    distributor.terminate()
+    distributedFunnel.distributor.terminate()
   
     print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")
     plot.plt.show()

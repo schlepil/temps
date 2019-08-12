@@ -1,17 +1,16 @@
 from coreUtils import *
-from systems.pendulum import getSys, getUlims
-import polynomial as poly
-import dynamicalSystems as dynSys
-import trajectories as traj
-import Lyapunov as lyap
-import relaxations as relax
+import XXX
 
-import plotting as plot
-from plotting import plt
+def ffun():
+    print('a')
 
-from scipy.integrate import solve_ivp
-shape=(2,1)
-shape_ = narray(shape, ndmin=1)
-f = np.ndarray(shape_, dtype=object)
-print(shape_)
-print(f)
+if __name__ == "__main__":
+    #import parallelChecker.parallelWorkers
+    #from parallelChecker.parallelChecker import workerSolve
+    #from multiprocessing import Process, Queue
+    a = XXX.getP()
+    a.start()
+    b = np.random.rand(10)
+    print(a)
+    a.join()
+    

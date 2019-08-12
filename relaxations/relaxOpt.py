@@ -136,7 +136,7 @@ class convexProg():
 
             if not isValid:
                        isValid=True
-                       xSolnew=self.localSolve(xSol)
+                       xSolnew=self.localSolve(xSol, fun=sol['primal objective']).reshape((-1,1))
                        zSolnew=self.repr.evalAllMonoms(xSolnew)
                        for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
                            isValid = isValid and bool(aCstr.isValid(zSolnew, atol=atol))
@@ -347,12 +347,12 @@ class convexProg():
                 if isValid[i]:
                     continue
                 # Do the local search
-                xSol[:,[i]] = self.localSolve(xSol[:,i]) #localSolve expects 1d vector
+                xSol[:,[i]] = self.localSolve(xSol[:,i], fun=sol['primal objective']).reshape((xSol.shape[0],1)) #localSolve expects 1d vector
                 # Check if now ok
                 thisIsValid = True
                 zSolNew = self.repr.evalAllMonoms(xSol[:,[i]])
                 for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
-                    thisIsValid &= aCstr.isValid(zSolnew, atol=atol)
+                    thisIsValid &= aCstr.isValid(zSolNew, atol=atol)
                 assert thisIsValid, "Ups local solve failed"
                 isValid[i] = True
             
@@ -394,16 +394,18 @@ class convexProg():
         options_.update(options)
         return {'fun':gx, 'x0':xSol.reshape((-1,)), 'method':method, 'tol':tol, 'constraints':this_cstr, 'options':options_ }
 
-    def localSolve(self, xSol:np.ndarray)->np.ndarray:
+    def localSolve(self, xSol:np.ndarray, fun:float=None)->np.ndarray:
         # TODO @xiao take into account possible linear / socp constraints
         # TODO @xiao reduce the computational complexity by only taking non-zero coefficients (monomials up to the highest polynomial in the constraints)
         # TODO @xiao make this more generic, so that solvers can be easily exchanged, maybe by creating a local-solver object "sugar-coating" existing solvers
         
-        res = localSolve(**self.localSolveDict(xSol))
+        thisProbDict = self.localSolveDict(xSol)
+        res = localSolve(**thisProbDict)
         assert res.success
+        assert (fun is None) or (fun<=res.fun-coreOptions.numericEpsPos*10.), "Convex opt has to provide a lower bound" # TODO check epsilon
         if __debug__:
-            print('cstrverif',this_cstr['fun'](res.x))
-            if not nall(this_cstr['fun'](res.x)>-coreOptions.absTolCstr):
+            print('cstrverif',thisProbDict['constraints']['fun'](res.x))
+            if not nall(thisProbDict['constraints']['fun'](res.x)>-coreOptions.absTolCstr):
                 print('shit')
         
         return res.x

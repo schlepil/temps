@@ -1010,6 +1010,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         # Test if any of the points is infeasible relying on optimal control
         PG0n = ctrlDictIn['PG0']/(norm(ctrlDictIn['PG0'], axis=0, keepdims=True)+coreOptions.floatEps)
         for k in range(allY.shape[1]):
+            # TODO change to optimal
             thisY = allY[:, [k]]
             yPlaneDist = ndot(thisY.T, PG0n).reshape((nu_,))
             yPlaneSign = np.sign(yPlaneDist)
@@ -1139,7 +1140,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         nq_ = self.nq
         nu_ = self.nu
     
-        thisPoly = polynomial(self.repr)  # Helper
+        thisPoly = polynomial.polynomial(self.repr)  # Helper
     
         probDict_ = thisSol['origProb']['probDict']
     
@@ -1268,7 +1269,9 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         for i, input in enumerate(inputs):
             thisProb = dp(thisProbBase)
             probList.append(thisProb)
-            thisProb['probDict']['critPointOrigin'] = {'y':allY[:,[i]].copy(), 'strictSep':0, 'currU':thisSol['probDict']['u'] }
+            #thisProb['probDict']['critPointOrigin'] = {'y':allY[:,[i]].copy(), 'strictSep':0, 'currU':thisSol['probDict']['u'] }
+            # TODO check
+            thisProb['probDict']['critPointOrigin'] = {'y':allY.copy(), 'strictSep':0, 'currU':thisSol['probDict']['u'] }
             
             # Which original crit point is contained
             isContained = nones((allY.shape[1],), dtype=np.bool_)
@@ -1319,8 +1322,11 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
             if opts['sphereBoundCritPoint']:
                 # assert thisSol['probDict']['nPt'] == -1
-                assert thisSol['probDict']['resPlacementParent'] is None
-                assert opts['projection'] == 'sphere'
+                if __debug__:
+                    if ((thisSol['probDict']['resPlacementParent'] is None) and (nany(thisSol['probDict']['u'] != 2))):
+                        raise RuntimeError
+                    if opts['projection'] != 'sphere':
+                        raise RuntimeError
                 probList = self.analyzeSolSphereLinCtrl(thisSol, ctrlDict, opts)
             else:
                 raise NotImplementedError
@@ -1450,7 +1456,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         for aSubProofList in aSubProof:
             for aProof in aSubProofList:
                 # Map to sphere
-                aProof['ySol'] = self.ellip2Sphere(at, aProof['critPoints']['yCrit'])
+                aProof['ySol'] = self.ellip2Sphere(at, aProof['critPoints']['yCrit']) # TODO this is really fucked up with the inconsistency between x and y
                 aProof['origProb'] = thisLinProb
                 newProbList = self.analyzeSolSphereLinCtrl(aProof, aCtrlDict, opts)
                 # Add all except first which is the linear prob

@@ -5,8 +5,7 @@ import polynomial as poly
 
 
 from parallelChecker.parallelDefinitions import *
-from multiprocessing import Process, Queue
-from multiprocessing.sharedctypes import RawArray as mpRawArray
+#from multiprocessing import Queue
 
 
 import queue
@@ -23,6 +22,7 @@ serializer = mySerializer
 
 if useSharedMem_:
     import ctypes
+    from multiprocessing.sharedctypes import RawArray as mpRawArray
     
     cfloat = np.ctypeslib.as_ctypes_type(nfloat)
     # The shared variables for faster com
@@ -50,7 +50,12 @@ if waitingListType_ == 'heap':
                 heappush(self.container, heapStoreClass(args))
             else:
                 #Use the (negated) sum over the control indices -> the higher the indices the more specific the problem -> the higher the chance to fail
-                heappush(self.container, heapStoreClass((int(-nsum(args[0]['probDict']['u'])), args[0])))
+                value = float(-nsum(args[0]['probDict']['u']))
+                try:
+                    value += args[0]['probDict']['orderPenalty']
+                except KeyError:
+                    pass
+                heappush(self.container, heapStoreClass((value, args[0])))
         
         def pop(self):
             return heappop(self.container)[1]
@@ -68,7 +73,7 @@ reprDict_ = {}
 relaxationDict_ = {}
 problemDict_ = {}
 
-def probSetterShared_(problem: dict, probQueue: Queue, workerId: int):
+def probSetterShared_(problem: dict, probQueue: "Queue", workerId: int):
     # First copy, then put into queue
     # Necessary
     
@@ -89,7 +94,7 @@ def probSetterShared_(problem: dict, probQueue: Queue, workerId: int):
     return workerId
 
 
-def probSetterBare_(problem: dict, probQueue: Queue, workerId: int):
+def probSetterBare_(problem: dict, probQueue: "Queue", workerId: int):
     # Put all into the queue
     
     if __debug__:
@@ -106,7 +111,7 @@ else:
     probSetter = probSetterBare_
 
 
-def solGetter(solQueues: List[Queue], workerId: int = None, block=True, timeout=0.0001):
+def solGetter(solQueues: List["Queue"], workerId: int = None, block=True, timeout=0.0001):
     sol = None
     if workerId is None:
         if block:
@@ -141,7 +146,7 @@ def solGetter(solQueues: List[Queue], workerId: int = None, block=True, timeout=
 
 
 class workDistributor:
-    def __init__(self, probQueues:List[Queue], solQueues:List[Queue]):
+    def __init__(self, probQueues:List["Queue"], solQueues:List["Queue"]):
         self.inUse = narray([0 for _ in range(nThreads_)]).astype(np.bool_)
         self.waitingList = waitingListClass()
         
@@ -247,7 +252,7 @@ class workDistributor:
 
 # No threading
 class workDistributorNoThread:
-    def __init__(self, probQueues: List[Queue], solQueues: List[Queue]):
+    def __init__(self, probQueues: List["Queue"], solQueues: List["Queue"]):
         self.waitingList = waitingListClass()
         
         self.probQ = probQueues
@@ -287,6 +292,10 @@ class workDistributorNoThread:
         return None
     
     def setProb(self, problem: dict):
+        if __debug__:
+            if nany(problem['probDict']['u'] != 2) and (problem['probDict']['resPlacementParent'] is None):
+                print("snap")
+        
         self.nbrOfUnreturnedPbr += 1
         
         if self.doStoreOrig:
@@ -727,6 +736,10 @@ def workerSolveVariable(inQueue, outQueue):
 
         if __debug__:
             print(f"Worker {selfNr} recieved new input")
+            print(f"ProbDict start : \n {input}")
+        
+        if nany(input['u'] != 2) and (input['resPlacementParent'] is None):
+            print("snap")
 
 
         # TODO here is just a dirty fix for the degrees
@@ -858,6 +871,10 @@ def workerSolveVariable(inQueue, outQueue):
             if extraction[0].size == 0:
                 thisProb.extractOptSol(solution)
 
+        if nany(input['u'] != 2) and (input['resPlacementParent'] is None):
+            print("snap")
+        if __debug__:
+            print(f"ProbDict end : \n {input}")
         outQueue.put({'probDict':input, 'xSol':extraction[0], 'ySol':ySol, 'obj':solution['obj'], 'sol':solution, 'ext':extraction})
 
     return 0

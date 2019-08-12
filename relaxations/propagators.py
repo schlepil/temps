@@ -31,10 +31,11 @@ class dummyPropagator(propagators):
     def doRescale(self, tSteps, funnelInstance:"funnels.distributedFunnel", oldResults, oldResultsLin, allTaylorApprox, alphaFromTo, interStepsPropCrit:int=5):
         return ([True],[1]), oldResults, oldResultsLin
 
-def getWorstCritPointsPerSubtree(aSubProof, oldResultsLin, delNonCrit=False):
+def getWorstCritPointsPerSubtree(aSubProof, oldResultsLin, delNonCrit=False, retVal=False):
     # Search for "root-nodes"
     root2LeafNodesDict = {}
     # oldResults[k][i][j] with k being the time-point -> oldProof last == new proof first
+    worstVal = np.Inf
     for aSubProofList in aSubProof:
         for aProof in aSubProofList:
             if aProof is None:
@@ -46,7 +47,10 @@ def getWorstCritPointsPerSubtree(aSubProof, oldResultsLin, delNonCrit=False):
                 # All linear control -> disregard
                 continue
             # Search for root
-            _, ip, jp = aProof['probDict']['resPlacementParent']
+            try:
+                _, ip, jp = aProof['probDict']['resPlacementParent']
+            except:
+                pass
             while aSubProof[ip][jp]['probDict']['resPlacementParent'] is not None:
                 _, ip, jp = aSubProof[ip][jp]['probDict']['resPlacementParent']
             # Found the root
@@ -56,6 +60,8 @@ def getWorstCritPointsPerSubtree(aSubProof, oldResultsLin, delNonCrit=False):
                 # Compare and keep the worst
                 if aProof['obj'] < root2LeafNodesDict[(ip, jp)]['obj']:
                     root2LeafNodesDict[(ip, jp)] = aProof
+            # store the val
+            worstVal = min(worstVal, aProof['obj'])
     
     if delNonCrit:
         # Remove 'xCrit' and 'yCrit' form critPoints of not the one chosen for the subtree
@@ -68,8 +74,10 @@ def getWorstCritPointsPerSubtree(aSubProof, oldResultsLin, delNonCrit=False):
                     aProof['critPoints']['xCrit'] = None
                     aProof['critPoints']['yCrit'] = None
         
-    
-    return root2LeafNodesDict
+    if retVal:
+        return root2LeafNodesDict, worstVal
+    else:
+        return root2LeafNodesDict
 
 class localFixedPropagator(propagators):
     def __init__(self):
@@ -79,7 +87,7 @@ class localFixedPropagator(propagators):
     def fillLocalSolveDict(self, localSolveDict:dict, x0:np.ndarray, funnelInstance, aProof:dict, aZone, ctrlDict:dict):
         nq_ = x0.size
 
-        thisPolyFunCstr = polynomial.polyFunction(funnelInstance.repr, (nsum(nabs(aProof['probDict']['u']) == 1)+1,))  # Last constraint is to confine to levelset; others are to restrain to this optimal region
+        thisPolyFunCstr = polynomial.polyFunction(funnelInstance.repr, (nsum(nabs(aProof['probDict']['u']) == 1)+1,1))  # Last constraint is to confine to levelset; others are to restrain to this optimal region
         
         thisPolyObj = self.thisPolyObj_
         # Objective is with respect to sphere -> rebuild
@@ -91,7 +99,7 @@ class localFixedPropagator(propagators):
             thisPolyObj.coeffs += ctrlDict[i][atype]
             if atype in (-1, 1):
                 # -> separation necessary
-                thisPolyFunCstr[cstrCount] = polynomial.polynomial(funnelInstance.repr, -ctrlDict[i][atype])
+                thisPolyFunCstr[cstrCount,0] = polynomial.polynomial(funnelInstance.repr, -ctrlDict[i][atype])
                 cstrCount += 1
         
         # Set objective function
@@ -101,44 +109,52 @@ class localFixedPropagator(propagators):
     
         # Get the constraint to the level-set
         # zone2Cstr(self,aZone, offset:np.ndarray=None)
-        thisPolyFunCstr[-1] = funnelInstance.lyapFunc.zone2Cstr(aZone)
+        thisPolyFunCstr[-1,0] = funnelInstance.lyapFunc.zone2Cstr(aZone)
         # Get the function
-        localSolveDict['constraints']['fun'] = lambda x:thisPolyFunCstr.eval2(x.reshape((nq_, 1))).squeeze()
+        localSolveDict['constraints']['fun'] = lambda x:thisPolyFunCstr.eval(x.reshape((nq_, 1))).reshape((-1,))
         # Set the start point
         localSolveDict['x0'] = x0.reshape((nq_,))
         
         if __debug__:
-            if nany(thisPolyFunCstr.eval2(x0) < coreOptions.absTolCstr):
+            if nany(localSolveDict['constraints']['fun'](localSolveDict['x0']) < -coreOptions.absTolCstr):
                 print("Constraints failed on starting points")
         
         return None
     
-    def postProcLocalSol(self, res, aProof, ctrlDict, repr, oldResultsLin ):
+    def postProcLocalSol(self, res, aProof, ctrlDict, repr, oldResultsLin, nCritPoint=0 ):
+        """
+        Puts the information and checks if the point can be stabilized using the optimal control law
+        :param res:
+        :param aProof:
+        :param ctrlDict:
+        :param repr:
+        :param oldResultsLin:
+        :return:
+        """
+        
         
         nu_ = aProof['probDict']['u'].size
         
         thisPolyObj = self.thisPolyObj_
         
-        isDiverging = False
-        
-        assert res.succes
+        assert res.success
         # Set the new value
-        aProof['critPoints']['yCrit'] = res.x.reshape((-1, 1))
+        aProof['critPoints']['yCrit'][:,[nCritPoint]] = res.x.reshape((-1, 1))
         aProof['obj'] = res.fun
-        if res.fun >= coreOptions.absTolCstr:
+        if (res.fun < -coreOptions.absTolCstr):# and nany(nabs(aProof['probDict']['u'].reshape((-1,))!=1)):
             # Check if stabilizable (using the best possible input)
             res.z = repr.evalAllMonoms(aProof['critPoints']['yCrit'])
             thisPolyObj.coeffs = ctrlDict[-1][0].copy()
+            thisPolyObj.unlock()
             for i in range(nu_):
                 atype = -(int(ndot(ctrlDict[i][1].reshape((1, -1)), res.z) >= 0.)*2-1)
                 thisPolyObj.coeffs += ctrlDict[i][atype]
             # Check
-            aProof['obj'] = thisPolyObj.eval2(res.z)
+            aProof['obj'] = -float(thisPolyObj.eval2(res.z)) # Inverse sign to give the same as optimization
             oldResultsLin[aProof['probDict']['resPlacementLin']] = aProof['obj']
             # Found proof of non-stabilizability
-            isDiverging = (aProof['obj'] >= coreOptions.absTolCstr)
-        
-        return isDiverging
+            
+        return bool(aProof['obj'] >= -coreOptions.absTolCstr) #Return isConverging
     
     def lvl3Propagate(self,tSteps,funnelInstance:"funnels.distributedFunnel", oldResults, oldResultsLin, interStepsPropCrit:int=5):
         
@@ -167,7 +183,9 @@ class localFixedPropagator(propagators):
         nq_, nu_ = funnelInstance.dynSys.nq, funnelInstance.dynSys.nu
     
         # Assemble substeps
-        tSubSteps = np.hstack([np.linspace(tSteps[i], tSteps[i+1], num=interStepsPropCrit, endpoint=False, dtype=nfloat) for i in range(tSteps.size-1)].append(tSteps[-1]))
+        tSubSteps = [np.linspace(tSteps[i], tSteps[i+1], num=interStepsPropCrit, endpoint=False, dtype=nfloat) for i in range(tSteps.size-1)]
+        tSubSteps.append(tSteps[-1])
+        tSubSteps = np.hstack(tSubSteps)
     
         # Search for "root-nodes"
         root2LeafNodesDict = getWorstCritPointsPerSubtree(oldResults[0], oldResultsLin, True)
@@ -181,9 +199,10 @@ class localFixedPropagator(propagators):
         # Build-up the minimize dict
         localSolveDict = {'fun':None, 'x0':None, 'constraints':{'type':'ineq', 'fun':None}, 'method':'COBYLA', 'tol':0.9*coreOptions.absTolCstr, 'options':{}}
         # Check if converging
-        isDiverging = False
+        isConverging = False
+        proofVals = {}
         for at in reversed(tSubSteps):
-            if isDiverging:
+            if not isConverging:
                 break
 
             ctrlDict = thisZone = None
@@ -192,7 +211,7 @@ class localFixedPropagator(propagators):
                 if ctrlDict is None:
                     ctrlDict, thisZone = funnelInstance.lyapFunc.getCtrlDict(at, returnZone=True)
                 allYCrit = [aProof['critPoints']['yCrit'][:, [i]] for i in range(aProof['critPoints']['yCrit'].shape[1])]
-                for aYCrit in allYCrit:
+                for i, aYCrit in enumerate(allYCrit):
                     # TODO influence of linear and polynomial seperation?
                     # Loop over each critical point
                     # Fill it
@@ -200,7 +219,9 @@ class localFixedPropagator(propagators):
                     # Here we go
                     res = relaxations.localSolve(**localSolveDict)
                     # Post-Proc
-                    isDiverging &= self.postProcLocalSol(res, aProof, ctrlDict, funnelInstance.repr, oldResultsLin)
+                    isConverging &= self.postProcLocalSol(res, aProof, ctrlDict, funnelInstance.repr, oldResultsLin, nCritPoint=i)
+                    # Set worst
+                    proofVals[at] = min(proofVals.get(at, np.Inf), res.fun)
             
             # Build up new dict
             if at in tSteps:
@@ -212,16 +233,16 @@ class localFixedPropagator(propagators):
                     for aSubProofList in aSubProof:
                         if not len(aSubProofList):
                             # Copy all necessary proofs
-                            aSubProofList.extend(dp(root2LeafNodesDict.values()))
+                            aSubProofList.extend(dp(list(root2LeafNodesDict.values())))
                         for aProof in aSubProofList:
                             aProof['probDict']['resPlacement'] = [idxK, idxI, idxJ]
                             aProof['probDict']['resPlacementLin'] = idxResLinNew
-                            aProof['probDict']['resPlacementParent'] = None
+                            aProof['probDict']['resPlacementParent'] = ['a'] #dbg None
                             newResultsLin.append(aProof['obj'])
                             idxJ += 1
                             idxResLinNew += 1
     
-        return isDiverging, newResults, newResultsLin
+        return isConverging, newResults, newResultsLin
     
     def doPropagate(self,tSteps,funnelInstance:"funnels.distributedFunnel", oldResults, oldResultsLin, interStepsPropCrit:int=5):
         """
@@ -267,7 +288,7 @@ class localFixedPropagator(propagators):
             self.thisCvxProb_ = thisCvxProb = relaxations.convexProg(funnelInstance.repr)
         
         # Get all critical leaves
-        root2LeafNodesList = [ getWorstCritPointsPerSubtree(aSubProofList, oldResultsLin, delNonCrit=True) for aSubProofList in oldResults ]
+        root2LeafNodesList = [ getWorstCritPointsPerSubtree(aSubProofList, oldResultsLin, delNonCrit=False) for aSubProofList in oldResults ]
         
         # Create all alpha steps
         allAlphas = np.linspace(alphaFromTo[0], alphaFromTo[1], interStepsPropCrit, endpoint=True)
@@ -275,7 +296,7 @@ class localFixedPropagator(propagators):
         # Build-up the minimize dict
         localSolveDict = {'fun':None, 'x0':None, 'constraints':{'type':'ineq', 'fun':None}, 'method':'COBYLA', 'tol':0.9*coreOptions.absTolCstr, 'options':{}}
         # Check if converging
-        isDiverging = [False for _ in range(interStepsPropCrit)]
+        isConverging = [True for _ in range(interStepsPropCrit)]
 
         # Loop through them
         for i, aAlpha in enumerate(allAlphas):
@@ -304,7 +325,7 @@ class localFixedPropagator(propagators):
                         # Here we go
                         res = relaxations.localSolve(**localSolveDict)
                         # Post-Proc
-                        isDiverging[i] &= self.postProcLocalSol(res, aProof, ctrlDict, funnelInstance.repr, oldResultsLin)
+                        isConverging[i] &= self.postProcLocalSol(res, aProof, ctrlDict, funnelInstance.repr, oldResultsLin)
         
         newResultsLin = []
         newResults = [[[]] for _ in tSteps]
@@ -314,16 +335,16 @@ class localFixedPropagator(propagators):
             idxJ = 0
             
             for aSubProofList in newResults[idxK]:
-                aSubProofList.extend(root2LeafDict.values())
+                aSubProofList.extend(dp(list(root2LeafDict.values())))
                 for aProof in aSubProofList:
                     aProof['probDict']['resPlacement'] = [idxK, idxI, idxJ]
                     aProof['probDict']['resPlacementLin'] = idxResLinNew
-                    aProof['probDict']['resPlacementParent'] = None
+                    aProof['probDict']['resPlacementParent'] = [] # dbg None
                     newResultsLin.append(aProof['obj'])
                     idxJ += 1
                     idxResLinNew += 1
         
-        return ([not a for a in isDiverging], allAlphas), newResults, newResultsLin #TODO change this; Main prog expects is converging
+        return (isConverging, allAlphas), newResults, newResultsLin
         
     
     def doRescale(self,tSteps,funnelInstance:"funnels.distributedFunnel", oldResults, oldResultsLin, allTaylorApprox, alphaFromTo, interStepsPropCrit:int=5):
