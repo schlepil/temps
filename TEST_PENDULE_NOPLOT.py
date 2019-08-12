@@ -34,8 +34,8 @@ if __name__ == "__main__":
   # Get the trajectory
   #xTraj = lambda t: narray([[np.pi*0.1*t], [np.pi*0.1]], dtype=nfloat)
   #dxTraj = lambda t: narray([[np.pi*0.1], [0.]], dtype=nfloat)
-  xTraj = lambda t: narray([[np.pi], [0.]], dtype=nfloat)
-  dxTraj = lambda t: narray([[0.], [0.]], dtype=nfloat)
+  xTraj = lambda t: narray([[np.pi*t], [np.pi]], dtype=nfloat)
+  dxTraj = lambda t: narray([[np.pi], [0.]], dtype=nfloat)
   # Compute necessary input (here 0.)
   #uRefTmp = pendSys.getUopt(xTraj(0), dxTraj(0), respectCstr=False, fullDeriv=True)
   uRefTmp = lambda t: pendSys.getUopt(xTraj(t), dxTraj(t), respectCstr=False, fullDeriv=True)
@@ -59,12 +59,12 @@ if __name__ == "__main__":
   # Get the propagator of critical solutions
   thisPropagator = relax.propagators.localFixedPropagator()
 
-  myFunnel = distributedFunnel(dynSys=pendSys, lyapFunc=lyapF, traj=refTraj, evolveLyap=thisLyapEvol, propagator=thisPropagator, opts={})
+  myFunnel = distributedFunnel(dynSys=pendSys, lyapFunc=lyapF, traj=refTraj, evolveLyap=thisLyapEvol, propagator=thisPropagator, opts={'minConvRate':-0.})
 
   lyapF.P = lyapF.lqrP(np.identity(2), np.identity(1), refTraj.getX(0.))[0]
   #P=np.array([[1.,0.],[0.,1.]])
   
-  myFunnel.compute(0.0, 0.5, (lyapF.P, 100.))
+  myFunnel.compute(0.0, 0.001, (lyapF.P, 1.))
   print('hei')
   if coreOptions.doPlot:
     opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],

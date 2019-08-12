@@ -140,7 +140,7 @@ class localFixedPropagator(propagators):
         assert res.success
         # Set the new value
         aProof['critPoints']['yCrit'][:,[nCritPoint]] = res.x.reshape((-1, 1))
-        aProof['obj'] = res.fun
+        aProof['obj'] = min(res.fun, aProof['obj']) # Take the worst point of all
         if (res.fun < -coreOptions.absTolCstr):# and nany(nabs(aProof['probDict']['u'].reshape((-1,))!=1)):
             # Check if stabilizable (using the best possible input)
             res.z = repr.evalAllMonoms(aProof['critPoints']['yCrit'])
@@ -200,7 +200,7 @@ class localFixedPropagator(propagators):
         localSolveDict = {'fun':None, 'x0':None, 'constraints':{'type':'ineq', 'fun':None}, 'method':'COBYLA', 'tol':0.9*coreOptions.absTolCstr, 'options':{}}
         # Check if converging
         isConverging = False
-        proofVals = {}
+        worstVal = np.Inf
         for at in reversed(tSubSteps):
             if not isConverging:
                 break
@@ -211,6 +211,8 @@ class localFixedPropagator(propagators):
                 if ctrlDict is None:
                     ctrlDict, thisZone = funnelInstance.lyapFunc.getCtrlDict(at, returnZone=True)
                 allYCrit = [aProof['critPoints']['yCrit'][:, [i]] for i in range(aProof['critPoints']['yCrit'].shape[1])]
+                # Reset the objective -> set by postProcLocalSol afterwards
+                aProof['obj'] = np.Inf
                 for i, aYCrit in enumerate(allYCrit):
                     # TODO influence of linear and polynomial seperation?
                     # Loop over each critical point
@@ -220,8 +222,8 @@ class localFixedPropagator(propagators):
                     res = relaxations.localSolve(**localSolveDict)
                     # Post-Proc
                     isConverging &= self.postProcLocalSol(res, aProof, ctrlDict, funnelInstance.repr, oldResultsLin, nCritPoint=i)
-                    # Set worst
-                    proofVals[at] = min(proofVals.get(at, np.Inf), res.fun)
+                    # Store to scale
+                    worstVal = min(worstVal, aProof['obj'])
             
             # Build up new dict
             if at in tSteps:

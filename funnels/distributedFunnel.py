@@ -462,10 +462,15 @@ class distributedFunnel:
         resIdLin = 0
         doesConverge = None
         
-        oldResults = lastProofInfo[0]
-        if oldResults is None:
-            oldResults = len(timePoints)*[None]
-        oldResultsLin = lastProofInfo[1]
+        if lastProofInfo is None:
+            oldResults=None
+            oldResultsLin = None
+        else:
+            oldResults = lastProofInfo[0]
+            if oldResults is None:
+                oldResults = len(timePoints)*[None]
+            oldResultsLin = lastProofInfo[1]
+        
         
         # Get all zones to be checked
         allCtrlDictsNzones = [self.lyapFunc.getCtrlDict(at, aTaylorApprox[0], aTaylorApprox[1], returnZone=True, opts=self.opts) for at, aTaylorApprox in zip(timePoints, allTaylorApprox)]
@@ -514,6 +519,7 @@ class distributedFunnel:
             if __debug__:
                 print(f"Checking result for {[k,i,j]}")
                 testSol(thisSol, allCtrlDictsNzones[k][0]) # TODO sth is wrong here
+                ccc = self.lyapFunc.getCtrlDict(0.)
                 if nany(thisSol['probDict']['u'] != 2) and (thisSol['probDict']['resPlacementParent'] is None):
                     print("snap")
 
@@ -617,7 +623,7 @@ class distributedFunnel:
                 print(f"\nAt {tC}\n")
             
             
-            tC, nextZoneGuess = self.evolveLyap(tC, self.opts['optsEvol']['tDeltaMax'], lyapFunc_.getLyap(tC))
+            tC, nextZoneGuess = self.evolveLyap(tC, min(self.opts['optsEvol']['tDeltaMax'], tC-tStart), lyapFunc_.getLyap(tC))
             tSteps = np.linspace(tC, tL, self.opts['interSteps']) # TODO check order; Does the order play a role here?
             
             # Step 1 - critical points

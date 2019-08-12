@@ -557,8 +557,14 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
         allU = [self.dynSys.ctrlInput.getMinU(t), self.dynSys.ctrlInput.refTraj.getU(t), self.dynSys.ctrlInput.getMaxU(t)]
         allDeltaU = [allU[0]-allU[1], allU[2]-allU[1]]
-    
+        
+        #Get the zone
         zone = self.getZone(t)
+        # Get the taylor if neccessary
+        if ((fTaylorApprox is None) or (gTaylorApprox is None)):
+            fTaylorApproxTmp, gTaylorApproxTmp = self.dynSys.getTaylorApprox(self.refTraj.getX(t))
+            fTaylorApprox = fTaylorApproxTmp if fTaylorApprox is None else fTaylorApprox
+            gTaylorApprox = gTaylorApproxTmp if gTaylorApprox is None else gTaylorApprox
         # Optimal control
         objectiveStar = self.getObjectiveAsArray(fTaylorApprox, gTaylorApprox, self.dynSys.maxTaylorDeg, np.ones((self.dynSys.nu, 1)), self.repr.varNumsPerDeg[0], dx0=self.dynSys.ctrlInput.refTraj.getDX(t), t=t, zone=zone)
         # Parse
@@ -797,6 +803,16 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         :param taylorDeg:
         :return:
         """
+        if __debug__:
+            assert (x0 is None) != (t is None)
+        
+        if (x0 is None) == (fTaylor is None):
+            if x0 is None:
+                x0 = self.refTraj.getX(t)
+            else:
+                x0 = None
+            
+        
         
         if __debug__:
             assert (fTaylor is None) == (gTaylor is None)
@@ -1434,6 +1450,22 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
 
         return thisProbLin
 
+    def Proofs2Prob3(self, at: float, aZone: List, resultsLin: List, aSubProof: List[List[dict]], aCtrlDict: dict, opts: dict = {}):
+        """
+        # Get the corresponding problems; aSubProof containts only critical proofs
+        :param at:
+        :param aZone:
+        :param resultsLin:
+        :param aSubProof:
+        :param aCtrlDict:
+        :param opts:
+        :return:
+        """
+        # Return simply the linear problem -> Do not take into account any info
+        thisLinProb = self.getLinProb_(aCtrlDict, opts)
+        probList = [thisLinProb]
+        return [probList]
+
     
     def Proofs2Prob3(self, at:float, aZone:List, resultsLin:List, aSubProof:List[List[dict]], aCtrlDict:dict, opts:dict={}):
         """
@@ -1446,8 +1478,6 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         :param opts:
         :return:
         """
-        
-        # TODO once returned, the parent index has to be set manually
         
         thisLinProb = self.getLinProb_(aCtrlDict, opts)
         probList = [thisLinProb]
@@ -1470,7 +1500,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         """
         
         if self.opts_['zoneCompLvl'] == 1:
-            raise NotImplementedError
+            return self.Proofs2Prob1(at, aZone, resultsLin, aSubProof, aCtrlDict, opts)
         elif self.opts_['zoneCompLvl'] == 2:
             raise NotImplementedError
         elif self.opts_['zoneCompLvl'] == 3:
