@@ -34,8 +34,8 @@ if __name__ == "__main__":
   # Get the trajectory
   #xTraj = lambda t: narray([[np.pi*0.1*t], [np.pi*0.1]], dtype=nfloat)
   #dxTraj = lambda t: narray([[np.pi*0.1], [0.]], dtype=nfloat)
-  xTraj = lambda t: narray([[np.pi*t], [np.pi]], dtype=nfloat)
-  dxTraj = lambda t: narray([[np.pi], [0.]], dtype=nfloat)
+  xTraj = lambda t: narray([[np.pi*1], [np.pi*0]], dtype=nfloat)
+  dxTraj = lambda t: narray([[np.pi*0], [0.]], dtype=nfloat)
   # Compute necessary input (here 0.)
   #uRefTmp = pendSys.getUopt(xTraj(0), dxTraj(0), respectCstr=False, fullDeriv=True)
   uRefTmp = lambda t: pendSys.getUopt(xTraj(t), dxTraj(t), respectCstr=False, fullDeriv=True)
@@ -78,7 +78,7 @@ if __name__ == "__main__":
     plot.plot2dConv(myFunnel, 0.05)
     plot.plot2dProof(myFunnel, 0.05)
     print('hello')
-    distributedFunnel.distributor.terminate()
+    myFunnel.distributor.terminate()
   
     print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")
     plot.plt.show()

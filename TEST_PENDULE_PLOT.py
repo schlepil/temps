@@ -11,6 +11,7 @@ import trajectories as traj
 import Lyapunov as lyap
 import relaxations as relax
 from systems.pendulum import getSys, getUlims
+#from systems.polySysTest import getSys, getUlims
 import plotting as plot
 from plotting import plt
 
@@ -24,16 +25,17 @@ if __name__ == "__main__":
     thisRepr = poly.polynomialRepr(2, 4)
     
     # Get the dynamical system
-    pendSys = getSys(thisRepr, fileName=None)  # "~/tmp/pendulumDict.pickle")
+    pendSys = getSys(thisRepr)  # "~/tmp/pendulumDict.pickle")
     
     # Get the trajectory
-    # xTraj = lambda t: narray([[np.pi*0.1*t], [np.pi*0.1]], dtype=nfloat)
-    # dxTraj = lambda t: narray([[np.pi*0.1], [0.]], dtype=nfloat)
-    xTraj = lambda t:narray([[np.pi*t], [np.pi]], dtype=nfloat)
-    dxTraj = lambda t:narray([[np.pi], [0.]], dtype=nfloat)
+    xTraj = lambda t: narray([[np.pi], [0.]], dtype=nfloat)
+    dxTraj = lambda t: narray([[0.], [0.]], dtype=nfloat)
+    #xTraj = lambda t:narray([[np.pi*t], [np.pi]], dtype=nfloat)
+    #dxTraj = lambda t:narray([[np.pi], [0.]], dtype=nfloat)
     # Compute necessary input (here 0.)
     # uRefTmp = pendSys.getUopt(xTraj(0), dxTraj(0), respectCstr=False, fullDeriv=True)
     uRefTmp = lambda t:pendSys.getUopt(xTraj(t), dxTraj(t), respectCstr=False, fullDeriv=True)
+    #uRefTmp = lambda t:pendSys.getUopt(xTraj(t), dxTraj(t), respectCstr=False)
     # uTraj = lambda t: uRefTmp.copy()
     # uTraj=uRefTmp
     # def __int__(self, fX: Callable, fU: Callable, nx: int, nu: int, fXd: Callable = None, tMin: float = 0., tMax: float = 1.):
@@ -72,19 +74,81 @@ if __name__ == "__main__":
     print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")
     # plot.plt.show()
     Uminmax = getUlims()
+    quiverScale = 0.02
     for at in np.linspace(0., 0.1, 5):
         # Compute the proof for each time point
         allTaylorApprox = [pendSys.getTaylorApprox(refTraj.getX(at))]
-        doesConverge, critPoints, results, resultsLin, timePoints = myFunnel.verify1(narray([at]), None, allTaylorApprox=allTaylorApprox)
+        doesConverge, results, resultsLin, timePoints = myFunnel.verify1(narray([at]), None, allTaylorApprox=allTaylorApprox)
         pltDict = plot.plot2dConv(myFunnel, at)
         for aSubProof in results:
             for aSubProofList in aSubProof:
                 for aProof in aSubProofList:
-                    yCrit = lyapF.sphere2Ellip(at, aProof['xSol'])  # These are relative coords -> add current pos
-                    yCrit += refTraj.getX(at)
-                    pendSys(yCrit, narray([[Uminmax[0]]]), 0, mode=[3, 3], x0=refTraj.getX(0.))
-                    pltDict['ax'].plot(yCrit[0, :], yCrit[1, :], 'dr')
-        
+                    yCritRel = lyapF.sphere2Ellip(at, aProof['xSol'])  # These are relative coords -> add current pos
+                    yCritAbs = yCritRel + refTraj.getX(at)
+                    #Get extremal derivatives
+                    ydMin = pendSys(yCritAbs, np.tile(narray([Uminmax[0]]),(1,yCritAbs.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(0.))
+                    ydMax = pendSys(yCritAbs, np.tile(narray([Uminmax[1]]),(1,yCritAbs.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(0.))
+                    # Get relative derivatives
+                    ydMinRel = ydMin-refTraj.getDX(at)
+                    ydMaxRel = ydMax-refTraj.getDX(at)
+                    # Get the corresponding derivative of the Lyapunov function
+                    VdMin = lyapF.evalVd(yCritRel, ydMinRel, at) #Use relative vel
+                    VdMax = lyapF.evalVd(yCritRel, ydMaxRel, at)
+                    pltDict['ax'].plot(yCritAbs[0, :], yCritAbs[1, :], 'dr')
+                    plot.myQuiver(pltDict['ax'], yCritAbs, ydMinRel*quiverScale, c='b')
+                    plot.myQuiver(pltDict['ax'], yCritAbs, ydMaxRel*quiverScale, c='r')
+
+                    xxx, yyy, YYY = plot.ax2Grid(pltDict['ax'], 20, returnFlattened=True)
+                    ydAllMinRel = pendSys(YYY, np.tile(narray([Uminmax[0]]), (1, YYY.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(0.), dx0=refTraj.getDX(at))
+                    ydAllMaxRel = pendSys(YYY, np.tile(narray([Uminmax[1]]), (1, YYY.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(0.), dx0=refTraj.getDX(at))
+                    ydAllZeroRel = pendSys(YYY, np.tile(narray([[0.]]), (1, YYY.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(0.), dx0=refTraj.getDX(at))
+                    
+                    plot.myQuiver(pltDict['ax'], YYY, ydAllMinRel*quiverScale, c='b')
+                    plot.myQuiver(pltDict['ax'], YYY, ydAllMaxRel*quiverScale, c='r')
+                    plot.myQuiver(pltDict['ax'], YYY, ydAllZeroRel*quiverScale, c='g')
+                    
+                    # Check consistency of derivative values
+                    # Using the lyap
+                    VdMinAll = lyapF.evalVd(YYY-refTraj.getX(at), ydAllMinRel, at, kd=False) #Use relative vel
+                    VdMaxAll = lyapF.evalVd(YYY-refTraj.getX(at), ydAllMaxRel, at, kd=False) #Use relative vel
+                    VdZeroAll = lyapF.evalVd(YYY-refTraj.getX(at), ydAllZeroRel, at, kd=False) #Use relative vel
+                    # Using the control dict
+                    controlDictTest = lyapF.getCtrlDict(at, returnZone=False)
+                    # Compute using control dict
+                    thisPoly = poly.polynomial(myFunnel.repr)
+                    thisPoly.coeffs = controlDictTest[-1][0] + controlDictTest[0][-1].copy()
+                    VdMinCtrl = thisPoly.eval2(yCritRel)
+                    VdMinAllCtrl = thisPoly.eval2(YYY-refTraj.getX(at))
+                    thisPoly.coeffs = controlDictTest[-1][0].copy()+controlDictTest[0][1].copy()
+                    VdMaxCtrl = thisPoly.eval2(yCritRel)
+                    VdMaxAllCtrl = thisPoly.eval2(YYY-refTraj.getX(at))
+                    thisPoly.coeffs = controlDictTest[-1][0].copy()
+                    VdZeroAllCtrl = thisPoly.eval2(YYY-refTraj.getX(at))
+                    
+                    VdOptAll = np.minimum(VdMinAll,VdMaxAll).squeeze()
+                    idxVdOptAllOk = VdOptAll<=0.
+                    pltDict['ax'].plot(YYY[0,idxVdOptAllOk], YYY[1,idxVdOptAllOk], '.g')
+                    
+                    # Assert
+                    if not np.allclose(VdMin, VdMinCtrl):
+                        print("nope")
+                    if not np.allclose(VdMax, VdMaxCtrl):
+                        print("nope")
+                    if not np.allclose(VdMinAll.squeeze(), VdMinAllCtrl.squeeze()):
+                        print('nope')
+                    if not np.allclose(VdMaxAll.squeeze(), VdMaxAllCtrl.squeeze()):
+                        print('nope')
+                    if not np.allclose(VdZeroAll.squeeze(), VdZeroAllCtrl.squeeze()):
+                        print('nope')
+
+                    
+
+                    
+                    
+
+                    
+                    
+                    
         # plot.plot2dProof(myFunnel, at)
         # plot.plot2DCONV_and_2Dproof(plot.plot2dConv(myFunnel, 0.01),plot.plot2dProof(myFunnel, 0.01))
     #   myFunnel.compute(0.0, 0.5, (lyapF.P, 100.))

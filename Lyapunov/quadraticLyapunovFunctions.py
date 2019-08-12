@@ -400,6 +400,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         self.interpolate = None #Callable for interpolation
         
         self.opts_ = {'zoneCompLvl':3}
+        self.optsCtrlDict_ = {'minConvRate':-0.}
     
     @property
     def Ps(self):
@@ -548,7 +549,8 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         assert ((0<=maxCtrlDeg) and (maxCtrlDeg<=2))
         assert (taylorDeg is None) or (taylorDeg <= self.dynSys.maxTaylorDeg)
         
-        opts_ = {'minConvRate':0.}
+        #opts_ = {'minConvRate':0.}
+        opts_ = dp(self.optsCtrlDict_)
         recursiveExclusiveUpdate(opts_, opts)
         
         ctrlDict = {}  # Return value
@@ -577,7 +579,10 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             if __debug__:
                 assert abs(objectiveStar[k+1, 0]) <= 1e-9
             #Each part of the total convergence depends linearly on the input
-            ctrlDict[k] = {-1:objectiveStar[k+1, :]*allDeltaU[0][k, 0], 1:objectiveStar[k+1, :]*allDeltaU[1][k, 0]}  # Best is minimal or maximal
+            #ctrlDict[k] = {-1:objectiveStar[k+1, :]*allDeltaU[0][k, 0], 1:objectiveStar[k+1, :]*allDeltaU[1][k, 0]}  # Best is minimal or maximal
+            # However this does nolonger depend on the reference control input as the reference velocity is explicitly taken into account now
+            # TODO check up
+            ctrlDict[k] = {-1:objectiveStar[k+1, :]*allU[0][k, 0], 1:objectiveStar[k+1, :]*allU[2][k, 0]}  # Best is minimal or maximal
     
         # Linear control based on separating hyperplanes
         ctrlDict['PG0'] = ndot(zone[0], gTaylorApprox[0, :, :])
@@ -594,7 +599,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         if returnZone:
             return ctrlDict, zone
         else:
-            return  ctrlDict
+            return ctrlDict
         
 
     def plot(self, ax: "plot.plt.axes", t: float = 0.0, x0:np.ndarray=None, opts={}):
@@ -640,6 +645,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
     def evalVd(self, x: np.ndarray, xd: np.ndarray, t:np.ndarray, kd: bool = True):
         """
+        x and xd are derivation variables with respect to reference
         V = x.T.P.x
         Vd = 2x.T.P.xd + x.T.Pd.x
         :param x:
@@ -663,7 +669,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             allP = np.tile(allP, (x.shape[1],1,1))
             allPd = np.tile(allPd, (x.shape[1],1,1))
         
-        Vd = neinsum("in,nij,jn->n", 2.*x, allP, xd) + neinsum("in,nij,jn->n", x, allPd, x)
+        Vd = neinsum("in,nij,jn->n", 2.*x, allP, xd) + neinsum("in,nij,jn->n", x, allPd+self.optsCtrlDict_['minConvRate']*allP, x)
         
         if kd:
             Vd.resize((1,x.shape[1]))
@@ -1450,7 +1456,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
 
         return thisProbLin
 
-    def Proofs2Prob3(self, at: float, aZone: List, resultsLin: List, aSubProof: List[List[dict]], aCtrlDict: dict, opts: dict = {}):
+    def Proofs2Prob1(self, at: float, aZone: List, resultsLin: List, aSubProof: List[List[dict]], aCtrlDict: dict, opts: dict = {}):
         """
         # Get the corresponding problems; aSubProof containts only critical proofs
         :param at:

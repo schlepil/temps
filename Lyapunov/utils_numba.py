@@ -182,7 +182,8 @@ def evalPolyLyapAsArray_Numba(P, monomP, f, monomF, g, monomG, dx0, monomDX0, u,
     coeffsOut *= 2.
 
     # Add time-derivative (if necessary)
-        # Use symmetry
+    # Use symmetry
+    # Add z.T.Pdot.z
     for a, ampa in enumerate(monomP):
         # Diagonal
         coeffsOut[0,idxMat[ampa, ampa]] += Pdot[a, a]
