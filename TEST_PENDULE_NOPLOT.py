@@ -34,8 +34,8 @@ if __name__ == "__main__":
   # Get the trajectory
   #xTraj = lambda t: narray([[np.pi*0.1*t], [np.pi*0.1]], dtype=nfloat)
   #dxTraj = lambda t: narray([[np.pi*0.1], [0.]], dtype=nfloat)
-  xTraj = lambda t: narray([[np.pi*1], [np.pi*0]], dtype=nfloat)
-  dxTraj = lambda t: narray([[np.pi*0], [0.]], dtype=nfloat)
+  xTraj = lambda t: narray([[np.pi*t], [np.pi*1]], dtype=nfloat)
+  dxTraj = lambda t: narray([[np.pi], [0.]], dtype=nfloat)
   # Compute necessary input (here 0.)
   #uRefTmp = pendSys.getUopt(xTraj(0), dxTraj(0), respectCstr=False, fullDeriv=True)
   uRefTmp = lambda t: pendSys.getUopt(xTraj(t), dxTraj(t), respectCstr=False, fullDeriv=True)

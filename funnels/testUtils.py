@@ -2,7 +2,7 @@ from coreUtils import *
 
 import polynomial as poly
 import relaxations as relax
-
+import warnings
 
 def testSol(sol, ctrlDict:dict):
 
@@ -49,8 +49,7 @@ def testSol(sol, ctrlDict:dict):
             if (nany(signPlanes[0,:] != signPlanes[0,0])) and not type==2:
                 print(f"Attention: minimizers are on different signs of the plane. Check wich separation is used")
             if not type in list(-signPlanes[i,:])+[2]:
-                print(f"Failed on input {i} with dist {dist2Planes[i]} and ctrl {type}")
-                raise RuntimeError
+                warnings.warn(f"Failed on input {i} with dist {dist2Planes[i]} and ctrl {type}")
 
     # Check if minimal value corresponds to ctrlDict value
     thisPoly.coeffs = -ctrlDict[-1][0]

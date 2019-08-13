@@ -30,8 +30,8 @@ if __name__ == "__main__":
     # Get the trajectory
     xTraj = lambda t: narray([[np.pi], [0.]], dtype=nfloat)
     dxTraj = lambda t: narray([[0.], [0.]], dtype=nfloat)
-    #xTraj = lambda t:narray([[np.pi*t], [np.pi]], dtype=nfloat)
-    #dxTraj = lambda t:narray([[np.pi], [0.]], dtype=nfloat)
+    xTraj = lambda t:narray([[np.pi*t], [np.pi]], dtype=nfloat)
+    dxTraj = lambda t:narray([[np.pi], [0.]], dtype=nfloat)
     # Compute necessary input (here 0.)
     # uRefTmp = pendSys.getUopt(xTraj(0), dxTraj(0), respectCstr=False, fullDeriv=True)
     uRefTmp = lambda t:pendSys.getUopt(xTraj(t), dxTraj(t), respectCstr=False, fullDeriv=True)
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     # myFunnel.compute(0.0, 0.01, (lyapF.P, 1.))
     # Instead of computing an actually  stabilizable funnel, simply impose the shape to show the streamlines
     for at in np.linspace(0., 0.1, 5):
-        lyapF.register(at, (Pinit, .05))
+        lyapF.register(at, (Pinit, .25))
     opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
              'faceAlpha':0.0, 'linestyle':'-',
              'plotAx':np.array([0, 1]),
@@ -88,12 +88,34 @@ if __name__ == "__main__":
                     #Get extremal derivatives
                     ydMin = pendSys(yCritAbs, np.tile(narray([Uminmax[0]]),(1,yCritAbs.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(0.))
                     ydMax = pendSys(yCritAbs, np.tile(narray([Uminmax[1]]),(1,yCritAbs.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(0.))
+
+                    ydMinOrig = pendSys(yCritAbs, np.tile(narray([Uminmax[0]]), (1, yCritAbs.shape[1])), 0, mode=[0, 0], x0=refTraj.getX(0.))
+                    ydMaxOrig = pendSys(yCritAbs, np.tile(narray([Uminmax[1]]), (1, yCritAbs.shape[1])), 0, mode=[0, 0], x0=refTraj.getX(0.))
+
                     # Get relative derivatives
                     ydMinRel = ydMin-refTraj.getDX(at)
                     ydMaxRel = ydMax-refTraj.getDX(at)
+                    ydMinRelOrig = ydMinOrig-refTraj.getDX(at)
+                    ydMaxRelOrig = ydMaxOrig-refTraj.getDX(at)
+                    # Get the velocities using taylor approx
+                    # Compute Taylor approx around reference point
+                    allTaylorApprox = [pendSys.getTaylorApprox(refTraj.getX(at)) for i in range(yCritAbs.shape[1])]
+                    # Get the vector of monomials from relative position
+                    zCritRel = thisRepr.evalAllMonoms(yCritRel, maxDeg=pendSys.maxTaylorDeg)
+                    ydSysDyn = np.hstack( [ndot(allTaylorApprox[i][0], zCritRel[:,[i]]) for i in range(yCritAbs.shape[1])] )
+                    gTaylorContracted = [neinsum('kij,k->ij', allTaylorApprox[i][1], zCritRel[:,i]) for i in range(yCritRel.shape[1])]
+                    # Rate them with respect to the inputs
+                    ydInputMinDyn = np.hstack( [aG*Uminmax[0] for aG in gTaylorContracted] )
+                    ydInputMaxDyn = np.hstack( [aG*Uminmax[1] for aG in gTaylorContracted] )
+                    ydMinTaylor = ydSysDyn+ydInputMinDyn
+                    ydMaxTaylor = ydSysDyn+ydInputMaxDyn
+                    ydMinRelTaylor = ydMinTaylor - refTraj.getDX(at)
+                    ydMaxRelTaylor = ydMaxTaylor - refTraj.getDX(at)
                     # Get the corresponding derivative of the Lyapunov function
                     VdMin = lyapF.evalVd(yCritRel, ydMinRel, at) #Use relative vel
                     VdMax = lyapF.evalVd(yCritRel, ydMaxRel, at)
+                    VdMinTaylor = lyapF.evalVd(yCritRel, ydMinRelTaylor, at)  # Use relative vel
+                    VdMaxTaylor = lyapF.evalVd(yCritRel, ydMaxRelTaylor, at)
                     pltDict['ax'].plot(yCritAbs[0, :], yCritAbs[1, :], 'dr')
                     plot.myQuiver(pltDict['ax'], yCritAbs, ydMinRel*quiverScale, c='b')
                     plot.myQuiver(pltDict['ax'], yCritAbs, ydMaxRel*quiverScale, c='r')

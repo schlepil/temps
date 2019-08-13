@@ -116,6 +116,11 @@ class secondOrderSys(dynamicalSystem):
         else:
             self.fromFile(file)
 
+        # Determines how the Taylor approx is evaluated
+        # strictEval = True -> Get taylor approx and compute
+        # strictEval = False -> Compute the taylor approx of M (Mt), f (ft) and G (Gt), then compute xdd = Mt^-1.(ft + Gt.u) #Except if the maximal degrees for system and input dynamics do not coincide
+        self.strictEval = True
+
         return None
 
     @classmethod
@@ -197,6 +202,11 @@ class secondOrderSys(dynamicalSystem):
         #Integration of velocity (Only if the first order terms appear
         if (minDeg<=1) and (maxDeg>=1):
             MifTaylor[0:self.nqp,int(minDeg==0)+self.nqp:int(minDeg==0)+self.nq] = nidentity(self.nqv)  # Second order nature of the system
+        # BUG FIX
+        # Add the current reference velocity (if necessary)
+        if (minDeg == 0):
+            MifTaylor[0:self.nqp,0] = x[self.nqp:,0]
+        
         MiGTaylor = nzeros((nMonomsTaylor_,self.nq,self.nu), dtype=nfloat)
         
         # Setup the inputs
@@ -211,9 +221,9 @@ class secondOrderSys(dynamicalSystem):
         # Note that, in order to compute the needed orders (i.e. minDeg>0) we have to compute all
         # monoms of the original (non-inversed) dynamics
         indexKey = f"PDeriv_to_{maxDeg:d}_eval"
-        fPDeriv = nmatrix(self.pDerivF.__dict__["f"+indexKey](*xList)) # Pure np.matrix #TODO search for ways to vectorize
-        MPDeriv = [nmatrix(aFunc(*xList)) for aFunc in self.pDerivM.__dict__["M"+indexKey]] #List of matrices #TODO search for ways to vectorize
-        GPDeriv = [nmatrix(aFunc(*xList)) for aFunc in self.pDerivG.__dict__["G"+indexKey]] #List of matrices #TODO search for ways to vectorize
+        fPDeriv = nmatrix(self.pDerivF.__dict__["f"+indexKey](*xList),dtype=nfloat) # Pure np.matrix #TODO search for ways to vectorize
+        MPDeriv = [nmatrix(aFunc(*xList),dtype=nfloat) for aFunc in self.pDerivM.__dict__["M"+indexKey]] #List of matrices #TODO search for ways to vectorize
+        GPDeriv = [nmatrix(aFunc(*xList),dtype=nfloat) for aFunc in self.pDerivG.__dict__["G"+indexKey]] #List of matrices #TODO search for ways to vectorize
 
         
         # Inverse the inertia matrix at the current point
@@ -234,8 +244,8 @@ class secondOrderSys(dynamicalSystem):
 
         evalDictG = evalDictF.copy()
         
-        evalDictF['W'] = nmatrix(fPDeriv[:,[0]])
-        evalDictG['W'] = nmatrix(GPDeriv[0])
+        evalDictF['W'] = nmatrix(fPDeriv[:,[0]],dtype=nfloat)
+        evalDictG['W'] = nmatrix(GPDeriv[0],dtype=nfloat)
 
         # Now loop over all
         digits_ = self.repr.digits
@@ -272,8 +282,8 @@ class secondOrderSys(dynamicalSystem):
                 #Set deriv mass mat
                 evalDictF[idxKey+'M'] = evalDictG[idxKey+'M'] = MPDeriv[idxVal]
                 #Set the "function"
-                evalDictF[idxKey+'W'] = nmatrix(fPDeriv[:,[idxVal]])
-                evalDictG[idxKey+'W'] = nmatrix(GPDeriv[idxVal])
+                evalDictF[idxKey+'W'] = nmatrix(fPDeriv[:,[idxVal]],dtype=nfloat)
+                evalDictG[idxKey+'W'] = nmatrix(GPDeriv[idxVal],dtype=nfloat)
             
             thisFuncString = funcStrings_[aMonom.sum()]
             #Evaluate
@@ -286,6 +296,151 @@ class secondOrderSys(dynamicalSystem):
         #Done
         return MifTaylor, MiGTaylor
     
+    def computeQddInv(self, M:"Mass matrices", fg:"RHS dynamics"):
+        # Compute - system dynamics
+        if self.nqv == 1:
+            # special case: only one degree of freedom
+            xdd = np.divide(fg.squeeze(), M.squeeze()).reshape((1, fg.shape[1]))
+        else:
+            xdd = nempty((self.nqp, fg.shape[1]), dtype=nfloat)
+            for i in range(fg.shape[1]):
+                xdd[self.nq:, [i]] = ssolve(M[:, :, i], fg[:, [i]], assume_a='pos')
+        return xdd
+    
+    def compDynSysOrig(self, x:np.ndarray):
+        """
+        Compute the nonlinear system dynamics
+        :param x:
+        :param u:
+        :param t:
+        :param restrictInput:
+        :param mode:
+        :param x0:
+        :param dx0:
+        :return:
+        """
+
+        xLi = [x[i, :] for i in range(self.nq)]
+        M = self.pDerivM.M0_eval[0](*xLi)  # [nqv,nqv,nPt] or [nqv,nqv]
+        f = self.pDerivF.f0_eval(*xLi)  # [nqv,nPt] or [nqv,1]
+        M.resize((self.nqv, self.nqv, x.shape[1]))  # [nqv,nqv,nPt]
+        f.resize((self.nqv, x.shape[1]))
+        return self.computeQddInv(M, f)
+    
+    def compDynSysPolyNonStrict(self, x:"Points", x0:"origin Point", deg:int):
+        """
+        "Nonstrict computations" results might be slightly different from what is used within the proofs
+        Here we compute
+        1) Compute Taylor approx Mt.xdd = ft
+        2) Inverse -> xdd = Mt^-1.ft
+        :param x:
+        :param x0:
+        :param deg:
+        :return:
+        """
+        # Get partial derivs
+        fPDeriv = self.pDerivF.__dict__[f"fPDeriv_to_{deg:d}_eval"](*x0.squeeze())  # [nq,nMonoms]
+        # MPDeriv = self.pDerivM.__dict__[f"MPDeriv_to_{mode[0]:d}_MAT_eval"](*x0.squeeze())  # [nqv,nqv,nMonoms]
+        # Lambdifying tensors does not work as expected -> TODO
+        # Is returned as List of lists -> explicit conversion to np.array
+        MPDeriv = narray(self.pDerivM.__dict__[f"MPDeriv_to_{deg:d}_MAT_eval"](*x0.squeeze()), dtype=nfloat)  # [nqv,nqv,nMonoms]
+        MPDeriv.resize((self.nqv, self.nqv, len(self.repr.varNumsUpToDeg[deg])))  # Ensure dimension
+    
+        # Partial derivs to evaluated Taylor
+        z = self.repr.evalAllMonoms(x if x0 is None else x-x0, deg)  # TODO check correctness, monoms have to be evaluated at the offset
+        # multiply with weights
+        z *= self.inversionTaylor.weightingMonoms[:z.shape[0]].reshape((z.shape[0], 1))
+        # (broadcast) multiply and sum up and contract
+        f = ndot(fPDeriv, z)
+        M = neinsum("ijk,kn->ijn", MPDeriv, z)  # [nqv,nqv,nMonoms] . [nMonoms,nPt] -> [nqv,nqv,nPt] Mass matrices stacked along third axis as above
+        return self.computeQddInv(M, f)
+    
+    def compDynSysPolyStrict(self, deltax:"Points", x0:"origin Point", deg:int, taylorExp=[None, None]):
+        """
+        Compute system dynamics based on taylor approx. Gives strictly the same results as the ones used in the proofs
+        xdd = M^-1.f
+        compute directly the taylor expansion of this so {M^-1.f}t
+        :param x:
+        :param x0:
+        :param deg:
+        :return:
+        """
+        
+        # Compute Taylor expansion
+        fTaylor, gTaylor =  self.getTaylorApprox(x0, maxDeg=deg)
+        taylorExp[0] = fTaylor
+        taylorExp[1] = gTaylor
+        
+        # deltax -> derivation variables
+        # Check if deltax is already the vector of monomials
+        if deltax.shape[0] == self.nq:
+            deltaz = self.repr.evalAllMonoms(deltax, deg)
+        else:
+            nMonoms = len(self.repr.varNumsUpToDeg[deg])
+            assert deltax.shape[0]>=nMonoms
+            deltaz = deltax
+        
+        # Compute
+        return ndot(fTaylor, deltaz[:nMonoms, :])
+    
+    def compInputSysOrig(self, x:"Points", u:"Input"):
+        """
+        Same as compDynSysOrig but for input
+        :param x:
+        :param u:
+        :return:
+        """
+        xLi = [x[i, :] for i in range(self.nq)]
+        M = self.pDerivM.M0_eval[0](*xLi)  # [nqv,nqv,nPt] or [nqv,nqv]
+        G = self.pDerivG.G0_eval[0](*xLi)  # [nqv,nu,nPt] or [nqv,nu]
+        # Ensure dimensions
+        M.resize((self.nqv, self.nqv, x.shape[1]))
+        G.resize((self.nqv, self.nu, x.shape[1]))
+        # Compute
+        g = neinsum("ijk,jk->ik", G, u)
+        
+        return self.computeQddInv(M, g)
+        
+    def compInputSysPolyNonStrict(self, x:"Points", x0:"Origin", u:"Input", deg:int):
+        
+        # Get partial derivs
+        # Lambdifying tensors does not work as expected -> TODO
+        # Is returned as List of lists -> explicit conversion to np.array
+        GPDeriv = narray(self.pDerivG.__dict__[f"GPDeriv_to_{deg}_MAT_eval"](*x0.squeeze()), dtype=nfloat)  # [nqv,nu,nMonoms]
+        MPDeriv = narray(self.pDerivM.__dict__[f"MPDeriv_to_{deg}_MAT_eval"](*x0.squeeze()), dtype=nfloat)  # [nqv,nqv,nMonoms]
+        # Ensure dimensions
+        GPDeriv.resize((self.nqv, self.nu, len(self.repr.varNumsUpToDeg[deg])))
+        MPDeriv.resize((self.nqv, self.nqv, len(self.repr.varNumsUpToDeg[deg])))
+    
+        # Partial derivs to evaluated Taylor
+        z = self.repr.evalAllMonoms(x if x0 is None else x-x0, deg)  # TODO check correctness, monoms have to be evaluated at the offset
+        # multiply with weights
+        z *= self.inversionTaylor.weightingMonoms[:z.shape[0]].reshape((z.shape[0], 1))
+        # (broadcast) multiply and sum up and contract
+        g = neinsum("ijk,kn,jn->in", GPDeriv, z, u)  # ([nq,nu,nMonoms] . [nMonoms,nPt]) . (nu,nPt) -> [nq,nPt] Compute input
+        M = neinsum("ijk,kn->ijn", MPDeriv, z)  # [nq,nq,nMonoms] . [nMonoms,nPt] -> [nq,nq,nPt] Mass matrices stacked along third axis as above
+       
+        return self.computeQddInv(M, g)
+    
+    def compInputSysPolyStrict(self, deltax:"Points", x0:"origin Point", u:"Input", deg:int, taylorExp=[None, None]):
+        
+        # Get the taylor approx
+        gTaylor = self.getTaylorApprox(x0, maxDeg=deg)[1] if taylorExp[1] is None else taylorExp[1]
+        
+        # deltax -> derivation variables
+        # Check if deltax is already the vector of monomials
+        if deltax.shape[0] == self.nq:
+            deltaz = self.repr.evalAllMonoms(deltax, deg)
+        else:
+            nMonoms = len(self.repr.varNumsUpToDeg[deg])
+            assert deltax.shape[0] >= nMonoms
+            deltaz = deltax
+        
+        # Compute
+        # [nMonoms,nq,nu].[nMonoms, nPt].[nu, nPt] -> [nq, nPt]
+        return neinsum("kij,kn,jn->in", gTaylor, deltaz[:nMonoms, :], u)
+
+
     def __call__(self, x:np.ndarray, u:Union[np.ndarray,Callable], t:float=0., restrictInput:bool=True, mode:List[int]=[0,0], x0:np.ndarray=None, dx0:np.ndarray=None):
         """
         Evaluate dynamics for current position and control input
@@ -298,7 +453,9 @@ class secondOrderSys(dynamicalSystem):
         :param dx0: reference velocity. If given, only the velocity difference will be returned
         :return:
         """
-        
+
+        assert not(0 in mode), "TBD"
+
         if __debug__:
             assert x.shape[0] == self.nq
             assert all([(aMode >= 0) and (aMode <=self.maxTaylorDeg) for aMode in mode ])
@@ -323,76 +480,36 @@ class secondOrderSys(dynamicalSystem):
             assert u.shape[0] == self.nu
         
         xd = np.zeros_like(x)
-        xd[:self.nqp, :] = x[self.nqp:, :]
+        if not self.strictEval:
+            # Explicitely take into account that the velocities stays the same. Automatically done with taylor expansion
+            xd[:self.nqp, :] = x[self.nqp:, :]
+
+        #Speedup stuff
+        taylorExp = [None,None]
+        deltaz = None
         
         # system dynamics
         if mode[0] == 0:
-            print('wdnmd')
-            xLi = [x[i,:] for i in range(self.nq)]
-            M = self.pDerivM.M0_eval[0](*xLi) # [nq,nq,nPt] or [nq,nq]
-            f = self.pDerivF.f0_eval(*xLi) # [nq,nPt] or [nq,1]
-            M.resize((self.nqv, self.nqv, x.shape[1]))#[nq,nq,nPt]
-
+            xd[self.nq:,:] += self.compDynSysOrig(x)
         elif mode[0] <= self.maxTaylorDeg:
-            # Get partial derivs
-            fPDeriv = self.pDerivF.__dict__[f"fPDeriv_to_{mode[0]:d}_eval"](*x0.squeeze())  # [nq,nMonoms]
-            # MPDeriv = self.pDerivM.__dict__[f"MPDeriv_to_{mode[0]:d}_MAT_eval"](*x0.squeeze())  # [nqv,nqv,nMonoms]
-            # Lambdifying tensors does not work as expected -> TODO
-            # Is returned as List of lists -> explicit conversion to np.array
-            MPDeriv = narray(self.pDerivM.__dict__[f"MPDeriv_to_{mode[0]:d}_MAT_eval"](*x0.squeeze()), dtype=nfloat)  # [nqv,nqv,nMonoms]
-            MPDeriv.resize((self.nqv, self.nqv, len(self.repr.varNumsUpToDeg[mode[0]]))) # Ensure dimension
-    
-            # Partial derivs to evaluated Taylor
-            z = self.repr.evalAllMonoms(x if x0 is None else x-x0, mode[0]) # TODO check correctness, monoms have to be evaluated at the offset
-            # multiply with weights
-            z *= self.inversionTaylor.weightingMonoms[:z.shape[0]].reshape((z.shape[0],1))
-            # (broadcast) multiply and sum up and contract
-            f = ndot(fPDeriv, z)
-            M = neinsum("ijk,kn->ijn", MPDeriv, z)  # [nqv,nqv,nMonoms] . [nMonoms,nPt] -> [nqv,nqv,nPt] Mass matrices stacked along third axis as above
-        # Compute - system dynamics
-        if self.nqv==1:
-            # special case: only one degree of freedom
-            xd[1,:] = np.divide(f.squeeze(), M.squeeze())
-        else:
-           for i in range(x.shape[1]):
-              xd[self.nq:,[i]] = ssolve(M[:,:,i], f[:,[i]], assume_a='pos')
+            if self.strictEval:
+                deltaz = self.repr.evalAllMonoms(x-x0, max(mode)) # monomial vector in derivation variables
+                xd = self.compDynSysPolyStrict(deltaz, x0, mode[0], taylorExp=taylorExp) #Override
+            else:
+                xd[self.nq:, :] += self.compDynSysPolyNonStrict(x, x0, mode[0])
 
         # input dynamics
         if mode[1] == 0:
-            xLi = [x[i,:] for i in range(self.nq)]
-            M = self.pDerivM.M0_eval[0](*xLi)  # [nqv,nqv,nPt] or [nqv,nqv]
-            G = self.pDerivG.G0_eval[0](*xLi)  # [nqv,nu,nPt] or [nqv,nu]
-            # Ensure dimensions
-            M.resize((self.nqv, self.nqv, x.shape[1]))
-            G.resize((self.nqv, self.nu, x.shape[1]))
-            #Compute
-            g = neinsum("ijk,jk->ik", G, u)
+            xd[self.nq:,:] += self.compInputSysOrig(x, u)
         else:
-            # Get partial derivs
-            # Lambdifying tensors does not work as expected -> TODO
-            # Is returned as List of lists -> explicit conversion to np.array
-            GPDeriv = narray(self.pDerivG.__dict__[f"GPDeriv_to_{mode[1]:d}_MAT_eval"](*x0.squeeze()), dtype=nfloat)  # [nqv,nu,nMonoms]
-            MPDeriv = narray(self.pDerivM.__dict__[f"MPDeriv_to_{mode[1]:d}_MAT_eval"](*x0.squeeze()), dtype=nfloat)  # [nqv,nqv,nMonoms]
-            #Ensure dimensions
-            GPDeriv.resize((self.nqv, self.nu, len(self.repr.varNumsUpToDeg[mode[1]])))
-            MPDeriv.resize((self.nqv, self.nqv, len(self.repr.varNumsUpToDeg[mode[1]])))
-
-            # Partial derivs to evaluated Taylor
-            z = self.repr.evalAllMonoms(x if x0 is None else x-x0, mode[1]) # TODO check correctness, monoms have to be evaluated at the offset
-            # multiply with weights
-            z *= self.inversionTaylor.weightingMonoms[:z.shape[0]].reshape((z.shape[0],1))
-            # (broadcast) multiply and sum up and contract
-            g = neinsum("ijk,kn,jn->in", GPDeriv, z,u)  # ([nq,nu,nMonoms] . [nMonoms,nPt]) . (nu,nPt) -> [nq,nPt] Compute input
-            M = neinsum("ijk,kn->ijn", MPDeriv, z)  # [nq,nq,nMonoms] . [nMonoms,nPt] -> [nq,nq,nPt] Mass matrices stacked along third axis as above
-
-        # Compute - input dynamics
-        if self.nqv==1:
-            # special case
-            xd[1,:] = np.divide(g.squeeze(), M.squeeze())
-        else:
-           for i in range(x.shape[1]):
-             xd[self.nqv:, [i]] += ssolve(M[:, :, i], g[:, [i]], assume_a='pos')
-
+            if self.strictEval:
+                if mode[0] != mode[1]:
+                    taylorExp[1] = None
+                deltaz = self.repr.evalAllMonoms(x-x0, mode[1]) if deltaz is None else deltaz # monomial vector in derivation variables
+                xd += self.compInputSysPolyStrict(deltaz, x0, u, mode[1],taylorExp=taylorExp)
+            else:
+                xd[self.nq:, :] += self.compInputSysPolyNonStrict(x, x0, u, mode[1])
+            
         if dx0 is not None:
             # Adjust for reference
             xd -= dx0
