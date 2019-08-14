@@ -648,8 +648,12 @@ class distributedFunnel:
             else:
                 # We already posses provably non-converging points
                 isConverging = False
-            
+
+            # Last positive proof
+            proofDataLargest = None
+
             if isConverging:
+                proofDataLargest = (isConverging, results, resultsLin, timePoints) #Store last positive
                 # Make the zone bigger to find an upper bound before using dichotomic search
                 alphaL = lyapFunc_.getAlpha(0)
                 alphaU = 2.*alphaL
@@ -662,6 +666,8 @@ class distributedFunnel:
                     critIsConverging = critIsConverging[-1]
                     if critIsConverging:
                         isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp), allTaylorApprox) #Change to store all in order to exploit the last proof
+                        if isConverging:
+                            proofDataLargest = (isConverging, results, resultsLin, timePoints)  # Store last positive
                     else:
                         isConverging = False
                     if not isConverging:
@@ -683,6 +689,8 @@ class distributedFunnel:
                     critIsConverging = critIsConverging[-1] # Last is convergence for new alpha
                     if critIsConverging:
                         isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp), allTaylorApprox) #Change to store all in order to exploit the last proof
+                        if isConverging:
+                            proofDataLargest = (isConverging, results, resultsLin, timePoints)  # Store last positive
                     else:
                         isConverging = False
                     if isConverging:
@@ -694,9 +702,6 @@ class distributedFunnel:
             
             # Now we can perform dichotomic search
             assert alphaL<alphaU
-            
-            # Last positive proof
-            proofDataLargest = None
             
             while (alphaU-alphaL)>self.opts['convLim']*alphaL:
                 alpha = (alphaL+alphaU)/2.
@@ -719,7 +724,8 @@ class distributedFunnel:
                 else:
                     alphaU = alpha
             
-            assert proofDataLargest is not None, "Never found a proof for convergence"
+            if proofDataLargest is None:
+                raise RuntimeError("Never found a proof for convergence")
             
             # Conservative -> Choose the largest converging value found
             lyapFunc_.setAlpha(alphaL,0)

@@ -32,8 +32,10 @@ if __name__ == "__main__":
   pendSys = getSys(thisRepr, fileName=None)  # "~/tmp/pendulumDict.pickle")
 
   # Get the trajectory
-  #xTraj = lambda t: narray([[np.pi*0.1*t], [np.pi*0.1]], dtype=nfloat)
-  #dxTraj = lambda t: narray([[np.pi*0.1], [0.]], dtype=nfloat)
+  # Static
+  #xTraj = lambda t: narray([[np.pi], [0.]], dtype=nfloat)
+  #dxTraj = lambda t: narray([[0.], [0.]], dtype=nfloat)
+  # Moving
   xTraj = lambda t: narray([[np.pi*t], [np.pi*1]], dtype=nfloat)
   dxTraj = lambda t: narray([[np.pi], [0.]], dtype=nfloat)
   # Compute necessary input (here 0.)
@@ -61,10 +63,13 @@ if __name__ == "__main__":
 
   myFunnel = distributedFunnel(dynSys=pendSys, lyapFunc=lyapF, traj=refTraj, evolveLyap=thisLyapEvol, propagator=thisPropagator, opts={'minConvRate':-0.})
 
-  lyapF.P = lyapF.lqrP(np.identity(2), np.identity(1), refTraj.getX(0.))[0]
+  Pinit = lyapF.lqrP(np.identity(2), np.identity(1), refTraj.getX(0.))[0]
+  #Scale
+  Pinit *= 3./min(eigh(Pinit)[0])**0.5
+
   #P=np.array([[1.,0.],[0.,1.]])
   
-  myFunnel.compute(0.0, 0.001, (lyapF.P, 1.))
+  myFunnel.compute(0.0, 0.001, (Pinit, 1.))
   print('hei')
   if coreOptions.doPlot:
     opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],

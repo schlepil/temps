@@ -117,7 +117,7 @@ class localFixedPropagator(propagators):
         
         if __debug__:
             if nany(localSolveDict['constraints']['fun'](localSolveDict['x0']) < -coreOptions.absTolCstr):
-                print("Constraints failed on starting points")
+                print(f"Constraints failed on starting point with {localSolveDict['constraints']['fun'](localSolveDict['x0'])}")
         
         return None
     
