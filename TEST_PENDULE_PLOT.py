@@ -19,11 +19,18 @@ from scipy.integrate import solve_ivp
 
 from funnels import *
 
+def printRelErr(A,B):
+    iMax = np.argmax(np.abs(A.squeeze()-B.squeeze()))
+    vMax = max(abs(A.squeeze()[iMax]), abs(B.squeeze()[iMax]))
+    print(f"Relative error {(A.squeeze()[iMax]-B.squeeze()[iMax])/vMax}")
+
 if __name__ == "__main__":
     # from parallelChecker import probSetter, solGetter, probQueues, solQueues
     # Complicate the problem
     thisRepr = poly.polynomialRepr(2, 4)
-    
+
+    nPtPlot = 40
+
     # Get the dynamical system
     pendSys = getSys(thisRepr)  # "~/tmp/pendulumDict.pickle")
     
@@ -56,7 +63,7 @@ if __name__ == "__main__":
     thisLyapEvol = lyap.quadLyapTimeVaryingLQR(dynSys=pendSys, refTraj=refTraj)
     myFunnel = distributedFunnel(pendSys, lyapF, refTraj, thisLyapEvol, propagator=relax.propagators.dummyPropagator(), opts={'minConvRate':-0.})
     
-    Pinit = lyapF.lqrP(0.01*np.identity(2), np.identity(1), refTraj.getX(0.))[0]
+    Pinit = lyapF.lqrP(np.identity(2), np.identity(1), refTraj.getX(0.))[0]
     # P=np.array([[1.,0.],[0.,1.]])
     
     # myFunnel.compute(0.0, 0.01, (lyapF.P, 1.))
@@ -86,15 +93,23 @@ if __name__ == "__main__":
                     yCritRel = lyapF.sphere2Ellip(at, aProof['xSol'])  # These are relative coords -> add current pos
                     yCritAbs = yCritRel + refTraj.getX(at)
                     #Get extremal derivatives
-                    ydMin = pendSys(yCritAbs, np.tile(narray([Uminmax[0]]),(1,yCritAbs.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(0.))
-                    ydMax = pendSys(yCritAbs, np.tile(narray([Uminmax[1]]),(1,yCritAbs.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(0.))
+                    # Strict
+                    pendSys.strictEval = True
+                    ydMin = pendSys(yCritAbs, np.tile(narray([Uminmax[0]]),(1,yCritAbs.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(at))
+                    ydMax = pendSys(yCritAbs, np.tile(narray([Uminmax[1]]),(1,yCritAbs.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(at))
+                    # Nonstrict
+                    pendSys.strictEval = False
+                    ydMinNS = pendSys(yCritAbs, np.tile(narray([Uminmax[0]]), (1, yCritAbs.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(at))
+                    ydMaxNS = pendSys(yCritAbs, np.tile(narray([Uminmax[1]]), (1, yCritAbs.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(at))
 
-                    ydMinOrig = pendSys(yCritAbs, np.tile(narray([Uminmax[0]]), (1, yCritAbs.shape[1])), 0, mode=[0, 0], x0=refTraj.getX(0.))
-                    ydMaxOrig = pendSys(yCritAbs, np.tile(narray([Uminmax[1]]), (1, yCritAbs.shape[1])), 0, mode=[0, 0], x0=refTraj.getX(0.))
+                    ydMinOrig = pendSys(yCritAbs, np.tile(narray([Uminmax[0]]), (1, yCritAbs.shape[1])), 0, mode=[0, 0], x0=refTraj.getX(at))
+                    ydMaxOrig = pendSys(yCritAbs, np.tile(narray([Uminmax[1]]), (1, yCritAbs.shape[1])), 0, mode=[0, 0], x0=refTraj.getX(at))
 
                     # Get relative derivatives
                     ydMinRel = ydMin-refTraj.getDX(at)
                     ydMaxRel = ydMax-refTraj.getDX(at)
+                    ydMinNSRel = ydMinNS-refTraj.getDX(at)
+                    ydMaxNSRel = ydMaxNS-refTraj.getDX(at)
                     ydMinRelOrig = ydMinOrig-refTraj.getDX(at)
                     ydMaxRelOrig = ydMaxOrig-refTraj.getDX(at)
                     # Get the velocities using taylor approx
@@ -120,7 +135,7 @@ if __name__ == "__main__":
                     plot.myQuiver(pltDict['ax'], yCritAbs, ydMinRel*quiverScale, c='b')
                     plot.myQuiver(pltDict['ax'], yCritAbs, ydMaxRel*quiverScale, c='r')
 
-                    xxx, yyy, YYY = plot.ax2Grid(pltDict['ax'], 20, returnFlattened=True)
+                    xxx, yyy, YYY = plot.ax2Grid(pltDict['ax'], nPtPlot, returnFlattened=True)
                     ydAllMinRel = pendSys(YYY, np.tile(narray([Uminmax[0]]), (1, YYY.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(0.), dx0=refTraj.getDX(at))
                     ydAllMaxRel = pendSys(YYY, np.tile(narray([Uminmax[1]]), (1, YYY.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(0.), dx0=refTraj.getDX(at))
                     ydAllZeroRel = pendSys(YYY, np.tile(narray([[0.]]), (1, YYY.shape[1])), 0, mode=[3, 3], x0=refTraj.getX(0.), dx0=refTraj.getDX(at))
@@ -150,17 +165,49 @@ if __name__ == "__main__":
                     VdOptAll = np.minimum(VdMinAll,VdMaxAll).squeeze()
                     idxVdOptAllOk = VdOptAll<=0.
                     pltDict['ax'].plot(YYY[0,idxVdOptAllOk], YYY[1,idxVdOptAllOk], '.g')
+
+                    # Print the differences
+                    ff,aa = plot.plt.subplots(1,3)
+                    aa[1].set_title(f"{at}")
+                    for aaa in aa:
+                        lyapF.plot(aaa, at, refTraj.getX(at), {'faceAlpha':0.})
+
+                    # (Re)Compute all
+                    # Get optimal control
+                    thisCtrlDict = lyapF.getCtrlDict(at, returnZone=False)
+                    UU = pendSys.ctrlInput.getUopt(at, YYY-refTraj.getX(at), thisCtrlDict, pendSys.maxTaylorDeg)
+                    # Use this input for all calculations
+                    ydAllOrigin = pendSys(YYY, UU, at, mode=[0, 0], restrictInput=False, x0=refTraj.getX(at), dx0=refTraj.getDX(at))
+                    # Strict
+                    pendSys.strictEval = True
+                    ydAllStrict = pendSys(YYY, UU, at, mode=[3, 3], restrictInput=False, x0=refTraj.getX(at), dx0=refTraj.getDX(at))
+                    pendSys.strictEval = False
+                    ydAllNonStrict = pendSys(YYY, UU, at, mode=[3, 3], restrictInput=False, x0=refTraj.getX(at), dx0=refTraj.getDX(at))
+
+                    aa[0].streamplot(xxx,yyy,ydAllOrigin[0,:].reshape((nPtPlot,nPtPlot)), ydAllOrigin[1,:].reshape((nPtPlot,nPtPlot)), color='b')
+                    aa[1].streamplot(xxx,yyy,ydAllStrict[0,:].reshape((nPtPlot,nPtPlot)), ydAllStrict[1,:].reshape((nPtPlot,nPtPlot)), color='b')
+                    aa[2].streamplot(xxx,yyy,ydAllNonStrict[0,:].reshape((nPtPlot,nPtPlot))-ydAllStrict[0,:].reshape((nPtPlot,nPtPlot)), ydAllNonStrict[1,:].reshape((nPtPlot,nPtPlot))-ydAllStrict[1,:].reshape((nPtPlot,nPtPlot)), color='b')
+
+
+
+                    if not np.allclose(ydAllNonStrict, ydAllStrict):
+                        printRelErr(ydAllNonStrict, ydAllStrict)
                     
                     # Assert
                     if not np.allclose(VdMin, VdMinCtrl):
+                        printRelErr(VdMin, VdMinCtrl)
                         print("nope")
                     if not np.allclose(VdMax, VdMaxCtrl):
+                        printRelErr(VdMax, VdMaxCtrl)
                         print("nope")
                     if not np.allclose(VdMinAll.squeeze(), VdMinAllCtrl.squeeze()):
+                        printRelErr(VdMinAll, VdMinAllCtrl)
                         print('nope')
                     if not np.allclose(VdMaxAll.squeeze(), VdMaxAllCtrl.squeeze()):
+                        printRelErr(VdMaxAll, VdMaxAllCtrl)
                         print('nope')
                     if not np.allclose(VdZeroAll.squeeze(), VdZeroAllCtrl.squeeze()):
+                        printRelErr(VdZeroAll, VdZeroAllCtrl)
                         print('nope')
 
                     

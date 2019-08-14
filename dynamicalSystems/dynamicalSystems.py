@@ -295,9 +295,22 @@ class secondOrderSys(dynamicalSystem):
         nmultiply(MiGTaylor,self.inversionTaylor.weightingMonoms3d[nMonomsOffset_:nMonomsOffset_+nMonomsTaylor_, :, :],out=MiGTaylor)
         #Done
         return MifTaylor, MiGTaylor
-    
+
+    def ensureShape(self, MG:"M or G", thisShape:"shape"):
+        # Take care of certain particularities of lambdify
+        try:
+            # If the mass matrix is input dependent or x.shape[1]==1 it can be correctly reshaped
+            MG.resize(thisShape)  # [nqv,nqv,nPt]
+        except:
+            # If the mass matrix is not input dependent and there are several points -> tile
+            assert MG.size == thisShape[0]*thisShape[1]
+            MG.resize((thisShape[0], thisShape[1], 1))
+            MG = np.tile(MG, (1, 1, thisShape[2]))
+        return MG
+
     def computeQddInv(self, M:"Mass matrices", fg:"RHS dynamics"):
         # Compute - system dynamics
+        M = self.ensureShape(M, (self.nqv, self.nqv, fg.shape[1]))
         if self.nqv == 1:
             # special case: only one degree of freedom
             xdd = np.divide(fg.squeeze(), M.squeeze()).reshape((1, fg.shape[1]))
@@ -323,7 +336,6 @@ class secondOrderSys(dynamicalSystem):
         xLi = [x[i, :] for i in range(self.nq)]
         M = self.pDerivM.M0_eval[0](*xLi)  # [nqv,nqv,nPt] or [nqv,nqv]
         f = self.pDerivF.f0_eval(*xLi)  # [nqv,nPt] or [nqv,1]
-        M.resize((self.nqv, self.nqv, x.shape[1]))  # [nqv,nqv,nPt]
         f.resize((self.nqv, x.shape[1]))
         return self.computeQddInv(M, f)
     
@@ -394,8 +406,9 @@ class secondOrderSys(dynamicalSystem):
         M = self.pDerivM.M0_eval[0](*xLi)  # [nqv,nqv,nPt] or [nqv,nqv]
         G = self.pDerivG.G0_eval[0](*xLi)  # [nqv,nu,nPt] or [nqv,nu]
         # Ensure dimensions
-        M.resize((self.nqv, self.nqv, x.shape[1]))
-        G.resize((self.nqv, self.nu, x.shape[1]))
+        # Mass matrix dim ensured by computeQddInv
+        # Same issue for G
+        G = self.ensureShape(G, (self.nqv, self.nu, x.shape[1]))
         # Compute
         g = neinsum("ijk,jk->ik", G, u)
         
@@ -454,8 +467,6 @@ class secondOrderSys(dynamicalSystem):
         :return:
         """
 
-        assert not(0 in mode), "TBD"
-
         if __debug__:
             assert x.shape[0] == self.nq
             assert all([(aMode >= 0) and (aMode <=self.maxTaylorDeg) for aMode in mode ])
@@ -480,9 +491,7 @@ class secondOrderSys(dynamicalSystem):
             assert u.shape[0] == self.nu
         
         xd = np.zeros_like(x)
-        if not self.strictEval:
-            # Explicitely take into account that the velocities stays the same. Automatically done with taylor expansion
-            xd[:self.nqp, :] = x[self.nqp:, :]
+        xd[:self.nqp, :] = x[self.nqp:, :]
 
         #Speedup stuff
         taylorExp = [None,None]
@@ -490,17 +499,17 @@ class secondOrderSys(dynamicalSystem):
         
         # system dynamics
         if mode[0] == 0:
-            xd[self.nq:,:] += self.compDynSysOrig(x)
+            xd[self.nqp:,:] += self.compDynSysOrig(x)
         elif mode[0] <= self.maxTaylorDeg:
             if self.strictEval:
                 deltaz = self.repr.evalAllMonoms(x-x0, max(mode)) # monomial vector in derivation variables
                 xd = self.compDynSysPolyStrict(deltaz, x0, mode[0], taylorExp=taylorExp) #Override
             else:
-                xd[self.nq:, :] += self.compDynSysPolyNonStrict(x, x0, mode[0])
+                xd[self.nqp:, :] += self.compDynSysPolyNonStrict(x, x0, mode[0]) #Keep base velocity
 
         # input dynamics
         if mode[1] == 0:
-            xd[self.nq:,:] += self.compInputSysOrig(x, u)
+            xd[self.nqp:,:] += self.compInputSysOrig(x, u)
         else:
             if self.strictEval:
                 if mode[0] != mode[1]:
@@ -508,7 +517,7 @@ class secondOrderSys(dynamicalSystem):
                 deltaz = self.repr.evalAllMonoms(x-x0, mode[1]) if deltaz is None else deltaz # monomial vector in derivation variables
                 xd += self.compInputSysPolyStrict(deltaz, x0, u, mode[1],taylorExp=taylorExp)
             else:
-                xd[self.nq:, :] += self.compInputSysPolyNonStrict(x, x0, u, mode[1])
+                xd[self.nqp:, :] += self.compInputSysPolyNonStrict(x, x0, u, mode[1])
             
         if dx0 is not None:
             # Adjust for reference

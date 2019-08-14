@@ -392,14 +392,45 @@ class boxInputCstrLFBG(boxInputCstr):
                     ctrlCoeffs[:, self.repr.varNumsPerDeg[1]] = K
                 else:
                     ctrlCoeffs = K
+            elif aDeg == 0:
+                assert 0
             else:
                 raise NotImplementedError
         else:
             raise NotImplementedError
             
         return ctrlCoeffs
-            
-        
+
+        # TODO Merge with some other function
+    def getUopt(self, t, deltax, ctrlDict, deg):
+
+        """
+        Compute optimal control input based on given input dynamics
+        :param deltax:
+        :param P:
+        :param gTaylor:
+        :return:
+        """
+
+        umin,umax = self.getMinU(t), self.getMaxU(t)
+
+        u = nempty((self.nu, deltax.shape[1]))
+        # deltax : derivation variable
+        deltaz = self.repr.evalAllMonoms(deltax, deg)
+        nMonoms = len(self.repr.varNumsUpToDeg[deg])
+        # Compute influence
+        for i in range(self.nu):
+            useMin = (ndot(ctrlDict[i][1][:nMonoms].reshape((1,nMonoms)), deltaz)>=0.).reshape((deltaz.shape[1],))
+            u[i, useMin] = umin
+            u[i, np.logical_not(useMin)] = umax
+
+        return u
+
+
+
+
+
+
             
         
     
