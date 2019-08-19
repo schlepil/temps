@@ -1,7 +1,7 @@
 from coreUtils import *
 from polynomial import *
 from relaxations.constraints import constraint
-
+absTolCstr=1E-6
 # Implements base relaxations and constraints
 
 
@@ -262,7 +262,6 @@ class lasserreConstraint(constraint):
 
         if simpleEval:
             res = (self.poly.eval2(z).reshape((-1,))>atol).astype(np.bool_)
-            print('wozaizhe',self.poly.eval2(z).reshape((-1,)))
         else:
             if z.shape[0] == self.repr.nDims:
                 z = self.repr.evalAllMonoms(z)

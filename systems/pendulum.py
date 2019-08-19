@@ -10,8 +10,8 @@ from polynomial import polynomialRepr
 
 # Zero is stable
 
-def getUlims():
-    return -2.,2. #Usually -2,2
+def getUlims(Ul=-2.,Uu=2.):
+    return Ul,Uu
 
 def getSys(repr: polynomialRepr, fileName:str=None):
     ##Taken from Drake - RobotLocomotion @ CSAIL
@@ -27,6 +27,7 @@ def getSys(repr: polynomialRepr, fileName:str=None):
 
         # Constraints -> It is important the keep a certain margin between the reference
         # input and the input limits to allow for stabilitzation
+        uLim = [-10,10]
 
         # Get the state-space variables
         u = sy.symbols('u')

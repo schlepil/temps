@@ -122,9 +122,6 @@ def plotEllipse(ax, pos, P, alpha, plotAx=np.array([0, 1]), deltaPos=None, color
         Pt = P[np.ix_(plotAx, plotAx)]
     else:
         assert 0, "No valid pltStyle for ellip given"
-    #print('Pt',Pt)
-    #print('pos',pos)
-    #print('pos[plotAx]',pos[plotAx])
     e = getEllipse(pos[plotAx], Pt, alpha)
     e.set_linewidth(1.)
     e.set_edgecolor(color[:3]+[1.])
@@ -188,7 +185,6 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
     
     # __call__(self, x:np.ndarray, u:np.ndarray, mode:str='OO', x0:np.ndarray=None):
     VV = funnel.dynSys(XX, UU, t=t,mode=opts_['modeDyn'], x0=x0, dx0=dx0)
-    print('VV',VV)
     streamColor = getStreamColor(funnel.lyapFunc, XX,VV,t,opts_)
     
     thisStream = aa.streamplot(xx,yy,VV[0,:].reshape((opts_['nGrid'],opts_['nGrid'])),VV[1,:].reshape((opts_['nGrid'],opts_['nGrid'])), color=streamColor, cmap=opts_['cmap'])
@@ -305,7 +301,10 @@ def plot2dProof(funnel:fn.distributedFunnel, t=0.0, opts={}):
     return allDict
 
 
-
+def plot2DCONV_and_2Dproof(conv={},proof={}):
+   for i in range(len(proof)):
+      conv['ax'].__add__(proof[i]['ax'])
+   return conv
 
 
 
