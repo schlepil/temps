@@ -891,8 +891,10 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 Pj=self.P[j]
                 for i in range(gTaylor.shape[0]):
                      PG.append( ndot(Pj, gTaylor[i,:,:]))  # gTaylor is g[monom,i,j]
-            PG=narray(PG).reshape(self.P.shape[0],-1)
+            PG=narray(PG).reshape(gTaylor.shape[0],self.P.shape[0],gTaylor.shape[1])
             # PG = nmatmul(self.P, gTaylor)# gTaylor is g[monom,i,j]
+            which = np.arange(0, self.nu+1)
+            coeffsOut = nzeros((len(which), self.repr.nMonoms), dtype=nfloat)
             compPolyCstr_Numba(self.repr.varNumsPerDeg[1], PG, self.repr.varNumsUpToDeg[taylorDeg], which, self.idxMat, coeffsOut)  # Expects coeffs to be zero
         
         return coeffsOut

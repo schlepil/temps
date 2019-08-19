@@ -160,7 +160,7 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
              'faceAlpha':0.0, 'linestyle':'-',
              'plotAx':np.array([0, 1]),
              'cmap':'viridis', 'colorStreams':'ang', 'nGrid':200, 'cbar':True,
-             'modeCtrl':(2,nones((funnel.dynSys.nu,), dtype=nint)),
+             'modeCtrl':(1,nones((funnel.dynSys.nu,), dtype=nint)),
              'modeDyn':[3,3]}
     opts_.update(opts)
     
