@@ -1074,28 +1074,32 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             # Decide what to do for each critical point
             yPlaneDist = ndot(thisY.T, PG0n).reshape((nu_,))
         
-            minDist =.9 # Has to be always strictly smaller than one otherwise linear control prob becomes infeasible  # np.Inf
+            radius =.6 # Has to be always strictly smaller than one otherwise linear control prob becomes infeasible  # np.Inf
+            allScaleFacK = {} # 1./(maximal distance of a point to the separation plane) Only generated for the linear inputs
         
             for i, iDist in enumerate(yPlaneDist):
                 if iDist < -opts['minDistToSep']:
                     # Negative -> use maximal control input
                     thisCtrlType[i, 0] = 1
-                    minDist = min(minDist, abs(iDist)) # Ensure that limiting sphere and control separation surface do not intersect
+                    radius = min(radius, abs(iDist)) # Ensure that limiting sphere and control separation surface do not intersect
                 elif iDist < opts['minDistToSep']:
                     # Linear control as iDist is self.opts['minDistToSep'] <= iDist < self.opts['minDistToSep']
                     thisCtrlType[i, 0] = 2
+                    allScaleFacK[i] = None
                 else:
                     # Large positive -> use minimal control input
                     thisCtrlType[i, 0] = -1
-                    minDist = min(minDist, abs(iDist)) # Ensure that limiting sphere and control separation surface do not intersect
+                    radius = min(radius, abs(iDist)) # Ensure that limiting sphere and control separation surface do not intersect
                 
             # Any point within the separation sphere can at most have the distance 2*minDist to any of the
             # separating hyperplanes;
             # Therefore we can safely scale the linear feedback gain by min(1., 1./(2*minDist))
-            thisProb['probDict']["scaleFacK"] = max(1., 1./(2.*minDist))
+            for aKey in allScaleFacK.keys():
+                allScaleFacK[aKey] = 1./(abs(yPlaneDist[aKey]) + radius)
+            thisProb['probDict']["scaleFacK"] = allScaleFacK # max(1., 1./(2.*radius)) #TODO test
             # Remember
             thisProb['probDict']['u'] = thisCtrlType.copy()
-            thisProb['probDict']['minDist'] = minDist
+            thisProb['probDict']['radius'] = radius
             thisProb['probDict']['center'] = thisY.copy()
             
             # Rescale the control dict
@@ -1113,7 +1117,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             thisProb['obj'] = -thisCoeffs  # Inverse sign to maximize divergence <-> minimize convergence
             
             # get the sphere
-            thisPoly.setEllipsoidalConstraint(thisY, minDist)
+            thisPoly.setEllipsoidalConstraint(thisY, radius)
         
             # Confine the current problem to the sphere
             thisProb['probDict']['nCstrNDegType'].append((2, 's'))
@@ -1432,7 +1436,8 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         return bool(thisPoly.eval2(zStarOld) >= -coreOptions.absTolCstr)
 
     def createBaseProb_(self, opts):
-        return {'probDict':{'solver':opts['solver'], 'minDist':1., 'scaleFacK':1., 'dimsNDeg':(self.dynSys.nq, self.repr.maxDeg), 'nCstrNDegType':[]}, 'cstr':[]}
+        return {'probDict':{'solver':opts['solver'], 'radius':1., 'scaleFacK':1., 'dimsNDeg':(self.dynSys.nq, self.repr.maxDeg), 'nCstrNDegType':[]},
+                'cstr':[]}
 
     def getLinProb_(self, ctrlDict, opts):
         # Only the linear control prob has to be created

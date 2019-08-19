@@ -35,9 +35,21 @@ def recursiveExclusiveUpdate(dict0:dict, dict1:dict):
     return None
 
 def rescaleLinCtrlDict(ctrlDict:dict, scale=1., doDeepCopy=True):
+    """
+    if scale is a scalar -> rescale all linear control laws with this
+    if scale is a array -> rescale individually
+    :param ctrlDict:
+    :param scale:
+    :param doDeepCopy:
+    :return:
+    """
+
 
     if doDeepCopy:
         ctrlDict = dp(ctrlDict)
+
+    isArrayOrDict = hasattr(scale, "__getitem__")
+
         
     for aInKey, aCoeffDict in ctrlDict.items():
         try:
@@ -45,7 +57,10 @@ def rescaleLinCtrlDict(ctrlDict:dict, scale=1., doDeepCopy=True):
             # Attention only correct of 'projection' is 'sphere'
             int(aInKey)  # Ensure that it is dynamics
             assert isinstance(aCoeffDict, dict)
-            aCoeffDict[2] *= scale
+            if isArrayOrDict:
+                aCoeffDict[2] *= scale[aInKey]
+            else:
+                aCoeffDict[2] *= scale
         except (KeyError, AssertionError, TypeError, ValueError):
             if __debug__:
                 print(f"Passed on {aInKey} for rescaling")
