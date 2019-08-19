@@ -36,6 +36,7 @@ def getWorstCritPointsPerSubtree(aSubProof, oldResultsLin, delNonCrit=False, ret
     root2LeafNodesDict = {}
     # oldResults[k][i][j] with k being the time-point -> oldProof last == new proof first
     worstVal = np.Inf
+    bestVal = -np.Inf
     for aSubProofList in aSubProof:
         for aProof in aSubProofList:
             if aProof is None:
@@ -62,6 +63,8 @@ def getWorstCritPointsPerSubtree(aSubProof, oldResultsLin, delNonCrit=False, ret
                     root2LeafNodesDict[(ip, jp)] = aProof
             # store the val
             worstVal = min(worstVal, aProof['obj'])
+            bestVal = max(bestVal, aProof['obj'])
+
     
     if delNonCrit:
         # Remove 'xCrit' and 'yCrit' form critPoints of not the one chosen for the subtree
@@ -75,7 +78,7 @@ def getWorstCritPointsPerSubtree(aSubProof, oldResultsLin, delNonCrit=False, ret
                     aProof['critPoints']['yCrit'] = None
         
     if retVal:
-        return root2LeafNodesDict, worstVal
+        return root2LeafNodesDict, (worstVal, bestVal)
     else:
         return root2LeafNodesDict
 
@@ -188,7 +191,8 @@ class localFixedPropagator(propagators):
         tSubSteps = np.hstack(tSubSteps)
     
         # Search for "root-nodes"
-        root2LeafNodesDict = getWorstCritPointsPerSubtree(oldResults[0], oldResultsLin, True)
+        root2LeafNodesDict = getWorstCritPointsPerSubtree(oldResults[0], oldResultsLin, delNonCrit=True, retVal=False)
+
     
         # Now propagate them correctly
         # Loop over timepoints
@@ -200,8 +204,10 @@ class localFixedPropagator(propagators):
         localSolveDict = {'fun':None, 'x0':None, 'constraints':{'type':'ineq', 'fun':None}, 'method':'COBYLA', 'tol':0.9*coreOptions.absTolCstr, 'options':{}}
         # Check if converging
         isConverging = False
+        # Store the worst convergence to properly order the exploration
+        bestVal = -np.Inf
         worstVal = np.Inf
-        for at in reversed(tSubSteps):
+        for i,at in enumerate(reversed(tSubSteps)):
             if not isConverging:
                 break
 
@@ -222,8 +228,8 @@ class localFixedPropagator(propagators):
                     res = relaxations.localSolve(**localSolveDict)
                     # Post-Proc
                     isConverging &= self.postProcLocalSol(res, aProof, ctrlDict, funnelInstance.repr, oldResultsLin, nCritPoint=i)
-                    # Store to scale
-                    worstVal = min(worstVal, aProof['obj'])
+                    bestVal = bestVal if bestVal>res.fun else res.fun
+                    worstVal = worstVal if worstVal<res.fun else res.fun
             
             # Build up new dict
             if at in tSteps:
@@ -243,8 +249,14 @@ class localFixedPropagator(propagators):
                             newResultsLin.append(aProof['obj'])
                             idxJ += 1
                             idxResLinNew += 1
+        # We know know what is the order of them
+        deltaVal = bestVal-worstVal+coreOptions.numericEpsPos # add eps incase that there is only one point -> delta = 0.
+        for aSubProof in newResults:
+            for aSubProofList in aSubProof:
+                for aProof in aSubProofList:
+                    aProof['probDict']['orderPenalty'] = 0.5*(aProof['obj']-bestVal)/deltaVal # Add 0.5 so that order by specific input is preserved
     
-        return isConverging, newResults, newResultsLin
+        return narray(isConverging, dtype=nbool), newResults, newResultsLin
     
     def doPropagate(self,tSteps,funnelInstance:"funnels.distributedFunnel", oldResults, oldResultsLin, interStepsPropCrit:int=5):
         """
@@ -290,8 +302,8 @@ class localFixedPropagator(propagators):
             self.thisCvxProb_ = thisCvxProb = relaxations.convexProg(funnelInstance.repr)
         
         # Get all critical leaves
-        root2LeafNodesList = [ getWorstCritPointsPerSubtree(aSubProofList, oldResultsLin, delNonCrit=False) for aSubProofList in oldResults ]
-        
+        root2LeafNodesList = [getWorstCritPointsPerSubtree(aSubProofList, oldResultsLin, delNonCrit=False, retVal=False) for aSubProofList in oldResults]
+
         # Create all alpha steps
         allAlphas = np.linspace(alphaFromTo[0], alphaFromTo[1], interStepsPropCrit, endpoint=True)
 
@@ -301,6 +313,9 @@ class localFixedPropagator(propagators):
         isConverging = [True for _ in range(interStepsPropCrit)]
 
         # Loop through them
+        bestVal = -np.Inf
+        worstVal = np.Inf
+
         for i, aAlpha in enumerate(allAlphas):
             # -> Set this alpha
             funnelInstance.lyapFunc.setAlpha(aAlpha, 0)
@@ -328,7 +343,12 @@ class localFixedPropagator(propagators):
                         res = relaxations.localSolve(**localSolveDict)
                         # Post-Proc
                         isConverging[i] &= self.postProcLocalSol(res, aProof, ctrlDict, funnelInstance.repr, oldResultsLin)
-        
+                        # Save
+                        worstVal = min(worstVal, res.fun) # Replace with tenary
+                        bestVal = max(bestVal, res.fun)
+
+        deltaVal = bestVal - worstVal + coreOptions.numericEpsPos
+
         newResultsLin = []
         newResults = [[[]] for _ in tSteps]
         idxResLinNew = 0
@@ -342,11 +362,12 @@ class localFixedPropagator(propagators):
                     aProof['probDict']['resPlacement'] = [idxK, idxI, idxJ]
                     aProof['probDict']['resPlacementLin'] = idxResLinNew
                     aProof['probDict']['resPlacementParent'] = [] # dbg None
+                    aProof['probDict']['orderPenalty'] = 0.5*(aProof['obj']-bestVal)/deltaVal # Add 0.5 so that order by specific input is preserved
                     newResultsLin.append(aProof['obj'])
                     idxJ += 1
                     idxResLinNew += 1
         
-        return (isConverging, allAlphas), newResults, newResultsLin
+        return (narray(isConverging, dtype=nbool), allAlphas), newResults, newResultsLin
         
     
     def doRescale(self,tSteps,funnelInstance:"funnels.distributedFunnel", oldResults, oldResultsLin, allTaylorApprox, alphaFromTo, interStepsPropCrit:int=5):

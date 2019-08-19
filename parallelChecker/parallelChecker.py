@@ -51,10 +51,7 @@ if waitingListType_ == 'heap':
             else:
                 #Use the (negated) sum over the control indices -> the higher the indices the more specific the problem -> the higher the chance to fail
                 value = float(-nsum(args[0]['probDict']['u']))
-                try:
-                    value += args[0]['probDict']['orderPenalty']
-                except KeyError:
-                    pass
+                value += args[0]['probDict'].get('orderPenalty', 0.)
                 heappush(self.container, heapStoreClass((value, args[0])))
         
         def pop(self):

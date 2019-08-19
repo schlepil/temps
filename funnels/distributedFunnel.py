@@ -40,7 +40,8 @@ class distributedFunnel:
                      'optsEvol':{
                                     'tDeltaMax':.1
                                 },
-                     'storeProof':True
+                     'storeProof':True,
+                     'useAllAlpha':True
                      }
         recursiveExclusiveUpdate(self.opts, opts)
 
@@ -661,14 +662,31 @@ class distributedFunnel:
                 
                 #while self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                 while True:
-                    # TODO-> use allAlpha info
                     (critIsConverging, allAlphas), resultsProp, resultsLinProp = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
-                    critIsConverging = critIsConverging[-1]
+                    # First critical point is "original" so the convergence should be ensured
+                    assert critIsConverging[0], "Something is wrong with the local solve proof"
+
+                    # Heuristic: Use the smallest non-converging (with respect to critical points
+                    if ((self.opts['useAllAlphas']) and (critIsConverging[-1]==False)) :
+                        idx = np.flatnonzero(critIsConverging)[-1] + 1  # Last converging + 1 = First non-converging
+                        alphaU = allAlphas(idx)
+                        lyapFunc_.setAlpha(alphaU, 0, returnInfo=False)
+                        critIsConverging = critIsConverging[idx]
+                        if __debug__:
+                            assert critIsConverging == False, "idx got it wrong"
+                            # Test
+                            isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp),
+                                                                                         allTaylorApprox)  # Change to store all in order to exploit the last proof
+                            assert isConverging == False, "Local proof contradicts global proof"
+                    else:
+                        critIsConverging = critIsConverging[-1] # Simply use last
+
                     if critIsConverging:
                         isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp), allTaylorApprox) #Change to store all in order to exploit the last proof
                         if isConverging:
                             proofDataLargest = (isConverging, results, resultsLin, timePoints)  # Store last positive
                     else:
+                        # The propagations of critical points found non-stabilizable points
                         isConverging = False
                     if not isConverging:
                         # Break if first not converging size is found
@@ -686,7 +704,25 @@ class distributedFunnel:
                 #while not self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                 while True:
                     (critIsConverging, allAlphas), resultsProp, resultsLinProp = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
-                    critIsConverging = critIsConverging[-1] # Last is convergence for new alpha
+                    # First critical point is "original" so the DI-convergence should be ensured
+                    assert critIsConverging[0] == False, "Something is wrong with the local solve proof"
+
+                    # Heuristic: Use the largest converging (with respect to critical points)
+                    if ((self.opts['useAllAlphas']) and (critIsConverging[-1])) :
+                        idx = np.flatnonzero(critIsConverging)[0]  # First converging -> largest with respect to crit points
+                        alphaL = allAlphas(idx)
+                        lyapFunc_.setAlpha(alphaL, 0, returnInfo=False)
+                        critIsConverging = critIsConverging[idx]
+                        if __debug__:
+                            assert critIsConverginge, "idx got it wrong"
+                            # Test
+                            isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp),
+                                                                                         allTaylorApprox)  # Change to store all in order to exploit the last proof
+                            if isConverging != critIsConverging:
+                                raise UserWarning("Local proof gives different convergence than global proof -> Heuristic suboptimal")
+                    else:
+                        critIsConverging = critIsConverging[-1] # Simply use last -> Here smallest
+
                     if critIsConverging:
                         isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp), allTaylorApprox) #Change to store all in order to exploit the last proof
                         if isConverging:
@@ -712,7 +748,19 @@ class distributedFunnel:
                 
                 #if self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                 (critIsConverging, allAlphas), resultsProp, resultsLinProp = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
-                critIsConverging = critIsConverging[-1] # Last is convergence for new alpha
+
+                if ((self.opts['useAllAlphas']) and (critIsConverging[0]!=critIsConverging[-1])): #Can only be used if there is a zero-crossing
+                    idxChange = np.flatnonzero(critIsConverging[:-1] != critIsConverging[1:]) #Get the index
+                    # Use the non-converging side to avoid global opt
+                    if critIsConverging[idxChange]:
+                        idxChange += 1
+                    alpha = allAlphas[idxChange]
+                    critIsConverging = critIsConverging[idxChange]
+                    assert critIsConverging == False, "idx got sth wrong"
+                else:
+                    critIsConverging = critIsConverging[-1]
+
+
                 if critIsConverging:
                     isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp), allTaylorApprox) #Change to store all in order to exploit the last proof
                 else:
@@ -739,6 +787,4 @@ class distributedFunnel:
         return None
     
 
-# TODO: rank tSteps according to their importance
 # TODO: also propagate critical points of linear control
-# TODO: Instead of using simply bijection search, use the information provided by allAlphas
