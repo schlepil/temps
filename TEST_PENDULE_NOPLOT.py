@@ -70,19 +70,21 @@ if __name__ == "__main__":
   #P=np.array([[1.,0.],[0.,1.]])
   
   myFunnel.compute(0.0, 0.001, (Pinit, 1.))
-  print('hei')
+
   if coreOptions.doPlot:
-    opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
-               'faceAlpha':0.0, 'linestyle':'-',
-               'plotAx':np.array([0, 1]),
-               'cmap':'viridis', 'colorStreams':'ang', 'nGrid':200, 'cbar':True,
-               'modeDyn':[0,0]}
+    opts_ = {'pltStyle': 'proj', 'linewidth': 1., 'color': [0.0, 0.0, 1.0, 1.0],
+             'faceAlpha': 0.0, 'linestyle': '-',
+             'plotAx': np.array([0, 1]),
+             'cmap': 'viridis', 'colorStreams': 'ang', 'nGrid': 200, 'cbar': True,
+             'modeCtrl': (2, nones((myFunnel.dynSys.nu,), dtype=nint)),
+             'modeDyn': [3, 3]}
     plot.plot2dConv(myFunnel, 0.0)
-    plot.plot2dProof(myFunnel, 0.0)
+    plot.plot2dConv(myFunnel, 0.0,opts=opts_)
+    # plot.plot2dProof(myFunnel, 0.0)
     #
-    plot.plot2dConv(myFunnel, 0.05)
-    plot.plot2dProof(myFunnel, 0.05)
-    print('hello')
+    # plot.plot2dConv(myFunnel, 0.05)
+    # plot.plot2dProof(myFunnel, 0.05)
+
     myFunnel.distributor.terminate()
   
     print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")

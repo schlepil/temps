@@ -886,7 +886,15 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         else:
             # Return full matrix, each row corresponds to the coefficients of one polynomial constraint (for all monomials in the representation)
             # Due the matrix multiplication of P and each g
-            PG = nmatmul(self.P, gTaylor)  # gTaylor is g[monom,i,j]
+            PG=[]
+            for j in range(self.P.shape[0]):
+                Pj=self.P[j]
+                for i in range(gTaylor.shape[0]):
+                     PG.append( ndot(Pj, gTaylor[i,:,:]))  # gTaylor is g[monom,i,j]
+            PG=narray(PG).reshape(gTaylor.shape[0],self.P.shape[0],gTaylor.shape[1])
+            # PG = nmatmul(self.P, gTaylor)# gTaylor is g[monom,i,j]
+            which = np.arange(0, self.nu+1)
+            coeffsOut = nzeros((len(which), self.repr.nMonoms), dtype=nfloat)
             compPolyCstr_Numba(self.repr.varNumsPerDeg[1], PG, self.repr.varNumsUpToDeg[taylorDeg], which, self.idxMat, coeffsOut)  # Expects coeffs to be zero
         
         return coeffsOut
@@ -904,7 +912,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         if zone is None:
             zone = self.getZone(t)
 
-        assert mode[0] == 1, 'Only linear separation is currently implemented'
+        # assert mode[0] == 1, 'Only linear separation is currently implemented'
 
         #ctrlCoeffs_, ctrlMonoms_ = self.dynSys.ctrlInput.getU(mode[1], t, monomOut=True)
         ctrlCoeffs_, ctrlMonoms_ = self.dynSys.ctrlInput.getU2(mode[1], t, zone=zone, gTaylor=gTaylor, x0=x0, monomOut=True, uRef=uRef)
