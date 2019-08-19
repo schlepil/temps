@@ -74,7 +74,9 @@ class omplTrajectory(referenceTrajectory):
         self.dynF = dynF # It is better to compute the derivative using the interpolated position and control input
 
         self.xrefI = sp.interpolate.PchipInterpolator(self.t, self.X, axis=1)
-        self.urefI = sp.interpolate.PchipInterpolator(self.t, self.U, axis=1)
+
+        # OMPL uses piecewise constant inputs, if trajectory was preprocessed other interpolators can be used
+        # self.urefI = sp.interpolate.PchipInterpolator(self.t, self.U, axis=1)
 
     def getU(self,t:float, doRestrict:bool=True):
         t=self.checkTime(t, doRestrict)

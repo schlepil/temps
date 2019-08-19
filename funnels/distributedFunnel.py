@@ -41,7 +41,7 @@ class distributedFunnel:
                                     'tDeltaMax':.1
                                 },
                      'storeProof':True,
-                     'useAllAlpha':True
+                     'useAllAlphas':True
                      }
         recursiveExclusiveUpdate(self.opts, opts)
 
@@ -669,7 +669,7 @@ class distributedFunnel:
                     # Heuristic: Use the smallest non-converging (with respect to critical points
                     if ((self.opts['useAllAlphas']) and (critIsConverging[-1]==False)) :
                         idx = np.flatnonzero(critIsConverging)[-1] + 1  # Last converging + 1 = First non-converging
-                        alphaU = allAlphas(idx)
+                        alphaU = allAlphas[idx]
                         lyapFunc_.setAlpha(alphaU, 0, returnInfo=False)
                         critIsConverging = critIsConverging[idx]
                         if __debug__:

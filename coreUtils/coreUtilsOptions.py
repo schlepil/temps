@@ -8,3 +8,5 @@ doPlot = False
 
 absTolCstr = 1.e-6
 numericEpsPos = -1.e-6
+
+usePenaltyOrdering = True # Order proofs with respect to "last" result
