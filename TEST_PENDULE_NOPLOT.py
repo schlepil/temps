@@ -70,7 +70,7 @@ if __name__ == "__main__":
   #P=np.array([[1.,0.],[0.,1.]])
   
   myFunnel.compute(0.0, 0.001, (Pinit, 1.))
-  print('hei')
+
   if coreOptions.doPlot:
     opts_ = {'pltStyle':'proj', 'linewidth':1., 'color':[0.0, 0.0, 1.0, 1.0],
                'faceAlpha':0.0, 'linestyle':'-',
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     #
     plot.plot2dConv(myFunnel, 0.05)
     plot.plot2dProof(myFunnel, 0.05)
-    print('hello')
+
     myFunnel.distributor.terminate()
   
     print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")
