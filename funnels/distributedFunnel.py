@@ -576,7 +576,7 @@ class distributedFunnel:
         assert doesConverge
         
         for k, at in enumerate(timePoints):
-            thisSubProof =  {'t':at, 'proofs':[]}
+            thisSubProof =  {'t':at, 'proofs':[], 'allResults':dp(results)}
             for aSubList in results[k]:
                 for aProb in aSubList: # To each crtitical point a list is associated
                     if np.isfinite( resultsLin[aProb['probDict']['resPlacementLin']]):

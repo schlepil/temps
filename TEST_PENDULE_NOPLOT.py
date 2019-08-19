@@ -76,7 +76,7 @@ if __name__ == "__main__":
              'faceAlpha': 0.0, 'linestyle': '-',
              'plotAx': np.array([0, 1]),
              'cmap': 'viridis', 'colorStreams': 'ang', 'nGrid': 200, 'cbar': True,
-             'modeCtrl': (2, nones((myFunnel.dynSys.nu,), dtype=nint)),
+             'modeCtrl': (1, 2*nones((myFunnel.dynSys.nu,), dtype=nint)),
              'modeDyn': [3, 3]}
     plot.plot2dConv(myFunnel, 0.0)
     plot.plot2dConv(myFunnel, 0.0,opts=opts_)
