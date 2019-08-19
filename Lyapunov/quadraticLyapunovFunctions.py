@@ -1104,7 +1104,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             
             # Rescale the control dict
             ctrlDict = rescaleLinCtrlDict(ctrlDictIn, thisProb['probDict']["scaleFacK"], True) #Rescale a deepcopy
-            
+
             # Now we have the necessary information and we can construct the actual problem
             thisCoeffs = ctrlDict[-1][0].copy()  # Objective resulting from system dynamics
             if __debug__:
@@ -1500,6 +1500,9 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 aProof['ySol'] = self.ellip2Sphere(at, aProof['critPoints']['yCrit']) # TODO this is really fucked up with the inconsistency between x and y
                 aProof['origProb'] = thisLinProb
                 newProbList = self.analyzeSolSphereLinCtrl(aProof, aCtrlDict, opts)
+                # Copy the penalty of the original proof
+                for aProb in newProbList:
+                    aProb['probDict']['orderPenalty'] = aProof['probDict']['orderPenalty']
                 # Add all except first which is the linear prob
                 probList.extend(newProbList[1:])
         

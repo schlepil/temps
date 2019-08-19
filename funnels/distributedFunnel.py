@@ -606,6 +606,7 @@ class distributedFunnel:
         """
 
         lyapFunc_ = self.lyapFunc
+        storeProof__ = self.opts['storeProof']
 
         assert tStart>=self.traj.tLims[0]
         assert tStop<=self.traj.tLims[1]
@@ -657,7 +658,8 @@ class distributedFunnel:
             proofDataLargest = None
 
             if isConverging:
-                proofDataLargest = dp((isConverging, results, resultsLin, timePoints)) #Store last positive #TODO avoid dp
+                if storeProof__:
+                    proofDataLargest = dp((isConverging, results, resultsLin, timePoints)) #Store last positive #TODO avoid dp
                 # Make the zone bigger to find an upper bound before using dichotomic search
                 alphaL = lyapFunc_.getAlpha(0)
                 alphaU = 2.*alphaL
@@ -686,7 +688,7 @@ class distributedFunnel:
 
                     if critIsConverging:
                         isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp), allTaylorApprox) #Change to store all in order to exploit the last proof
-                        if isConverging:
+                        if isConverging and storeProof__:
                             proofDataLargest = dp((isConverging, results, resultsLin, timePoints))  # Store last positive
                     else:
                         # The propagations of critical points found non-stabilizable points
@@ -728,7 +730,7 @@ class distributedFunnel:
 
                     if critIsConverging:
                         isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp), allTaylorApprox) #Change to store all in order to exploit the last proof
-                        if isConverging:
+                        if isConverging and storeProof__:
                             proofDataLargest = dp((isConverging, results, resultsLin, timePoints))  # Store last positive
                     else:
                         isConverging = False
@@ -771,7 +773,8 @@ class distributedFunnel:
                 if isConverging:
                     # Converges
                     alphaL = alpha
-                    proofDataLargest = dp((isConverging, results, resultsLin, timePoints))
+                    if storeProof__:
+                        proofDataLargest = dp((isConverging, results, resultsLin, timePoints))
                 else:
                     alphaU = alpha
             
@@ -781,7 +784,7 @@ class distributedFunnel:
             # Conservative -> Choose the largest converging value found
             lyapFunc_.setAlpha(alphaL,0)
             # Additional work if seeking to store the proof
-            if self.opts['storeProof']:
+            if storeProof__:
                 # Necessary to ensure that the proof for alphaL is stored
                 self.storeProof(*proofDataLargest)
             

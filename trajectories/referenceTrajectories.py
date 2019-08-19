@@ -1,4 +1,5 @@
 from coreUtils import *
+import trajectories.interpolators as interpolate
 
 class referenceTrajectory:
     def __int__(self, nx:int, nu:int, tMin:float, tMax:float):
@@ -60,7 +61,8 @@ class analyticTrajectory(referenceTrajectory):
         
 class omplTrajectory(referenceTrajectory):
 
-    def __init__(self, dynF:Callable, fileName:str, nx:int, nu:int, tMin:float=0., tMax:float=1.):
+    def __init__(self, dynF:Callable, fileName:str, nx:int, nu:int, tMin:float=0., tMax:float=1.,
+                 interPX = interpolate.interpolate.pchip_interpolate, interPU = interpolate.leftNeighboor):
 
         super(omplTrajectory, self).__init__(nx, nu, tMin, tMax)
 
@@ -73,7 +75,8 @@ class omplTrajectory(referenceTrajectory):
 
         self.dynF = dynF # It is better to compute the derivative using the interpolated position and control input
 
-        self.xrefI = sp.interpolate.PchipInterpolator(self.t, self.X, axis=1)
+        self.xrefI = interPX(self.t, self.X, axis=1)
+        self.urefI = interPU(self.t, self.U)
 
         # OMPL uses piecewise constant inputs, if trajectory was preprocessed other interpolators can be used
         # self.urefI = sp.interpolate.PchipInterpolator(self.t, self.U, axis=1)
@@ -85,6 +88,12 @@ class omplTrajectory(referenceTrajectory):
         t = self.checkTime(t, doRestrict)
         return self.fX(t).reshape((self.nx,-1))
     def getDX(self,t:float, doRestrict:bool=True):
+        """
+        This is used on the reference trajectory -> use original, nonlinear dynamics
+        :param t:
+        :param doRestrict:
+        :return:
+        """
         t = self.checkTime(t, doRestrict)
         return self.dynF(self.getX(t,False), self.getU(t,False), t).reshape((self.nx,-1))
 
