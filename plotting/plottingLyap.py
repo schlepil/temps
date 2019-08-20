@@ -171,7 +171,7 @@ def plot2dConv(funnel:fn.distributedFunnel, t=0.0, opts={}):
     # Plot the region
     funnel.lyapFunc.plot(aa, t, opts=opts_)
     aa.autoscale()
-    
+
     # Plot the streamlines
     
     # Get the veloctiy
@@ -306,16 +306,70 @@ def plot2DCONV_and_2Dproof(conv={},proof={}):
       conv['ax'].__add__(proof[i]['ax'])
    return conv
 
+def plotfunnel(funnel:fn.distributedFunnel):
+   opts_ = {'zoneOpts': {'pltStyle': 'proj', 'linewidth': 1., 'color': [0.0, 0.0, 1.0, 1.0],
+                          'faceAlpha': 0.0, 'linestyle': '-',
+                          'plotAx': np.array([0, 1])},
+             'streamOpts': {'cmap': 'viridis', 'colorStreams': 'ang', 'nGrid': 200, 'cbar': True, 'plotValidOnly': True,
+                            'validEps': -.1},
+             'modeDyn': [3, 3],
+             'cstrOpts': {'binaryPlot': True, 'filled': False, 'nGrid': 200, 'cbar': False, 'ctrOpts': {}}}
+   from plotting.plottingCstr import plot2dCstr
+   thisPoly = poly.polynomial(funnel.repr)
+   thisRelax = relax.lasserreRelax(funnel.repr)
+   allDict = {}
+   nax = [1, 1]
+   ff, aa = plt.subplots(*nax, sharex=True, sharey=True)
+   for each_proof in funnel.proof_.values():
+         this_proof=each_proof[0]['proofs']
+         this_time=each_proof[0]['t']
+         x0, dx0, uRef = funnel.dynSys.ctrlInput.refTraj.getX(this_time), funnel.dynSys.ctrlInput.refTraj.getDX(this_time), funnel.dynSys.ctrlInput.refTraj.getU(this_time)
+         allDict[this_time]={}
+         thisDict=allDict[this_time]
 
+         # for nSub, (subProof, _) in enumerate(this_proof):
+         #     allDict[nSub] = {}
+         #     thisDict = allDict[nSub]
+         #
+         #     nProbs = len(subProof['origProb'])
+         #
+         #     nax = [1, 1]
+         #
+         #     while True:
+         #         if nax[0] * nax[1] >= nProbs:
+         #             break
+         #         nax[1] += 1
+         #         if nax[0] * nax[1] >= nProbs:
+         #             break
+         #         nax[0] += 1
 
+             # ff, aa = plt.subplots(*nax, sharex=True, sharey=True,projection='3d')
+             # aa = narray(aa, ndmin=2)
+             # thisDict['fig'] = ff
+             # thisDict['ax'] = aa
 
+         # nax = [1, 1]
+         # ff, aa = plt.subplots(*nax, sharex=True, sharey=True)
+         # aa = narray(aa, ndmin=2)
+         zonePlot = funnel.lyapFunc.plot(ax=aa, t=this_time, x0=x0, opts=opts_['zoneOpts'])
+         aa.autoscale()
+         aa.axis('equal')
+         cstr_list = []
+         for origProb in this_proof:
+             one_cstr_list= origProb['origProb']['cstr']
+             for i in one_cstr_list:
+                 cstr_list.append(i)
+         for aCstr in cstr_list:
+             thisPoly.coeffs = aCstr
+             thisCstr = relax.lasserreConstraint(thisRelax, thisPoly)
+             # Plot
+             plot2dCstr(thisCstr, aa, x0=x0)
+         thisDict['fig'] = ff
+         thisDict['ax'] = aa
+         thisDict['zonePlot'] = zonePlot
+   return allDict
 
-
-        
-    
-    
-
-
-
-
-
+# def plotfunnel2(funnel:fn.distributedFunnel):
+#     from sympy import plot_implicit, symbols
+#     x0,x1=symbols('x0 x1')
+#     for

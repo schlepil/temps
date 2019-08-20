@@ -38,7 +38,7 @@ class distributedFunnel:
                      'earlyExit':True,
                      #'minConvRate':-0., #TODO this does not seem to be propagated correctly # Moved to LyapFunc
                      'optsEvol':{
-                                    'tDeltaMax':.1
+                                    'tDeltaMax':0.1
                                 },
                      'storeProof':True,
                      'useAllAlphas':True

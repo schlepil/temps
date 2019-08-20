@@ -5,7 +5,7 @@ import relaxations as rel
 
 def plot2dCstr(aObj:Union[rel.constraint, rel.polynomial, rel.convexProg], ax:pt.matplotlib.axes, x0:np.ndarray=None, opts={}, fig=None):
     
-    opts_ = {'binaryPlot':True, 'filled':False, 'nGrid':200, 'cbar':True, 'ctrOpts':{}}
+    opts_ = {'binaryPlot':True, 'filled':False, 'nGrid':200, 'cbar':True, 'ctrOpts':{'levels':[0.]}}
     #opts_.update(opts)
     recursiveExclusiveUpdate(opts_, opts)
     

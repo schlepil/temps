@@ -36,8 +36,8 @@ if __name__ == "__main__":
   #xTraj = lambda t: narray([[np.pi], [0.]], dtype=nfloat)
   #dxTraj = lambda t: narray([[0.], [0.]], dtype=nfloat)
   # Moving
-  xTraj = lambda t: narray([[np.pi*t], [np.pi*1]], dtype=nfloat)
-  dxTraj = lambda t: narray([[np.pi], [0.]], dtype=nfloat)
+  xTraj = lambda t: narray([[0.5*np.pi*t], [0.5*np.pi*1]], dtype=nfloat)
+  dxTraj = lambda t: narray([[0.5*np.pi], [0.]], dtype=nfloat)
   # Compute necessary input (here 0.)
   #uRefTmp = pendSys.getUopt(xTraj(0), dxTraj(0), respectCstr=False, fullDeriv=True)
   uRefTmp = lambda t: pendSys.getUopt(xTraj(t), dxTraj(t), respectCstr=False, fullDeriv=True)
@@ -61,7 +61,8 @@ if __name__ == "__main__":
   # Get the propagator of critical solutions
   thisPropagator = relax.propagators.localFixedPropagator()
 
-  myFunnel = distributedFunnel(dynSys=pendSys, lyapFunc=lyapF, traj=refTraj, evolveLyap=thisLyapEvol, propagator=thisPropagator, opts={'minConvRate':-0.})
+  myFunnel = distributedFunnel(dynSys=pendSys, lyapFunc=lyapF, traj=refTraj, evolveLyap=thisLyapEvol, propagator=thisPropagator, opts={'minConvRate':-0.,'optsEvol':{
+                                    'tDeltaMax':0.02},'interSteps':5})
 
   Pinit = lyapF.lqrP(np.identity(2), np.identity(1), refTraj.getX(0.))[0]
   #Scale
@@ -69,7 +70,7 @@ if __name__ == "__main__":
 
   #P=np.array([[1.,0.],[0.,1.]])
   
-  myFunnel.compute(0.0, 0.001, (Pinit, 1.))
+  myFunnel.compute(0.0, 0.1, (Pinit, 1.))
 
   if coreOptions.doPlot:
     opts_ = {'pltStyle': 'proj', 'linewidth': 1., 'color': [0.0, 0.0, 1.0, 1.0],
@@ -78,14 +79,14 @@ if __name__ == "__main__":
              'cmap': 'viridis', 'colorStreams': 'ang', 'nGrid': 200, 'cbar': True,
              'modeCtrl': (1, 2*nones((myFunnel.dynSys.nu,), dtype=nint)),
              'modeDyn': [3, 3]}
-    plot.plot2dConv(myFunnel, 0.0)
-    plot.plot2dConv(myFunnel, 0.0,opts=opts_)
+    # plot.plot2dConv(myFunnel, 0.0)
+    # plot.plot2dConv(myFunnel, 0.0,opts=opts_)
     # plot.plot2dProof(myFunnel, 0.0)
     #
     # plot.plot2dConv(myFunnel, 0.05)
     # plot.plot2dProof(myFunnel, 0.05)
 
     myFunnel.distributor.terminate()
-  
+    plot.plotfunnel(myFunnel)
     print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")
     plot.plt.show()

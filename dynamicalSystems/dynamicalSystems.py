@@ -564,7 +564,7 @@ class secondOrderSys(dynamicalSystem):
 
         if respectCstr:
             self.ctrlInput(uStar,t)
-        print('this is uStar', uStar)
+
         return uStar
 
 

@@ -287,7 +287,7 @@ class convexProg():
             
             # Check if all constraints are respected (Here it can happen that they are not)
             isValid = nones((xSol.shape[1],), dtype=np.bool_)
-            print('xSol',xSol)
+
             zSol = self.repr.evalAllMonoms(xSol)
             #Check all constraints
             # atol = -1e-6
@@ -480,10 +480,6 @@ class convexProg():
             for aCstr in self.constraints.s.cstrList:
                 thisGshs = aCstr.getCstr(isSparse)
                 dims['s'].append(int((thisGshs[1].size)**.5))
-                print('each G',thisGshs[0])
-                print('each G', thisGshs[0].shape)
-                print('each h',thisGshs[1])
-                print('each h', thisGshs[1].shape)
                 G.append(thisGshs[0])
                 h.append(thisGshs[1])
         
@@ -494,15 +490,11 @@ class convexProg():
             # The first variable corresponds to zero order polynomial -> is always zero and can be added to the constant terms
             h -= G[:,[0]]
             G = G[:,1:]
-        print('im g', G.shape)
-        print('im h', h.shape)
+
         G = matrix(G)
         h = matrix(h)
         
-        print('im G',G)
 
-        print('im h',h)
-        print('objectif',obj)
         sol = solvers.conelp(obj, G,h,dims,primalstart=primalstart,dualstart=dualstart)
         
         #Add
