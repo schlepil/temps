@@ -64,7 +64,7 @@ if __name__ == "__main__":
   thisPropagator = relax.propagators.localFixedPropagator()
 
   myFunnel = distributedFunnel(dynSys=pendSys, lyapFunc=lyapF, traj=refTraj, evolveLyap=thisLyapEvol, propagator=thisPropagator, opts={'minConvRate':-0.,'optsEvol':{
-                                    'tDeltaMax':0.02},'interSteps':5})
+                                    'tDeltaMax':0.01},'interSteps':5})
 
   if lyapF.opts_['zoneCompLvl']==1:
     myFunnel.opts['useAllAlphas'] = False # Cannot use this option without propagation
@@ -96,5 +96,8 @@ if __name__ == "__main__":
 
     myFunnel.distributor.terminate()
     plot.plotfunnel(myFunnel)
+
+    print(f"Evolution is alpha:\n {myFunnel.lyapFunc.alpha_} \n P: \n {myFunnel.lyapFunc.P}")
+
     print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")
     plot.plt.show()

@@ -626,8 +626,13 @@ class distributedFunnel:
             if __debug__:
                 print(f"\nAt {tC}\n")
             
-            
-            tC, nextZoneGuess = self.evolveLyap(tC, min(self.opts['optsEvol']['tDeltaMax'], tC-tStart), lyapFunc_.getLyap(tC))
+            # Countering some numerical issues
+            if ((tC - self.opts['optsEvol']['tDeltaMax']) > 0.) and (tC - self.opts['optsEvol']['tDeltaMax'])*1e4 < self.opts['optsEvol']['tDeltaMax']:
+                # The remaining time is very very small -> enlarge maximal step
+                deltaTNumeric = self.opts['optsEvol']['tDeltaMax']
+            else:
+                deltaTNumeric = 0.
+            tC, nextZoneGuess = self.evolveLyap(tC, min(self.opts['optsEvol']['tDeltaMax'] + deltaTNumeric, tC-tStart), lyapFunc_.getLyap(tC))
             tSteps = np.linspace(tC, tL, self.opts['interSteps']) # TODO check order; Does the order play a role here?
             
             # Step 1 - critical points

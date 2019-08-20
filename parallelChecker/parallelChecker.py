@@ -794,7 +794,7 @@ def workerSolveVariable(inQueue, outQueue):
                 print(solution)
                 print("Problem is")
                 print(thisProb)
-                if coreOptions.doPlot:
+                if False and (coreOptions.doPlot):
                     import plotting as plt
                     ff, aa = plt.plt.subplots(1, 1)
                     aa.set_xlim(-2, 2)
