@@ -451,6 +451,17 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             alphaFromTo = [dp(self.alpha_[idx]), dp(newAlpha)]
             self.alpha_[idx] = newAlpha
             self.computeK_(idx)
+
+        if 0 and __debug__: # This relatively expensive -> Activate manually if necessary
+            if self.t_.size>1:
+                if idx == self.t_.size-1:
+                    timePoints = np.linspace(self.t_[idx-1], self.t_[idx], 20)
+                else:
+                    timePoints = np.linspace(self.t_[idx], self.t_[idx+1], 20)
+                if not nall(self.checkValidity(timePoints)):
+                    self.checkValidity(timePoints)
+                    raise UserWarning("Produced invalid zone")
+
         return None if not returnInfo else alphaFromTo
     
     def reset(self):
@@ -1529,6 +1540,29 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             return self.Proofs2Prob3(at, aZone, resultsLin, aSubProof, aCtrlDict, opts)
         else:
             raise RuntimeError
+
+    def checkValidity(self, t):
+        t = narray(t, dtype=nfloat)
+
+        isValid = nones((t.size,), dtype=nbool)
+        for i,at in enumerate(t):
+            # Currently only positivity is checked
+            thisP, thisAlpha, thisPd = self.getZone(at)
+            if thisAlpha <= 1e-6:
+                raise UserWarning("alpha too small")
+                isValid[i] = False
+            try:
+                C = cholesky(thisP)
+            except:
+                raise UserWarning("Failed to decompose P")
+                isValid[i] = False
+            try:
+                C = cholesky(thisP/thisAlpha)
+            except:
+                raise UserWarning("Failed to decompose P/alpha")
+                isValid[i] = False
+        return isValid
+
 
 class piecewiseQuadraticLyapunovFunction(LyapunovFunction):
     """

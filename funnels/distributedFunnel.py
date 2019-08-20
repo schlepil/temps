@@ -525,7 +525,6 @@ class distributedFunnel:
             if __debug__:
                 print(f"Checking result for {[k,i,j]}")
                 testSol(thisSol, allCtrlDictsNzones[k][0]) # TODO sth is wrong here
-                ccc = self.lyapFunc.getCtrlDict(0.)
                 if nany(thisSol['probDict']['u'] != 2) and (thisSol['probDict']['resPlacementParent'] is None):
                     print("snap")
 
@@ -636,6 +635,7 @@ class distributedFunnel:
             # current guess of the zone. For this only the very last criticalPoints are necessary
             if results is not None:
                 critIsConverging, resultsProp, resultsLinProp = self.propagator.doPropagate(tSteps, self, results, resultsLin, self.opts['interStepsPropCrit'])
+                critIsConverging = nall(critIsConverging) # TODO sth smarter
             else:
                 critIsConverging = True #Dummy to force search
 
@@ -687,7 +687,11 @@ class distributedFunnel:
                         critIsConverging = critIsConverging[-1] # Simply use last
 
                     if critIsConverging:
-                        isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp), allTaylorApprox) #Change to store all in order to exploit the last proof
+                        try:
+                            isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp), allTaylorApprox) #Change to store all in order to exploit the last proof
+                        except:
+                            isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp),
+                                                                                         allTaylorApprox)  # Change to store all in order to exploit the last proof
                         if isConverging and storeProof__:
                             proofDataLargest = dp((isConverging, results, resultsLin, timePoints))  # Store last positive
                     else:

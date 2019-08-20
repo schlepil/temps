@@ -400,12 +400,15 @@ class convexProg():
         
         thisProbDict = self.localSolveDict(xSol)
         res = localSolve(**thisProbDict)
-        assert res.success
-        assert (fun is None) or (fun<=res.fun-coreOptions.numericEpsPos*10.), "Convex opt has to provide a lower bound" # TODO check epsilon
         if __debug__:
             print('cstrverif',thisProbDict['constraints']['fun'](res.x))
             if not nall(thisProbDict['constraints']['fun'](res.x)>-coreOptions.absTolCstr):
                 print('shit')
+            if fun is not None:
+                if not (fun<=res.fun-coreOptions.numericEpsPos*10.):
+                    raise UserWarning(f"Global opt did not provide a lower bound: glob: {fun}, local: {res.fun}")
+        assert res.success
+        assert (fun is None) or (fun<=res.fun-coreOptions.numericEpsPos*10.), "Convex opt has to provide a lower bound" # TODO check epsilon
         
         return res.x
 

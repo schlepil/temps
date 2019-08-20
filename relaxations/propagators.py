@@ -139,6 +139,10 @@ class localFixedPropagator(propagators):
         nu_ = aProof['probDict']['u'].size
         
         thisPolyObj = self.thisPolyObj_
+
+        if __debug__:
+            if not res.success:
+                raise UserWarning(f"local opt failed {res}")
         
         assert res.success
         # Set the new value
@@ -265,7 +269,9 @@ class localFixedPropagator(propagators):
         
         if funnelInstance.lyapFunc.opts_['zoneCompLvl'] == 1:
             # NOthing to be done here, the information of the last proof is disregarded with this setting
-            return super(type(self), self).doPropagate(tSteps, funnelInstance, oldResults, oldResultsLin, interStepsPropCrit)
+            #return True, oldResults, oldResultsLin
+            # Much like dummy
+            return nones((len(tSteps),), dtype=nbool), oldResults, oldResultsLin
         elif funnelInstance.lyapFunc.opts_['zoneCompLvl'] ==2:
             # Propagate the critical points of the parents-proofs of all final proofs
             raise NotImplementedError
@@ -377,7 +383,8 @@ class localFixedPropagator(propagators):
         
         if funnelInstance.lyapFunc.opts_['zoneCompLvl'] == 1:
             # NOthing to be done here, the information of the last proof is disregarded with this setting
-            return super(type(self), self).doRescale(tSteps, funnelInstance, oldResults, oldResultsLin, alphaFromTo, interStepsPropCrit)
+            #return super(type(self), self).doRescale(tSteps, funnelInstance, oldResults, oldResultsLin, alphaFromTo, interStepsPropCrit)
+            return (nones((len(alphaFromTo),),dtype=nbool), alphaFromTo), oldResults, oldResultsLin#like dummy
         elif funnelInstance.lyapFunc.opts_['zoneCompLvl'] ==2:
             # Rescale the critical points of the parents-proofs of all final proofs
             raise NotImplementedError

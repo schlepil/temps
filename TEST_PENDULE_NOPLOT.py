@@ -54,6 +54,8 @@ if __name__ == "__main__":
   # Set the interpolator
   # lyapF.interpolate = lyap.standardInterpolNoDeriv
   lyapF.interpolate = lyap.standardInterpol
+  # Set how to propagate
+  lyapF.opts_['zoneCompLvl']=1 #1: Do not use any info; 3: do the propagation; else : notimplemented
 
   # evolving the Lyapunov function along the trajectory
   thisLyapEvol = lyap.noChangeLyap()
@@ -64,12 +66,18 @@ if __name__ == "__main__":
   myFunnel = distributedFunnel(dynSys=pendSys, lyapFunc=lyapF, traj=refTraj, evolveLyap=thisLyapEvol, propagator=thisPropagator, opts={'minConvRate':-0.,'optsEvol':{
                                     'tDeltaMax':0.02},'interSteps':5})
 
+  if lyapF.opts_['zoneCompLvl']==1:
+    myFunnel.opts['useAllAlphas'] = False # Cannot use this option without propagation
+
+
   Pinit = lyapF.lqrP(np.identity(2), np.identity(1), refTraj.getX(0.))[0]
   #Scale
   Pinit *= 3./min(eigh(Pinit)[0])**0.5
 
   #P=np.array([[1.,0.],[0.,1.]])
-  
+
+
+  assert lyapF.opts_['zoneCompLvl']==1, "TBD"
   myFunnel.compute(0.0, 0.1, (Pinit, 1.))
 
   if coreOptions.doPlot:
