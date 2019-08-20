@@ -872,8 +872,6 @@ def workerSolveVariable(inQueue, outQueue):
 
         if nany(input['u'] != 2) and (input['resPlacementParent'] is None):
             print("snap")
-        if __debug__:
-            print(f"ProbDict end : \n {input}")
         outQueue.put({'probDict':input, 'xSol':extraction[0], 'ySol':ySol, 'obj':solution['obj'], 'sol':solution, 'ext':extraction})
 
     return 0

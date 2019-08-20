@@ -64,7 +64,7 @@ if __name__ == "__main__":
   thisPropagator = relax.propagators.localFixedPropagator()
 
   myFunnel = distributedFunnel(dynSys=pendSys, lyapFunc=lyapF, traj=refTraj, evolveLyap=thisLyapEvol, propagator=thisPropagator, opts={'minConvRate':-0.,'optsEvol':{
-                                    'tDeltaMax':0.01},'interSteps':5})
+                                    'tDeltaMax':0.05},'interSteps':4})
 
   if lyapF.opts_['zoneCompLvl']==1:
     myFunnel.opts['useAllAlphas'] = False # Cannot use this option without propagation
@@ -78,7 +78,7 @@ if __name__ == "__main__":
 
 
   assert lyapF.opts_['zoneCompLvl']==1, "TBD"
-  myFunnel.compute(0.0, 0.1, (Pinit, 1.))
+  myFunnel.compute(0.0, 0.15, (Pinit, 1.))
 
   if coreOptions.doPlot:
     opts_ = {'pltStyle': 'proj', 'linewidth': 1., 'color': [0.0, 0.0, 1.0, 1.0],

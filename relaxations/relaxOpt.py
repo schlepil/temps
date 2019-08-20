@@ -389,7 +389,7 @@ class convexProg():
             Amat[i, :] = acstr.poly.coeffs
         this_cstr = {'type':'ineq', 'fun':lambda x:ndot(Amat, self.repr.evalAllMonoms(x.reshape((-1, 1)))).squeeze()}
         gx = lambda x:ndot(self.objective.coeffs, self.repr.evalAllMonoms(x))
-        options_ = {}
+        options_ = {'maxiter':20000} #TODO optimize using gradient and hessian instead of increasing the maxiter
         options_.update(options)
         return {'fun':gx, 'x0':xSol.reshape((-1,)), 'method':method, 'tol':tol, 'constraints':this_cstr, 'options':options_ }
 
@@ -402,6 +402,8 @@ class convexProg():
         res = localSolve(**thisProbDict)
         if __debug__:
             print('cstrverif',thisProbDict['constraints']['fun'](res.x))
+            if not res.success:
+                raise UserWarning(f'Local opt failed {res}')
             if not nall(thisProbDict['constraints']['fun'](res.x)>-coreOptions.absTolCstr):
                 print('shit')
             if fun is not None:

@@ -46,7 +46,6 @@ class dynamicalSystem:
         raise NotImplementedError
     
     def __call__(self, x:np.ndarray, u:np.ndarray, restrictInput:bool=True, mode:str=[0,0], x0:np.ndarray=None, dx0:np.ndarray=None):
-        print('olg')
         raise NotImplementedError
     
     def getUopt(self,x:np.ndarray, dx:np.ndarray, respectCstr:bool=False, t:float=0.):
@@ -737,7 +736,6 @@ class polynomialSys(dynamicalSystem):
         :param dx0: reference velocity. If given, only the velocity difference will be returned
         :return:
         """
-        print('wdnmd')
         if __debug__:
             assert x.shape[0] == self.nq
             assert all([(aMode >= 0) and (aMode <= self.maxTaylorDeg) for aMode in mode])
