@@ -680,7 +680,6 @@ class distributedFunnel:
                     if ((self.opts['useAllAlphas']) and (critIsConverging[-1]==False)) :
                         idx = np.flatnonzero(critIsConverging)[-1] + 1  # Last converging + 1 = First non-converging
                         alphaU = allAlphas[idx]
-                        lyapFunc_.setAlpha(alphaU, 0, returnInfo=False)
                         critIsConverging = critIsConverging[idx]
                         if __debug__:
                             assert critIsConverging == False, "idx got it wrong"
@@ -690,6 +689,9 @@ class distributedFunnel:
                             assert isConverging == False, "Local proof contradicts global proof"
                     else:
                         critIsConverging = critIsConverging[-1] # Simply use last
+                    #Set new upper alpha
+                    lyapFunc_.setAlpha(alphaU, 0, returnInfo=False)
+
 
                     if critIsConverging:
                         try:
@@ -719,13 +721,12 @@ class distributedFunnel:
                 while True:
                     (critIsConverging, allAlphas), resultsProp, resultsLinProp = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
                     # First critical point is "original" so the DI-convergence should be ensured
-                    assert critIsConverging[0] == False, "Something is wrong with the local solve proof"
+                    assert not critIsConverging[0], "Something is wrong with the local solve proof"
 
                     # Heuristic: Use the largest converging (with respect to critical points)
                     if ((self.opts['useAllAlphas']) and (critIsConverging[-1])) :
                         idx = np.flatnonzero(critIsConverging)[0]  # First converging -> largest with respect to crit points
                         alphaL = allAlphas(idx)
-                        lyapFunc_.setAlpha(alphaL, 0, returnInfo=False)
                         critIsConverging = critIsConverging[idx]
                         if __debug__:
                             assert critIsConverginge, "idx got it wrong"
@@ -736,6 +737,8 @@ class distributedFunnel:
                                 raise UserWarning("Local proof gives different convergence than global proof -> Heuristic suboptimal")
                     else:
                         critIsConverging = critIsConverging[-1] # Simply use last -> Here smallest
+                    # Set lower alpha
+                    lyapFunc_.setAlpha(alphaL, 0, returnInfo=False)
 
                     if critIsConverging:
                         isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp), allTaylorApprox) #Change to store all in order to exploit the last proof
@@ -769,6 +772,8 @@ class distributedFunnel:
                     if critIsConverging[idxChange]:
                         idxChange += 1
                     alpha = allAlphas[idxChange]
+                    # Set the new alpha
+                    lyapFunc_.setAlpha(alpha, 0, returnInfo=False)
                     critIsConverging = critIsConverging[idxChange]
                     assert critIsConverging == False, "idx got sth wrong"
                 else:

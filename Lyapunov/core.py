@@ -77,4 +77,8 @@ class LyapunovFunction():
     def Proofs2Prob(self, aZone:List, resultsLin:List, aSubProofList:List[dict], aCtrlDict:dict, opts:dict={}):
         raise NotImplementedError
 
+    def setAlpha(self, newAlpha:float):
+        if (newAlpha <= coreOptions.alphaAbsMin):
+            assert 0, "New alpha considered zero -> non-stabilizable"
+
 lyapunovFunctions = ()

@@ -380,11 +380,16 @@ class localFixedPropagator(propagators):
         """
         \brief: propagate the informations of the last proof. Rescale is called when only the size of the funnel changes
         """
-        
+        assert alphaFromTo[0] != alphaFromTo[1], 'alpha does not change -> this should not happen when calling rescale'
+
         if funnelInstance.lyapFunc.opts_['zoneCompLvl'] == 1:
             # NOthing to be done here, the information of the last proof is disregarded with this setting
             #return super(type(self), self).doRescale(tSteps, funnelInstance, oldResults, oldResultsLin, alphaFromTo, interStepsPropCrit)
-            return (nones((len(alphaFromTo),),dtype=nbool), alphaFromTo), oldResults, oldResultsLin#like dummy
+            # isCOnverging has to be adapted: If alphaFromTo is growing, first element has to be true as this implies that the last proof
+            # was successful and vice-versa
+            isConverging = nones((len(alphaFromTo),),dtype=nbool)
+            isConverging[0] = alphaFromTo[-1]>alphaFromTo[0]
+            return (isConverging, alphaFromTo), oldResults, oldResultsLin#like dummy
         elif funnelInstance.lyapFunc.opts_['zoneCompLvl'] ==2:
             # Rescale the critical points of the parents-proofs of all final proofs
             raise NotImplementedError

@@ -423,6 +423,8 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
     @alpha.setter
     def alpha(self, newAlpha):
+        if nany(newAlpha.squeeze()<=coreOptions.alphaAbsMin):
+            assert 0, 'some alphas are too close to zero'
         if __debug__:
             assert (newAlpha.size == self.P_.shape[0]) or (newAlpha.size == self.alpha_.size) or (self.alpha_ is None)
         self.alpha_ = newAlpha.reshape((-1,))
@@ -444,6 +446,8 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             return self.alpha[idx]
     
     def setAlpha(self, newAlpha, idx=None, returnInfo=False):
+        super(type(self), self).setAlpha(newAlpha)
+
         if idx is None:
             alphaFromTo = [dp(self.alpha_), dp(newAlpha)]
             self.alpha_ = newAlpha
@@ -506,7 +510,16 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
         # Take the update into account
         self.compute_()
-    
+
+    def checkNumerics(self):
+        for i in range(self.P_.shape[0]):
+            # do some check up
+            if nany(np.diag(self.C_[i,:,:]) < coreOptions.cholDiagMin):
+                assert 0, f"shape matrix P : \\ {self.P_[i, :, :] / self.alpha_[i]} \\ is not psd"
+            if nany(np.diag(self.C_[i,:,:]) > coreOptions.cholDiagMax):
+                assert 0, f"shape matrix P : \\ {self.P_[i, :, :] / self.alpha_[i]} \\ approaches inf"
+
+
     def compute_(self):
         if ((self.P_ is not None) and (self.alpha_ is not None)):
             self.alpha_ = nrequire(self.alpha_, dtype=nfloat)
@@ -521,6 +534,8 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 self.Plog_[i,:,:] = logm(self.P_[i,:,:]/self.alpha_[i])
                 self.C_[i,:,:] = cholesky(self.P_[i,:,:]/self.alpha_[i])
                 self.Ci_[i,:,:] = inv(self.C_[i,:,:])
+            if __debug__:
+                self.checkNumerics()
         return None
     
     def computeK_(self, k_:int):
@@ -529,6 +544,8 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             self.Plog_[k, :, :] = logm(self.P_[k, :, :]/self.alpha_[k])
             self.C_[k, :, :] = cholesky(self.P_[k, :, :]/self.alpha_[k])
             self.Ci_[k, :, :] = inv(self.C_[k, :, :])
+        if __debug__:
+            self.checkNumerics()
         return None
         
     

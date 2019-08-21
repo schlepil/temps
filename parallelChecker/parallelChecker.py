@@ -72,6 +72,32 @@ reprDict_ = {}
 relaxationDict_ = {}
 problemDict_ = {}
 
+# Helper functions
+def doSolTest(inputAll, thisProb, thisSol):
+    if doThreading_:
+        if not thisSol['status'] == 'optimal':
+            if useSharedMem_:
+                print(f"Failed on \n {input} \n\n with \n {thisSol}")
+            else:
+                print(f"Failed on \n {inputAll} \n\n with \n {thisSol}")
+    else:
+        if not (thisSol['status'] == 'optimal'):
+            print("Error in solving")
+            print("Solution is")
+            print(thisSol)
+            print("Problem is")
+            print(thisProb)
+            if False and (coreOptions.doPlot):
+                import plotting as plt
+
+                ff, aa = plt.plt.subplots(1, 1)
+                aa.set_xlim(-2, 2)
+                aa.set_ylim(-2, 2)
+                plt.plot2dCstr(thisProb, aa, {'binaryPlot': True}, fig=ff)
+            raise RuntimeError("Non optimal solution")
+    return None
+
+
 def probSetterShared_(problem: dict, probQueue: "Queue", workerId: int):
     # First copy, then put into queue
     # Necessary
@@ -779,29 +805,9 @@ def workerSolveVariable(inQueue, outQueue):
         #solution = thisProb.solve()
         solution = do_fill_solve(thisProb, input if useSharedMem_ else inputAll)
 
-
-        if doThreading_:
-            if not solution['status'] == 'optimal':
-                if useSharedMem_:
-                    print(f"Failed on \n {input} \n\n with \n {solution}")
-                else:
-                    print(f"Failed on \n {inputAll} \n\n with \n {solution}")
-                outQueue.put("")
-        else:
-            if not (solution['status'] == 'optimal'):
-                print("Error in solving")
-                print("Solution is")
-                print(solution)
-                print("Problem is")
-                print(thisProb)
-                if False and (coreOptions.doPlot):
-                    import plotting as plt
-                    ff, aa = plt.plt.subplots(1, 1)
-                    aa.set_xlim(-2, 2)
-                    aa.set_ylim(-2, 2)
-                    plt.plot2dCstr(thisProb, aa, {'binaryPlot':True}, fig=ff)
-                raise RuntimeError("Non optimal solution")
-
+        # test
+        if __debug__:
+            doSolTest(inputAll, thisProb, solution)
 
         while True:
             try:
@@ -819,6 +825,8 @@ def workerSolveVariable(inQueue, outQueue):
             # refine_solution(old_sol:dict, old_extract, old_prob:rel.convexProg, input:dict):
             try:
                 thisProb, solution = refine_solution(solution, extraction, thisProb, input if useSharedMem_ else inputAll)
+                if __debug__:
+                    doSolTest(inputAll, thisProb, solution)
             except:
                 thisProb, solution = refine_solution(solution, extraction, thisProb, input if useSharedMem_ else inputAll)
                 print('A')
