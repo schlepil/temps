@@ -401,7 +401,6 @@ class convexProg():
         thisProbDict = self.localSolveDict(xSol)
         res = localSolve(**thisProbDict)
         if __debug__:
-            print('cstrverif',thisProbDict['constraints']['fun'](res.x))
             if not res.success:
                 raise UserWarning(f'Local opt failed {res}')
             if not nall(thisProbDict['constraints']['fun'](res.x)>-coreOptions.absTolCstr):
@@ -511,7 +510,7 @@ class convexProg():
         sol['x_np'] = narray(sol['x']).astype(nfloat).reshape((1,-1))
         if self.firstVarIsOne:
             sol['x_np'] = np.hstack(([[1]],sol['x_np']))
-        print('wdnmd',sol)
+
         return sol
         
         

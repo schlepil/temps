@@ -320,7 +320,10 @@ def plotfunnel(funnel:fn.distributedFunnel):
    allDict = {}
    nax = [1, 1]
    ff, aa = plt.subplots(*nax, sharex=True, sharey=True)
+   number=-1
    for each_proof in funnel.proof_.values():
+         number+=1
+         print('number',number)
          this_proof=each_proof[0]['proofs']
          this_time=each_proof[0]['t']
          x0, dx0, uRef = funnel.dynSys.ctrlInput.refTraj.getX(this_time), funnel.dynSys.ctrlInput.refTraj.getDX(this_time), funnel.dynSys.ctrlInput.refTraj.getU(this_time)
@@ -358,7 +361,7 @@ def plotfunnel(funnel:fn.distributedFunnel):
          for origProb in this_proof:
              one_cstr_list= origProb['origProb']['cstr']
              for i in one_cstr_list:
-                 cstr_list.append(i)
+                 cstr_list.append(funnel.dynSys.repr.doLinCoordChange(i,funnel.lyapFunc.C_[number]))
          for aCstr in cstr_list:
              thisPoly.coeffs = aCstr
              thisCstr = relax.lasserreConstraint(thisRelax, thisPoly)

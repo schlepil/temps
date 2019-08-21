@@ -44,7 +44,7 @@ if __name__ == "__main__":
   #uTraj = lambda t: uRefTmp.copy()
   #uTraj=uRefTmp
   # def __int__(self, fX: Callable, fU: Callable, nx: int, nu: int, fXd: Callable = None, tMin: float = 0., tMax: float = 1.):
-  refTraj = traj.analyticTrajectory(xTraj,uRefTmp, 2, 1, dxTraj)
+  refTraj = traj.analyticTrajectory(xTraj,uRefTmp, 2, 1, dxTraj,tMax=1.5)
 
   # Get the input constraints along the refTraj
   pendSys.ctrlInput = dynSys.constraints.boxInputCstrLFBG(thisRepr, refTraj, 1, *getUlims())
@@ -64,7 +64,7 @@ if __name__ == "__main__":
   thisPropagator = relax.propagators.localFixedPropagator()
 
   myFunnel = distributedFunnel(dynSys=pendSys, lyapFunc=lyapF, traj=refTraj, evolveLyap=thisLyapEvol, propagator=thisPropagator, opts={'minConvRate':-0.,'optsEvol':{
-                                    'tDeltaMax':0.05},'interSteps':4})
+                                    'tDeltaMax':0.15},'interSteps':2})
 
   if lyapF.opts_['zoneCompLvl']==1:
     myFunnel.opts['useAllAlphas'] = False # Cannot use this option without propagation
@@ -78,7 +78,7 @@ if __name__ == "__main__":
 
 
   assert lyapF.opts_['zoneCompLvl']==1, "TBD"
-  myFunnel.compute(0.0, 0.15, (Pinit, 1.))
+  myFunnel.compute(0.0, 0.45, (Pinit, 1.))
 
   if coreOptions.doPlot:
     opts_ = {'pltStyle': 'proj', 'linewidth': 1., 'color': [0.0, 0.0, 1.0, 1.0],
