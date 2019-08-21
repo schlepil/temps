@@ -350,10 +350,14 @@ def plotfunnel(funnel:fn.distributedFunnel):
 #     from sympy import plot_implicit, symbols
 #     x0,x1=symbols('x0 x1')
 #     for
-def get_a_inequation(csrt:narray):
+def get_a_inequation(repr, csrt:narray):
     from sympy import symbols, Eq
     x,y = symbols('x y')
-    return Eq(csrt[0]+csrt[1]*x+csrt[2]*y+csrt[3]*x**2+csrt[4]*x*y+csrt[5]*y**2+csrt[6]*x**3+csrt[7]*x**2*y+csrt[8]*x*y**2+csrt[9]*y**3+csrt[10]*x**4+csrt[11]*x**3*y+csrt[12]*x**2*y**2+csrt[13]*x*y**3+csrt[14]*y**4,0)
+    lhs = 0.
+    for i,amonom in enumerate(repr.listOfMonomials):
+        if not np.isclose(csrt[i], 0.):
+            lhs += csrt[i]*x**amonom[0]*y**amonom[1]
+    return Eq(lhs,0)
 
 def plotfunnel2(funnel:fn.distributedFunnel):
     from sympy import plot_implicit
@@ -371,9 +375,9 @@ def plotfunnel2(funnel:fn.distributedFunnel):
                       equaltozero=bool(-0.00001<aCstr[j]<0.00001) and equaltozero
                 if equaltozero is False:
                      cstr_list.append(aCstr)
-    p1 = plot_implicit(get_a_inequation(cstr_list[0]),show=False,depth=4)
+    p1 = plot_implicit(get_a_inequation(funnel.repr, cstr_list[0]),show=False,depth=4)
     for each_cstr in cstr_list:
-            p1.append(plot_implicit(get_a_inequation(each_cstr),show=False,depth=4)[0])
+            p1.append(plot_implicit(get_a_inequation(funnel.repr,funnel.repr, each_cstr),show=False,depth=4)[0])
     p1.show()
 def plota2DZone(funnel:fn.distributedFunnel,t=0.0):
     from sympy import plot_implicit
@@ -382,16 +386,14 @@ def plota2DZone(funnel:fn.distributedFunnel,t=0.0):
     for origProb in this_proof:
         one_cstr_list = origProb['origProb']['cstr']
         for i in one_cstr_list:
-                aCstr = funnel.dynSys.repr.doLinCoordChange(i, funnel.lyapFunc.C_[0])
+                aCstr = funnel.dynSys.repr.doLinCoordChange(i, funnel.lyapFunc.C_[0]) # Le C il est faux -> il depend du temps
                 equaltozero=True
                 for j in range(4,aCstr.shape[0]):
                       equaltozero=bool(-0.00001<aCstr[j]<0.00001) and equaltozero
                 if equaltozero is False:
                      cstr_list.append(aCstr)
-    if len(cstr_list)==1:
-        p1 = plot_implicit(get_a_inequation(cstr_list[0]), show=False, depth=4)
-    else:
-         p1 = plot_implicit(get_a_inequation(cstr_list[0]), show=False, depth=4)
-         for each_cstr in cstr_list:
-                p1.append(plot_implicit(get_a_inequation(each_cstr), show=False, depth=2)[0])
+    p1 = plot_implicit(get_a_inequation(funnel.repr, cstr_list[0]), show=False, depth=4)
+    for each_cstr in cstr_list[1:]:
+        p1.append(plot_implicit(get_a_inequation(funnel.repr, each_cstr), show=False, depth=4)[0])
+
     p1.show()

@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
   # evolving the Lyapunov function along the trajectory
   thisLyapEvol = lyap.noChangeLyap()
-  thisLyapEvol = lyap.quadLyapTimeVaryingLQR(pendSys,refTraj,np.identity(2))
+  #thisLyapEvol = lyap.quadLyapTimeVaryingLQR(pendSys,refTraj,np.identity(2))
   # Get the propagator of critical solutions
   thisPropagator = relax.propagators.localFixedPropagator()
 
@@ -96,7 +96,7 @@ if __name__ == "__main__":
 
     myFunnel.distributor.terminate()
     # plot.plotfunnel2(myFunnel)
-    plot.plota2DZone(myFunnel,0.0)
+    plot.plota2DZone(myFunnel,0.15)
     print(f"Evolution is alpha:\n {myFunnel.lyapFunc.alpha_} \n P: \n {myFunnel.lyapFunc.P}")
 
     print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")
