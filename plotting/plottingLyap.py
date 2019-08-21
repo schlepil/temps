@@ -113,7 +113,7 @@ def plotEllipse(ax, pos, P, alpha, plotAx=np.array([0, 1]), deltaPos=None, color
             T[plotAx[0], 0] = 1.
             T[plotAx[1], 1] = 1.
         else:
-            assert (T.shape[0] == P.shape[0] and T.shape[1] == P.shape[1]), "No valid affine 2d sub-space"
+            assert (T.shape[0] == P.shape[0]) and (T.shape[1] == P.shape[1]), "No valid affine 2d sub-space"
         #print(P)
         #print(T)
         Pt = projectEllip(P, T)
@@ -323,37 +323,11 @@ def plotfunnel(funnel:fn.distributedFunnel):
    number=-1
    for each_proof in funnel.proof_.values():
          number+=1
-         print('number',number)
-         this_proof=each_proof[0]['proofs']
-         this_time=each_proof[0]['t']
+         this_proof = each_proof[0]['proofs']
+         this_time = each_proof[0]['t']
          x0, dx0, uRef = funnel.dynSys.ctrlInput.refTraj.getX(this_time), funnel.dynSys.ctrlInput.refTraj.getDX(this_time), funnel.dynSys.ctrlInput.refTraj.getU(this_time)
          allDict[this_time]={}
-         thisDict=allDict[this_time]
-
-         # for nSub, (subProof, _) in enumerate(this_proof):
-         #     allDict[nSub] = {}
-         #     thisDict = allDict[nSub]
-         #
-         #     nProbs = len(subProof['origProb'])
-         #
-         #     nax = [1, 1]
-         #
-         #     while True:
-         #         if nax[0] * nax[1] >= nProbs:
-         #             break
-         #         nax[1] += 1
-         #         if nax[0] * nax[1] >= nProbs:
-         #             break
-         #         nax[0] += 1
-
-             # ff, aa = plt.subplots(*nax, sharex=True, sharey=True,projection='3d')
-             # aa = narray(aa, ndmin=2)
-             # thisDict['fig'] = ff
-             # thisDict['ax'] = aa
-
-         # nax = [1, 1]
-         # ff, aa = plt.subplots(*nax, sharex=True, sharey=True)
-         # aa = narray(aa, ndmin=2)
+         thisDict = allDict[this_time]
          zonePlot = funnel.lyapFunc.plot(ax=aa, t=this_time, x0=x0, opts=opts_['zoneOpts'])
          aa.autoscale()
          aa.axis('equal')
@@ -376,3 +350,48 @@ def plotfunnel(funnel:fn.distributedFunnel):
 #     from sympy import plot_implicit, symbols
 #     x0,x1=symbols('x0 x1')
 #     for
+def get_a_inequation(csrt:narray):
+    from sympy import symbols, Eq
+    x,y = symbols('x y')
+    return Eq(csrt[0]+csrt[1]*x+csrt[2]*y+csrt[3]*x**2+csrt[4]*x*y+csrt[5]*y**2+csrt[6]*x**3+csrt[7]*x**2*y+csrt[8]*x*y**2+csrt[9]*y**3+csrt[10]*x**4+csrt[11]*x**3*y+csrt[12]*x**2*y**2+csrt[13]*x*y**3+csrt[14]*y**4,0)
+
+def plotfunnel2(funnel:fn.distributedFunnel):
+    from sympy import plot_implicit
+    number = -1
+    cstr_list = []
+    for each_proof in funnel.proof_.values():
+        number += 1
+        this_proof = each_proof[0]['proofs']
+        for origProb in this_proof:
+            one_cstr_list = origProb['origProb']['cstr']
+            for i in one_cstr_list:
+                aCstr=funnel.dynSys.repr.doLinCoordChange(i, funnel.lyapFunc.C_[number])
+                equaltozero=True
+                for j in range(4,aCstr.shape[0]):
+                      equaltozero=bool(-0.00001<aCstr[j]<0.00001) and equaltozero
+                if equaltozero is False:
+                     cstr_list.append(aCstr)
+    p1 = plot_implicit(get_a_inequation(cstr_list[0]),show=False,depth=4)
+    for each_cstr in cstr_list:
+            p1.append(plot_implicit(get_a_inequation(each_cstr),show=False,depth=4)[0])
+    p1.show()
+def plota2DZone(funnel:fn.distributedFunnel,t=0.0):
+    from sympy import plot_implicit
+    this_proof = funnel.proof_[t][0]['proofs']
+    cstr_list=[]
+    for origProb in this_proof:
+        one_cstr_list = origProb['origProb']['cstr']
+        for i in one_cstr_list:
+                aCstr = funnel.dynSys.repr.doLinCoordChange(i, funnel.lyapFunc.C_[0])
+                equaltozero=True
+                for j in range(4,aCstr.shape[0]):
+                      equaltozero=bool(-0.00001<aCstr[j]<0.00001) and equaltozero
+                if equaltozero is False:
+                     cstr_list.append(aCstr)
+    if len(cstr_list)==1:
+        p1 = plot_implicit(get_a_inequation(cstr_list[0]), show=False, depth=4)
+    else:
+         p1 = plot_implicit(get_a_inequation(cstr_list[0]), show=False, depth=4)
+         for each_cstr in cstr_list:
+                p1.append(plot_implicit(get_a_inequation(each_cstr), show=False, depth=2)[0])
+    p1.show()

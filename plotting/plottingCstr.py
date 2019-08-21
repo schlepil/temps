@@ -51,3 +51,4 @@ def plot2dCstr(aObj:Union[rel.constraint, rel.polynomial, rel.convexProg], ax:pt
             fig.colorbar(cc)
 
     return cc
+

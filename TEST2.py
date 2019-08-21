@@ -1,48 +1,19 @@
 import copy
 import numpy as np
 from scipy import sparse
-maxDeg=3
-nVars=3
-listOfMonomials = [[] for _ in range(maxDeg+1)]
-print(listOfMonomials)
-listOfMonomials[0] = [[0 for _ in range(nVars)]]
-print(listOfMonomials)
-print(listOfMonomials[0])
-for deg in range(1, maxDeg + 1):
-    for aMonom in listOfMonomials[deg - 1]:
-        print("aMon",aMonom)
-        for j in range(nVars):
-            newMonom = copy.deepcopy(aMonom)
-            print("newMonom", newMonom)
-            newMonom[j] += 1
-            print("newMonom+1",newMonom)
-            if not newMonom in listOfMonomials[deg]:
-                listOfMonomials[deg].append(newMonom)
-fTrans = lambda aMonom: np.array(aMonom, dtype=int)
-listOfMonomials = [list(map(fTrans, aMonomList)) for aMonomList in listOfMonomials]
-print(listOfMonomials)
-
-def compLinChangeList(nDims: int, digits: int, aMonomList: np.ndarray):
-    coefMat0 = sparse.dok_matrix((nDims + 1, nDims + 1), dtype=int)
-
-    if sum(aMonomList) == 0:
-        thisList = [(0, coefMat0)]
-        thisList[0][1][0, 0] += 1
-    else:
-        thisList = [[0, copy.deepcopy(coefMat0)]]  # Start
-        for i, aExp in enumerate(aMonomList):
-            # For each exponent multiply all existing monomials with the new linear combination
-            # corresponding to x[i,0]
-            for _ in range(aExp):
-                thisListOld = thisList
-                thisList = []
-                for j in range(nDims):
-                    # Single exponent as int
-                    sExpInt = 10 ** (digits * (nDims - j - 1))  # exponent of the jth new dim as integer
-                    for oldExp, oldValue in thisListOld:
-                        newExp = oldExp + sExpInt
-                        newValue = copy.deepcopy(oldValue)
-                        newValue[i + 1, j + 1] += 1  # i+1,j+1 necessary due to the addition of the constant propagation
-                        thisList.append([newExp, newValue])
-
-    return thisList
+from sympy import plot_implicit,symbols,Eq
+x, y = symbols('x y')
+p1=plot_implicit(Eq(1.0*x**2+1.*y**2,1),show=False)
+p2=plot_implicit(Eq(1.0*(x+1)**2+1.*y**2,3),show=False)
+p3=plot_implicit(Eq(1.0*x**2+1.*y**2,5),show=False)
+p1.append(p2[0])
+p1.append(p3[0])
+# p2=plot_implicit(Eq(x**2 + y**2, 5),(x, -5, 5), (y, -2, 2),adaptive=False, points=400)
+# p1.show()
+g=bool(1==2)
+gg=bool(1==1) and bool(1==2)
+print(gg)
+s=bool(-0.00001<0<0.00001)
+print(s)
+sss=bool(-0.00001<10<0.00001)
+print(sss)
