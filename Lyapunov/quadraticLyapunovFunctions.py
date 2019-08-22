@@ -1110,7 +1110,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             # Decide what to do for each critical point
             yPlaneDist = ndot(thisY.T, PG0n).reshape((nu_,))
         
-            radius =.6 # Has to be always strictly smaller than one otherwise linear control prob becomes infeasible  # np.Inf
+            radius =.8 # Has to be always strictly smaller than one otherwise linear control prob becomes infeasible  # np.Inf
             allScaleFacK = {} # 1./(maximal distance of a point to the separation plane) Only generated for the linear inputs
         
             for i, iDist in enumerate(yPlaneDist):
