@@ -9,7 +9,12 @@ from scipy import optimize
 
 # TODO is this ok?
 # Parameter to switch??
-localSolve = sp_minimize
+if coreOptions.doTiming:
+    @myProfiling.countedtimer
+    def localSolve(*args, **kwargs):
+        return sp_minimize(*args, **kwargs)
+else:
+    localSolve = sp_minimize
 
 class convexProg():
 

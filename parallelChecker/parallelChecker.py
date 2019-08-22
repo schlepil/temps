@@ -287,6 +287,9 @@ class workDistributorNoThread:
         
         self.probStore_ = {}
         self.doStoreOrig = True
+
+        self.nbrOfRegistered_ = 0
+        self.nbrOfRetrieved_ = 0
     
     def terminate(self):
         pass
@@ -294,6 +297,9 @@ class workDistributorNoThread:
     def reset(self):
         self.waitingList = waitingListClass()
         self.nbrOfUnreturnedPbr = 0
+
+        self.nbrOfRegistered_ = 0
+        self.nbrOfRetrieved_ = 0
         
         if self.doStoreOrig:
             self.probStore_ = {}
@@ -318,6 +324,7 @@ class workDistributorNoThread:
     
     def setProb(self, problem: dict):
         if __debug__:
+            self.nbrOfRegistered_ += 1
             if nany(problem['probDict']['u'] != 2) and (problem['probDict']['resPlacementParent'] is None):
                 print("snap")
         
@@ -352,7 +359,9 @@ class workDistributorNoThread:
             del self.probStore_[sol['probDict']['probIdStore__']]
         
         if __debug__ and printProbNSol_:
+            self.nbrOfRetrieved_ += 1
             print(f"Returning: \n {serializer.dumps(sol)}")
+
         
         return sol
 
@@ -708,7 +717,7 @@ def workerSolveFixed(inQueue, outQueue):
 
     return 0
 
-
+@myProfiling.countedtimer
 def refine_solution(old_sol:dict, old_extract, old_prob:rel.convexProg, input:dict):
 
     dims,deg_prob = old_prob.repr.nDims, old_prob.repr.maxDeg
@@ -733,7 +742,7 @@ def refine_solution(old_sol:dict, old_extract, old_prob:rel.convexProg, input:di
     return  this_prob, this_prob.solve()
 
 
-
+@myProfiling.countedtimer
 def workerSolveVariable(inQueue, outQueue):
 
     global reprDict_

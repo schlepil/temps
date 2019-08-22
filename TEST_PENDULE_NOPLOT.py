@@ -100,4 +100,8 @@ if __name__ == "__main__":
     print(f"Evolution is alpha:\n {myFunnel.lyapFunc.alpha_} \n P: \n {myFunnel.lyapFunc.P}")
 
     print(f"final funnel is \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[0]} \n P: \n {myFunnel.lyapFunc.getPnPdot(0., True)[1]}")
+
+    # Loop through proof and indicate number of optimizations
+
+
     plot.plt.show()

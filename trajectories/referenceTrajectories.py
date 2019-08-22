@@ -2,7 +2,7 @@ from coreUtils import *
 import trajectories.interpolators as interpolate
 
 class referenceTrajectory:
-    def __int__(self, nx:int, nu:int, tMin:float, tMax:float):
+    def __init__(self, nx:int, nu:int, tMin:float, tMax:float):
         
         assert tMax>tMin
         
@@ -58,20 +58,50 @@ class analyticTrajectory(referenceTrajectory):
                 return (self.fX(t)-self.fX(t-self._dt))/self._dt
         else:
             return self.fXd(t)
-        
+
+def decomposeOMPLFile(fileName:str, nx:int, nu:int):
+    from os import path
+
+    dir, name = path.split(fileName)
+
+
+    allOMPL = np.loadtxt(fileName)
+    assert allOMPL.shape[1] == nx+nu+1
+    allX = allOMPL[:,:nx].T
+    allU = allOMPL[:, nx:nx+nu].T
+    # Left neighbour interpolation
+    allU[:, :-1] = allU[:, 1:]
+    allU[:, -1] = 0. # Should never be used
+
+    T = allOMPL[:, -1].reshape((-1,))
+    T = np.cumsum(T)
+
+    with open(path.join(dir, name+"_X"), 'w') as file:
+        np.savetxt(file, allX)
+    with open(path.join(dir, name+"_U"), 'w') as file:
+        np.savetxt(file, allU)
+    with open(path.join(dir, name+"_T"), 'w') as file:
+        np.savetxt(file, T)
+
+    return fileName
+
 class omplTrajectory(referenceTrajectory):
 
-    def __init__(self, dynF:Callable, fileName:str, nx:int, nu:int, tMin:float=0., tMax:float=1.,
-                 interPX = interpolate.interpolate.pchip_interpolate, interPU = interpolate.leftNeighboor):
+    def __init__(self, dynF:Callable, fileName:str, nx:int, nu:int, tMin:float=None, tMax:float=None,
+                 interPX = interpolate.interpolate.PchipInterpolator, interPU = interpolate.leftNeighboor):
 
-        super(omplTrajectory, self).__init__(nx, nu, tMin, tMax)
 
-        self.X = np.load( f"{fileName}_X.npy" )
-        self.U = np.load( f"{fileName}_U.npy" )
-        self.t = np.load( f"{fileName}_T.npy" )
+        self.X = np.loadtxt( f"{fileName}_X" )
+        self.U = np.loadtxt( f"{fileName}_U" )
+        self.t = np.loadtxt( f"{fileName}_T" )
+
+        tMin = self.t[0] if tMin is None else tMin
+        tMax = self.t[-1] if tMax is None else tMax
+
+        super(type(self), self).__init__(nx, nu, tMin, tMax)
 
         assert(self.tLims[0]>=self.t[0])
-        assert (self.tLims[1] <= self.t[1])
+        assert (self.tLims[1] <= self.t[-1])
 
         self.dynF = dynF # It is better to compute the derivative using the interpolated position and control input
 
