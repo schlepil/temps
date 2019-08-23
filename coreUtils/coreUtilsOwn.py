@@ -1,5 +1,7 @@
 from coreUtils.coreUtilsImport import Callable, Iterable, List
+from coreUtils.dbg import *
 from copy import deepcopy as dp
+
 
 
 def lmap(f:Callable, l:Iterable)->List:
@@ -62,7 +64,7 @@ def rescaleLinCtrlDict(ctrlDict:dict, scale=1., doDeepCopy=True):
             else:
                 aCoeffDict[2] *= scale
         except (KeyError, AssertionError, TypeError, ValueError):
-            if __debug__:
+            if dbg__1:
                 print(f"Passed on {aInKey} for rescaling")
         except IndexError:
             print('No Indexable features should be addressed')

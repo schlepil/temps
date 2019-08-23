@@ -118,7 +118,7 @@ class localFixedPropagator(propagators):
         # Set the start point
         localSolveDict['x0'] = x0.reshape((nq_,))
         
-        if __debug__:
+        if dbg__0:
             if nany(localSolveDict['constraints']['fun'](localSolveDict['x0']) < -coreOptions.absTolCstr):
                 print(f"Constraints failed on starting point with {localSolveDict['constraints']['fun'](localSolveDict['x0'])}")
         
@@ -140,7 +140,7 @@ class localFixedPropagator(propagators):
         
         thisPolyObj = self.thisPolyObj_
 
-        if __debug__:
+        if dbg__0:
             if not res.success:
                 raise UserWarning(f"local opt failed {res}")
         

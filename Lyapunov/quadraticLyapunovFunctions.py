@@ -39,7 +39,7 @@ def standardInterpol(tIn:np.ndarray, P:np.ndarray, C:np.ndarray, Plog:np.ndarray
     tIndL, tIndU = getLowerNUpperInd(tIn, t)
     
     if t.size == 1:
-        if __debug__:
+        if dbg__0:
             assert nall(tIn.squeeze() == t[0])
         alpha = nzeros((1,), dtype=nfloat)
     else:
@@ -74,7 +74,7 @@ def geodesicInterpol(tIn:np.ndarray, P:np.ndarray, C:np.ndarray, Plog:np.ndarray
     # and Serge Lang, Fundamentals of Differential Geometry, p 326
 
     if t.size == 1:
-        if __debug__:
+        if dbg__0:
             assert nall(tIn.squeeze() == t[0])
         alpha = nzeros((1,), dtype=nfloat)
         dT = 1.
@@ -110,7 +110,7 @@ class quadraticLyapunovFunction(LyapunovFunction):
     """
     def __init__(self,dynSys: dynamicalSystem,P: np.ndarray=None, alpha:float=None):
         
-        if __debug__:
+        if dbg__0:
             if P is not None:
                 assert (P.shape[0] == P.shape[1]) and (P.shape[0] == dynSys.nq)
                 assert alpha is not None
@@ -159,7 +159,7 @@ class quadraticLyapunovFunction(LyapunovFunction):
         try:
             t = float(t)
         except:
-            if __debug__:
+            if dbg__0:
                 assert isinstance(t, np.ndarray)
             P = np.tile(P, (t.size, P.shape[0], P.shape[1]))
         if returnPd:
@@ -242,7 +242,7 @@ class quadraticLyapunovFunction(LyapunovFunction):
         :param N:
         :return:
         """
-        if __debug__:
+        if dbg__0:
             assert (A is None) and (B is None) and (x is not None)
         
         if A is None:
@@ -266,7 +266,7 @@ class quadraticLyapunovFunction(LyapunovFunction):
         
 
     def getObjectivePoly(self,x0: np.ndarray = None,dx0: np.ndarray = None,fTaylor: np.ndarray = None,gTaylor: np.ndarray = None,uOpt: np.ndarray = None,idxCtrl: np.ndarray = None,t: float = 0.,taylorDeg: int = 3):
-        if __debug__:
+        if dbg__0:
             assert (fTaylor is None) == (gTaylor is None)
             assert (x0 is None) != (fTaylor is None)
             assert taylorDeg is not None
@@ -304,7 +304,7 @@ class quadraticLyapunovFunction(LyapunovFunction):
         :return:
         """
 
-        if __debug__:
+        if dbg__0:
             assert (fTaylor is None) == (gTaylor is None)
             assert (x0 is None) != (fTaylor is None)
             assert taylorDeg is not None
@@ -338,7 +338,7 @@ class quadraticLyapunovFunction(LyapunovFunction):
         :param which:
         :return:
         """
-        if __debug__:
+        if dbg__0:
             assert deg in (1,3)
             assert taylorDeg>=deg
         
@@ -371,7 +371,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
 
     def __init__(self, dynSys: dynamicalSystem, P:np.ndarray=None, alpha:np.ndarray = None, t:np.ndarray = None):
         
-        if __debug__:
+        if dbg__0:
             if P is not None:
                 assert (P.shape[1] == P.shape[2]) and (P.shape[1] == dynSys.nq)
                 assert alpha is not None
@@ -412,7 +412,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     
     @P.setter
     def P(self, newP):
-        if __debug__:
+        if dbg__0:
             assert (self.P_ == newP.shape) or (self.P_ is None)
         self.P_ = newP
         self.compute_()
@@ -425,7 +425,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
     def alpha(self, newAlpha):
         if nany(newAlpha.squeeze()<=coreOptions.alphaAbsMin):
             assert 0, 'some alphas are too close to zero'
-        if __debug__:
+        if dbg__0:
             assert (newAlpha.size == self.P_.shape[0]) or (newAlpha.size == self.alpha_.size) or (self.alpha_ is None)
         self.alpha_ = newAlpha.reshape((-1,))
         self.compute_()
@@ -435,7 +435,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         return self.t_
     @t.setter
     def t(self, newt):
-        if __debug__:
+        if dbg__0:
             assert (t.size == self.alpha_.size) or (t.size == self.t_.size) or (self.t_ is None)
         self.t_ = t.reshape((-1,))
     
@@ -456,7 +456,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             self.alpha_[idx] = newAlpha
             self.computeK_(idx)
 
-        if 0 and __debug__: # This relatively expensive -> Activate manually if necessary
+        if 0 and dbg__0: # This relatively expensive -> Activate manually if necessary
             if self.t_.size>1:
                 if idx == self.t_.size-1:
                     timePoints = np.linspace(self.t_[idx-1], self.t_[idx], 20)
@@ -486,14 +486,14 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             self.t_ = narray([t])
         else:
             if t in self.t_:
-                if __debug__:
+                if dbg__0:
                     print(f"Replacing item at {t}")
                 ind = np.argwhere(t == self.t_)
                 self.t_[ind] = t
                 self.alpha_[ind] = PnAlpha[1]
                 self.P_[ind,:,:] = PnAlpha[0]
             else:
-                if __debug__:
+                if dbg__0:
                     print(f"RWInserting item")
                 # Keep ordering
                 try:
@@ -534,7 +534,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 self.Plog_[i,:,:] = logm(self.P_[i,:,:]/self.alpha_[i])
                 self.C_[i,:,:] = cholesky(self.P_[i,:,:]/self.alpha_[i])
                 self.Ci_[i,:,:] = inv(self.C_[i,:,:])
-            if __debug__:
+            if dbg__0:
                 self.checkNumerics()
         return None
     
@@ -544,7 +544,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             self.Plog_[k, :, :] = logm(self.P_[k, :, :]/self.alpha_[k])
             self.C_[k, :, :] = cholesky(self.P_[k, :, :]/self.alpha_[k])
             self.Ci_[k, :, :] = inv(self.C_[k, :, :])
-        if __debug__:
+        if dbg__0:
             self.checkNumerics()
         return None
         
@@ -604,7 +604,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         ctrlDict[-1][0] -= thisPoly.coeffs*opts_['minConvRate']
     
         for k in range(self.dynSys.nu):
-            if __debug__:
+            if dbg__0:
                 assert abs(objectiveStar[k+1, 0]) <= 1e-9
             #Each part of the total convergence depends linearly on the input
             #ctrlDict[k] = {-1:objectiveStar[k+1, :]*allDeltaU[0][k, 0], 1:objectiveStar[k+1, :]*allDeltaU[1][k, 0]}  # Best is minimal or maximal
@@ -784,7 +784,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         :param N:
         :return:
         """
-        if __debug__:
+        if dbg__0:
             assert (A is None) and (B is None) and (x is not None)
         
         if A is None:
@@ -800,7 +800,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         return P, K
     
     def getObjectivePoly(self, x0: np.ndarray = None, dx0: np.ndarray = None, fTaylor: np.ndarray = None, gTaylor: np.ndarray = None, uOpt: np.ndarray = None, idxCtrl: np.ndarray = None, t: float = 0., taylorDeg: int = 3):
-        if __debug__:
+        if dbg__0:
             assert (fTaylor is None) == (gTaylor is None)
             assert (x0 is None) != (fTaylor is None)
             assert taylorDeg is not None
@@ -837,7 +837,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         :param taylorDeg:
         :return:
         """
-        if __debug__:
+        if dbg__0:
             assert (x0 is None) != (t is None)
         
         if (x0 is None) == (fTaylor is None):
@@ -848,7 +848,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             
         
         
-        if __debug__:
+        if dbg__0:
             assert (fTaylor is None) == (gTaylor is None)
             assert (x0 is None) != (fTaylor is None)
             assert taylorDeg is not None
@@ -894,7 +894,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 P = TorZone[0]/TorZone[1]
             else:
                 P = TorZone
-            if __debug__:
+            if dbg__0:
                 assert P.shape == (self.nq, self.nq)
         
         taylorDeg = [len(aLNbr) for aLNbr in self.repr.varNumsUpToDeg].index( gTaylor.shape[0])
@@ -971,7 +971,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                 P = TorZone[0]/TorZone[1]
             else:
                 P = TorZone
-            if __debug__:
+            if dbg__0:
                 assert P.shape == (self.nq, self.nq)
         
         if x0 is not None:
@@ -1085,7 +1085,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
             if thisPoly.eval2(thisY) < opts['numericEpsPos']:
                 # This point is not stabilizable using optimal control input
-                if __debug__:
+                if dbg__1:
                     print(f"""Point \n{thisY}\n is not stabilizable with eps {opts["numericEpsPos"]}""")
                 return []
     
@@ -1143,11 +1143,11 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
 
             # Now we have the necessary information and we can construct the actual problem
             thisCoeffs = ctrlDict[-1][0].copy()  # Objective resulting from system dynamics
-            if __debug__:
+            if dbg__0:
                 thisProb[f"obj_-1,0"] = ctrlDict[-1][0].copy()
             for i, type in enumerate(thisCtrlType.reshape((-1,))):
                 thisCoeffs += ctrlDict[i][type] # Part resulting from input dynamics and applying i-th control type
-                if __debug__:
+                if dbg__0:
                     thisProb[f"obj_{i},{type}"] = ctrlDict[i][type].copy()
                     
             thisProb['obj'] = -thisCoeffs  # Inverse sign to maximize divergence <-> minimize convergence
@@ -1183,7 +1183,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                     thisSubProbList = self.analyzeSolSphereDiscreteCtrl(newSol, ctrlDictIn, opt) # Pass the unscaled version of the ctrlDict
                     if not thisSubProbList:
                         # Even when splitted this point remains infeasible -> proof of non-convergence -> return empty list
-                        if __debug__:
+                        if dbg__0:
                             print(f"The solution {newSol} cannot be stabilized -> early exit")
                     probList.extend(thisSubProbList)
             else:
@@ -1259,7 +1259,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
                     val = [float(thisPoly.eval2(allY[:, [k]])) for k in range(allY.shape[1])]
                     convDict[aKey].update({bKey:val})
             except:
-                if __debug__:
+                if dbg__1:
                     print(f"Unable to eval {aKey} with {aVal}")
         # Compute convergence (Optimal control input with respect to separating hypersurface)
         allRes = nzeros((allY.shape[1],), dtype=nfloat)
@@ -1340,13 +1340,13 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
             
             thisCoeffs = ctrlDict[-1][0].copy()
             
-            if __debug__:
+            if dbg__0:
                 thisProb[f'obj_-1,0'] = ctrlDict[-1][0].copy()
         
             for k in range(nu_):
                 thisCoeffs += ctrlDict[k][input[k]]
                 
-                if __debug__:
+                if dbg__0:
                     thisProb[f'obj_{k},{input[k]}'] = ctrlDict[k][input[k]].copy()
                     
             
@@ -1384,7 +1384,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         
             if opts['sphereBoundCritPoint']:
                 # assert thisSol['probDict']['nPt'] == -1
-                if __debug__:
+                if dbg__0:
                     if ((thisSol['probDict']['resPlacementParent'] is None) and (nany(thisSol['probDict']['u'] != 2))):
                         raise RuntimeError
                     if opts['projection'] != 'sphere':
@@ -1459,7 +1459,7 @@ class quadraticLyapunovFunctionTimed(LyapunovFunction):
         yStarOld = oldSol['ySol']
         zStarOld = self.repr.evalAllMonoms(yStarOld)
         
-        if __debug__:
+        if dbg__0:
             # Check if the point is inside all constraints
             for aCstr in newProb['cstr'][1:]: # First constraint is lasserre constraint
                 thisPoly.coeffs = aCstr
@@ -1588,7 +1588,7 @@ class piecewiseQuadraticLyapunovFunction(LyapunovFunction):
 
     def __init__(self, dynSys: dynamicalSystem, P0: np.ndarray, alpha: float):
 
-        if __debug__:
+        if dbg__0:
             if P0 is not None:
                 assert (P0.shape[0] == P0.shape[1]) and (P0.shape[0] == dynSys.nq)
                 assert alpha is not None

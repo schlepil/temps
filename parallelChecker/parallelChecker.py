@@ -102,7 +102,7 @@ def probSetterShared_(problem: dict, probQueue: "Queue", workerId: int):
     # First copy, then put into queue
     # Necessary
     
-    if __debug__ and printProbNSol_:
+    if dbg__1 and printProbNSol_:
         print(f"Putting; \n {serializer.dumps(problem)}")
     
     polyObjSharedNP_[workerId][:problem['obj'].size] = problem['obj']
@@ -122,7 +122,7 @@ def probSetterShared_(problem: dict, probQueue: "Queue", workerId: int):
 def probSetterBare_(problem: dict, probQueue: "Queue", workerId: int):
     # Put all into the queue
     
-    if __debug__:
+    if dbg__1:
         print(f"Putting; \n {serializer.dumps(problem)}")
     
     problem['probDict']['workerId'] = workerId
@@ -164,7 +164,7 @@ def solGetter(solQueues: List["Queue"], workerId: int = None, block=True, timeou
     else:
         sol = solQueues[workerId].get(block=block, timeout=timeout)
     
-    if __debug__ and printProbNSol_:
+    if dbg__1 and printProbNSol_:
         print(f"Recieving; \n {serializer.dumps(sol)}")
     
     return sol
@@ -231,7 +231,7 @@ class workDistributor:
         self.waitingList.push(problem)
         self.spin()
         
-        if __debug__ and printProbNSol_:
+        if dbg__1 and printProbNSol_:
             print(f"Appending: \n {serializer.dumps(problem)}")
         
         return None
@@ -267,7 +267,7 @@ class workDistributor:
             sol['origProb'] = self.probStore_[sol['probDict']['probIdStore__']]
             del self.probStore_[sol['probDict']['probIdStore__']]
         
-        if __debug__ and printProbNSol_:
+        if dbg__1 and printProbNSol_:
             print(f"Returning: \n {serializer.dumps(sol)}")
         
         return sol
@@ -323,7 +323,7 @@ class workDistributorNoThread:
         return None
     
     def setProb(self, problem: dict):
-        if __debug__:
+        if dbg__0:
             self.nbrOfRegistered_ += 1
             if nany(problem['probDict']['u'] != 2) and (problem['probDict']['resPlacementParent'] is None):
                 print("snap")
@@ -340,7 +340,7 @@ class workDistributorNoThread:
         
         self.waitingList.push(problem)
         
-        if __debug__ and printProbNSol_:
+        if dbg__1 and printProbNSol_:
             print(f"Appending: \n {serializer.dumps(problem)}")
         
         return None
@@ -358,7 +358,7 @@ class workDistributorNoThread:
             sol['origProb'] = self.probStore_[sol['probDict']['probIdStore__']]
             del self.probStore_[sol['probDict']['probIdStore__']]
         
-        if __debug__ and printProbNSol_:
+        if dbg__1 and printProbNSol_:
             self.nbrOfRetrieved_ += 1
             print(f"Returning: \n {serializer.dumps(sol)}")
 
@@ -390,22 +390,22 @@ def get_or_create(dims_deg:Tuple, cstr_deg_type:List, solver='cvxopt', id_str:st
 
     try:
         this_repr = reprDict_[dims_deg]
-        if __debug__:
+        if dbg__2:
             print(f"{id_str} found representation")
     except KeyError:
         this_repr = poly.polynomialRepr(*dims_deg)
         reprDict_[dims_deg] = this_repr
-        if __debug__:
+        if dbg__1:
             print(f"{id_str} created representation")
 
     try:
         this_relax = relaxationDict_[dims_deg]
-        if __debug__:
+        if dbg__2:
             print(f"{id_str} found relaxation")
     except KeyError:
         this_relax = rel.lasserreRelax(this_repr)
         relaxationDict_[dims_deg] = this_relax
-        if __debug__:
+        if dbg__1:
             print(f"{id_str} created relaxation")
 
     try:
@@ -427,7 +427,7 @@ def get_or_create(dims_deg:Tuple, cstr_deg_type:List, solver='cvxopt', id_str:st
         if not dims_deg in problemDict_.keys():
             problemDict_[dims_deg] = {}
         problemDict_[dims_deg][tuple(cstr_deg_type)] = this_prob
-        if __debug__:
+        if dbg__1:
             print(f"{id_str} created the problem structure for {dims_deg} and {cstr_deg_type}")
 
     return this_repr, this_relax, this_prob
@@ -453,7 +453,7 @@ def do_fill(a_prob:rel.convexProg, input:dict):
 
     # pregenerate the slices
     slice_min = slice(0, len(a_prob.repr.varNumsUpToDeg[min(deg_input, deg_prob)]))
-    if __debug__:
+    if dbg__0:
         slice_excl = slice(len(a_prob.repr.varNumsUpToDeg[min(deg_input, deg_prob)]), input['obj'].size)
         assert nall(input['obj'][slice_excl] == 0.)
 
@@ -481,7 +481,7 @@ def do_fill(a_prob:rel.convexProg, input:dict):
             elif cstrType == 'q':
                 raise NotImplemented
             else:
-                if __debug__:
+                if dbg__0:
                     assert input['cstr'][k].size == input['obj'].size
                     assert nall(input['cstr'][k][slice_excl]==0.)
 
@@ -543,7 +543,7 @@ def workerSolveFixed(inQueue, outQueue):
             selfNr = input['workerId'] = os.getpid()
         selfSolver = input['solver']
         
-        if __debug__:
+        if dbg__0:
             print(f"Worker {selfNr} recieved new input")
         
         # try:
@@ -551,7 +551,7 @@ def workerSolveFixed(inQueue, outQueue):
         #     thisRelax = relaxationDict_[input['dimsNDeg']]
         #     thisProb = problemDict_[input['dimsNDeg']][tuple(input['nCstrNDegType'])] # TODO reduce memory footprint by making it order invariant
         #
-        #     if __debug__:
+        #     if dbg__0:
         #         print(f"Worker {selfNr} found corresponding representation, relaxation and problem")
         #
         #     #thisProb.objective = np.frombuffer(polyObjShared_[selfNr], nfloat, thisRepr.nMonoms)
@@ -582,22 +582,22 @@ def workerSolveFixed(inQueue, outQueue):
         #
         #     try:
         #         thisRepr = reprDict_[input['dimsNDeg']]
-        #         if __debug__:
+        #         if dbg__0:
         #             print(f"Worker {selfNr} found representation")
         #     except KeyError:
         #         thisRepr = poly.polynomialRepr(nDims, maxDeg)
         #         reprDict_[input['dimsNDeg']] = thisRepr
-        #         if __debug__:
+        #         if dbg__0:
         #             print(f"Worker {selfNr} created representation")
         #
         #     try:
         #         thisRelax = relaxationDict_[input['dimsNDeg']]
-        #         if __debug__:
+        #         if dbg__0:
         #             print(f"Worker {selfNr} found relaxation")
         #     except KeyError:
         #         thisRelax = rel.lasserreRelax(thisRepr)
         #         relaxationDict_[input['dimsNDeg']] = thisRelax
-        #         if __debug__:
+        #         if dbg__0:
         #             print(f"Worker {selfNr} created relaxation")
         #
         #     # Get all polynomials
@@ -634,7 +634,7 @@ def workerSolveFixed(inQueue, outQueue):
         #     if not input['dimsNDeg'] in problemDict_.keys():
         #         problemDict_[input['dimsNDeg']] = {}
         #     problemDict_[input['dimsNDeg']][tuple(input['nCstrNDegType'])] = thisProb
-        #     if __debug__:
+        #     if dbg__0:
         #         print(f"Worker {selfNr} created the problem structure for {input['dimsNDeg']} and {input['nCstrNDegType']}")
 
         thisRepr, thisRelax, thisProb = get_or_create(input['dimsNDeg'], input['nCstrNDegType'], solver = input['solver'], id_str=f"Worker {selfNr} ")
@@ -678,7 +678,7 @@ def workerSolveFixed(inQueue, outQueue):
             ySol = extraction[0]
         
         
-        if __debug__:
+        if dbg__1:
             xSol = extraction[0]
             if xSol is None:
                 print("What the hell")
@@ -754,8 +754,10 @@ def workerSolveVariable(inQueue, outQueue):
 
         input = inQueue.get()
 
-        if input == "":
-            print(f"Worker {selfNr} is terminating")
+        if (input == ""):
+            if dbg__1:
+                # Silence no thread
+                print(f"Worker {selfNr} is terminating")
             break
 
         if not useSharedMem_:
@@ -767,10 +769,6 @@ def workerSolveVariable(inQueue, outQueue):
         except KeyError:
             selfNr = input['workerId'] = os.getpid()
         selfSolver = input['solver']
-
-        if __debug__:
-            print(f"Worker {selfNr} recieved new input")
-            print(f"ProbDict start : \n {input}")
         
         if nany(input['u'] != 2) and (input['resPlacementParent'] is None):
             print("snap")
@@ -815,14 +813,14 @@ def workerSolveVariable(inQueue, outQueue):
         solution = do_fill_solve(thisProb, input if useSharedMem_ else inputAll)
 
         # test
-        if __debug__:
+        if dbg__0:
             doSolTest(inputAll, thisProb, solution)
 
         while True:
             try:
                 extraction = thisProb.extractOptSol(solution)
             except:
-                if __debug__:
+                if dbg__0:
                     print('a')
                     extraction = thisProb.extractOptSol(solution)
                 else:
@@ -834,7 +832,7 @@ def workerSolveVariable(inQueue, outQueue):
             # refine_solution(old_sol:dict, old_extract, old_prob:rel.convexProg, input:dict):
             try:
                 thisProb, solution = refine_solution(solution, extraction, thisProb, input if useSharedMem_ else inputAll)
-                if __debug__:
+                if dbg__0:
                     doSolTest(inputAll, thisProb, solution)
             except:
                 thisProb, solution = refine_solution(solution, extraction, thisProb, input if useSharedMem_ else inputAll)
@@ -852,7 +850,7 @@ def workerSolveVariable(inQueue, outQueue):
             ySol = extraction[0]
 
         #Testing
-        if __debug__:
+        if dbg__1:
             xSol = extraction[0]
             if xSol is None:
                 print("What the hell")

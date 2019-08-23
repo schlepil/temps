@@ -14,7 +14,7 @@ class referenceTrajectory:
         t = self.checkTime(t,doRestrict)
         return self.getX(t, False),self.getDX(t, False),self.getU(t, False)
     def checkTime(self,t,restrict=True):
-        if __debug__:
+        if dbg__0:
             if nany(t>self.tLims[1]):
                 print("time larger then final time")
             if nany(t<self.tLims[0]):
@@ -91,9 +91,9 @@ class omplTrajectory(referenceTrajectory):
                  interPX = interpolate.interpolate.PchipInterpolator, interPU = interpolate.leftNeighboor):
 
 
-        self.X = np.loadtxt( f"{fileName}_X" )
-        self.U = np.loadtxt( f"{fileName}_U" )
-        self.t = np.loadtxt( f"{fileName}_T" )
+        self.X = np.loadtxt( f"{fileName}_X" ).reshape((nx,-1))
+        self.U = np.loadtxt( f"{fileName}_U" ).reshape((nu,-1))
+        self.t = np.loadtxt( f"{fileName}_T" ).reshape((-1,))
 
         tMin = self.t[0] if tMin is None else tMin
         tMax = self.t[-1] if tMax is None else tMax
@@ -102,6 +102,7 @@ class omplTrajectory(referenceTrajectory):
 
         assert(self.tLims[0]>=self.t[0])
         assert (self.tLims[1] <= self.t[-1])
+        assert  (self.X.shape[1] == self.U.shape[1]) and (self.t.size == self.U.shape[1])
 
         self.dynF = dynF # It is better to compute the derivative using the interpolated position and control input
 
@@ -116,7 +117,7 @@ class omplTrajectory(referenceTrajectory):
         return self.urefI(t).reshape((self.nu,-1))
     def getX(self,t:float, doRestrict:bool=True):
         t = self.checkTime(t, doRestrict)
-        return self.fX(t).reshape((self.nx,-1))
+        return self.xrefI(t).reshape((self.nx,-1))
     def getDX(self,t:float, doRestrict:bool=True):
         """
         This is used on the reference trajectory -> use original, nonlinear dynamics

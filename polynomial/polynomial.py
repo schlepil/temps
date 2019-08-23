@@ -24,7 +24,7 @@ class polynomial():
 
         self.maxDeg = self.getMaxDegree()
         
-        if __debug__:
+        if dbg__0:
             assert self.maxDeg<=self.repr.maxDeg
 
     
@@ -57,13 +57,13 @@ class polynomial():
     
     
     def __add__(self, other):
-        if __debug__:
+        if dbg__0:
             assert isinstance(other, polynomial)
             assert self.repr == other.repr
         return polynomial(self.repr, self._coeffs + other._coeffs, alwaysFull=self._alwaysFull)
     
     def __iadd__(self, other):
-        if __debug__:
+        if dbg__0:
             assert isinstance(other, polynomial)
             assert self.repr == other.repr
         self._coeffs+=other._coeffs
@@ -71,13 +71,13 @@ class polynomial():
         return self
     
     def __sub__(self, other):
-        if __debug__:
+        if dbg__0:
             assert isinstance(other, polynomial)
             assert self.repr == other.repr
         return polynomial(self.repr, self._coeffs - other._coeffs, alwaysFull=self._alwaysFull)
     
     def __isub__(self, other):
-        if __debug__:
+        if dbg__0:
             assert isinstance(other, polynomial)
             assert self.repr == other.repr
         self._coeffs-=other._coeffs
@@ -91,7 +91,7 @@ class polynomial():
         if isinstance(other, (float,int)):
             return polynomial(self.repr, float(other) * self._coeffs, alwaysFull=self._alwaysFull)
         else:
-            if __debug__:
+            if dbg__0:
                 assert isinstance(other, polynomial)
                 assert self.repr == other.repr
                 assert self.maxDeg+other.maxDeg<=self.repr.maxDeg
@@ -108,7 +108,7 @@ class polynomial():
         if isinstance(other,(float,int)):
             self._coeffs *= float(other)
         else:
-            if __debug__:
+            if dbg__0:
                 assert isinstance(other, polynomial)
                 assert self.repr == other.repr
                 assert self.maxDeg+other.maxDeg <= self.repr.maxDeg
@@ -119,7 +119,7 @@ class polynomial():
         return self
     
     def __pow__(self, power:int, modulo=None):
-        if __debug__:
+        if dbg__0:
             assert self.maxDeg*power<=self.repr.maxDeg
         #very simplistic
         newPoly = self*self
@@ -173,7 +173,7 @@ class polynomial():
         self._isUpdate = True
         
     def setQuadraticForm(self, Q:np.ndarray, qMonoms:np.ndarray=None, h=None, hMonoms=None):
-        if __debug__:
+        if dbg__0:
             assert Q.shape[0] == Q.shape[1]
 
         qMonoms = self.repr.varNumsPerDeg[1] if qMonoms is None else qMonoms

@@ -71,7 +71,7 @@ def getInverseTaylorStrings(Mstr='M',Mistr='Mi',fstr='f',derivStrings=['x','y','
     
     # TODO take into account that M and Mi are symmetric, use np multidot
     
-    if __debug__:
+    if dbg__0:
         print(allDerivsListStr)
     
     return {'funcstr':allDerivsListStr, 'derivStr':derivStrings, 'allDerivs':dict(zip(allDerivStr,allDerivs))}
@@ -87,7 +87,7 @@ def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:i
     :param repr:
     :return:
     """
-    if __debug__:
+    if dbg__0:
         assert repr.nDims == q.shape[0]*q.shape[1]
 
     #Definitions
@@ -102,7 +102,7 @@ def compParDerivs(f:sy.Matrix, fStr:str, q:sy.Symbol, isMat:bool, maxPDerivDeg:i
     # Check if derive_by_array is better
 
     if not isMat:
-        if __debug__:
+        if dbg__0:
             assert m==1, 'only vectors allowed'
         #Vector case
         pDerivFD = {f"{fStr}0": sy.Matrix(nzeros((n, 1)))}

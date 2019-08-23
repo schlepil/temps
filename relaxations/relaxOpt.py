@@ -119,7 +119,7 @@ class convexProg():
         vMax = v[-1]
         vRel = v*(1./vMax)
 
-        if __debug__:
+        if dbg__0:
             assert vRel[0] > -opts_['relTol']
 
         if (nall(vRel[:-1]<opts_['relTol'])):
@@ -150,7 +150,7 @@ class convexProg():
                            else:
                                xSol=xSolnew
             assert abs(atol) < 1e-1
-            if __debug__:
+            if dbg__1:
                 print(f"Found valid solution for atol : {atol}")
             
             return xSol, None, (None, None, None)
@@ -347,6 +347,9 @@ class convexProg():
             #                raise RuntimeError
             #             else:
             #                xSol=xSolnew
+
+            # TODO : Do not abuse this as results are not reliable
+            # Reoptimize only for small violations and/or keep only the worst point (after reoptimization) for non-valid
             for i in range(xSol.shape[1]):
                 if isValid[i]:
                     continue
@@ -360,7 +363,7 @@ class convexProg():
                 assert thisIsValid, "Ups local solve failed"
                 isValid[i] = True
             
-            if __debug__:
+            if dbg__1:
                 print(f"Found valid solution for atol : {atol}")
             
             # Only return valid ones
@@ -405,7 +408,7 @@ class convexProg():
         
         thisProbDict = self.localSolveDict(xSol)
         res = localSolve(**thisProbDict)
-        if __debug__:
+        if dbg__0:
             if not res.success:
                 raise UserWarning(f'Local opt failed {res}')
             if not nall(thisProbDict['constraints']['fun'](res.x)>-coreOptions.absTolCstr):

@@ -82,7 +82,7 @@ def getIdxAndParent(aMonom: int,aMonomList: narray,nVars: int,digits: int):
 
 
     # TODO change to additionally take varnum2varnumParents
-#    if __debug__: #numba .43
+#    if dbg__0: #numba .43
 #        assert isinstance(aMonom,(int, nint, nintu))
 #        assert isinstance(aMonomList,np.ndarray)
     

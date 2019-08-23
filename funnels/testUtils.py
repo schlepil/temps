@@ -14,7 +14,8 @@ def testSol(sol, ctrlDict:dict):
 
     # Test if solution(s) is(are) valid
     xSol = sol['xSol'] #At
-    print(f"Minimizers are:\n{xSol}")
+    if dbg__1:
+        print(f"Minimizers are:\n{xSol}")
     zxSol = thisRepr.evalAllMonoms(xSol)
     
     try:
@@ -62,8 +63,8 @@ def testSol(sol, ctrlDict:dict):
             optsVals[k] += thisVal
             if thisVal <= 0.:
                 print(f"The control type {type} for input {i} failed on minimizer {k}")
-
-    print(f"global minimum was \n{sol['obj']}\n, computed values from ctrlDict are \n{optsVals}")
+    if dbg__1:
+        print(f"global minimum was \n{sol['obj']}\n, computed values from ctrlDict are \n{optsVals}")
 
 
 

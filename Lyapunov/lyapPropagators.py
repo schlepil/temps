@@ -171,7 +171,7 @@ class quadLyapTimeVaryingLQR(lyapEvol):
             allT = np.flip(allT, 0)
             allZ = np.fliplr(allZ)
         
-        if __debug__:
+        if dbg__0:
             for k in range(allZ.shape[1]):
                 aP = allZ[:, k].reshape((nq, nq)).copy()
                 try:

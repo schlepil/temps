@@ -80,7 +80,7 @@ class boxInputCstr(inputConstraints):
         except (AttributeError, TypeError):
             idx = narray(idx, ndmin=1, dtype=nint)
 
-        if __debug__:
+        if dbg__0:
             assert idx.dtype in (nintu,nint)
             assert len(idx.shape) == 1
             assert (uRef is not None) and (not np.any(idx==0))
@@ -177,7 +177,7 @@ class boxInputCstrNoised(boxInputCstr):
         :param limU:
         """
         
-        if __debug__:
+        if dbg__0:
             assert nuCtrl >=0
             assert nuNoise >= 0
         
@@ -224,7 +224,7 @@ class boxInputCstrLFBG(boxInputCstr):
         except (AttributeError, TypeError):
             idx = narray(idx, ndmin=1, dtype=nint)
         
-        if __debug__:
+        if dbg__0:
             assert (P is None) or (P.shape[0]==P.shape[1])
             assert ((P is None) and (PG0 is None)) or ((P is not None) and (PG0 is not None))
             assert np.all(idx<2) or (PG0 is not None)
@@ -243,7 +243,7 @@ class boxInputCstrLFBG(boxInputCstr):
         if uRef is None:
             uRef = self.refTraj.getU(t)
         
-        if __debug__:
+        if dbg__0:
             assert uOut.shape[1] == 1+nq
 
         # First get the bang bang optimal control
@@ -257,7 +257,7 @@ class boxInputCstrLFBG(boxInputCstr):
             if aIdx==2:
                 # Linear feedback is demanded for this input
                 # smallest allowable abs input
-                if __debug__:
+                if dbg__0:
                     assert self.thisLimL[k,0] <= uRef[k,0] <= self.thisLimU[k,0]
                 uMaxAbsK = min(uRef[k,0]-self.thisLimL[k,0],self.thisLimU[k,0]-uRef[k,0])
                 #ki = -PG0[:,[k]].T/norm(PG0[:,k],ord=2,axis=0)#normalise

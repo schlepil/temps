@@ -141,7 +141,7 @@ def evalRand(nDims, maxDegree):
 
         x = np.random.rand(nDims,)
         y = ndot(C,x.reshape((-1,1)))
-        if __debug__:
+        if dbg__0:
             print(thisPoly.eval(x)-thisPolyTrans.eval(y.squeeze()))
         else:
             assert abs(thisPoly.eval(x)-thisPolyTrans.eval(y.squeeze())) < 1e-10

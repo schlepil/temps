@@ -27,7 +27,7 @@ def populateCstr(cMat, firstIdxPerK, posInCMat, whichCoeff, c):
 #We will only look at the upper triangular matrix as they are all symmetric
 
 def polyListEval(listOfMonomials:"List of np.arrays", x:np.array):
-    if __debug__:
+    if dbg__0:
         lenExp = listOfMonomials[0].size
         assert all([aMonom.size==lenExp for aMonom in listOfMonomials])
         assert x.size==lenExp
@@ -127,7 +127,7 @@ class lasserreRelax:
             return self.constraintMat.allCMatCOO.tocsc(),self.constraintMat.rhs
     
     def evalCstr(self, x:np.array):
-        if __debug__:
+        if dbg__0:
             assert (x.size == self.repr.nDims) or (x.size == self.repr.nMonoms), "Wrong dimension, only single point evaluation"
         if x.size == self.repr.nMonoms:
             thisC = x
@@ -233,7 +233,7 @@ class lasserreConstraint(constraint):
         return None
     
     def getCstr(self, isSparse=False):
-        if __debug__:
+        if dbg__0:
             assert isSparse in [False, 'coo', 'csr', 'csc'], "unrecongnized"
 
         cstrMat = np.zeros(self.cstrMatDef.shapeCstr, dtype=nfloat)

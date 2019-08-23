@@ -12,7 +12,7 @@ class dynamicalSystem:
     
     def __init__(self, repr:polynomialRepr, q, u, maxTaylorDegree, ctrlInput:boxInputCstr):
         
-        if __debug__:
+        if dbg__0:
             assert q.shape[1] == 1
             assert u.shape[1] == 1
             assert maxTaylorDegree <= repr.maxDeg
@@ -63,7 +63,7 @@ class dynamicalSystem:
         dx = dx.reshape((self.nq,-1))
         m = x.shape(1)
         
-        if __debug__:
+        if dbg__0:
             assert x.shape==dx.shape
         
         uStar = np.zeros((self.nu, m), dtype=nfloat_)
@@ -73,7 +73,7 @@ class dynamicalSystem:
             # We need to solve
             # g(x).uStar = xd - f(x)
             uStar[:,[k]], res, _, _ = lstsq(gx[0], dx[:,[k]]-fx)
-            if __debug__:
+            if dbg__0:
                 assert res < 1e-9, "Could not solve"
         
         if respectCstr:
@@ -184,7 +184,7 @@ class secondOrderSys(dynamicalSystem):
         
         # TODO this is a naive implementation
         
-        if __debug__:
+        if dbg__0:
             assert (maxDeg is None) or (maxDeg <= self.maxTaylorDeg)
         
         maxDeg = self.maxTaylorDeg if maxDeg is None else maxDeg
@@ -466,7 +466,7 @@ class secondOrderSys(dynamicalSystem):
         :return:
         """
 
-        if __debug__:
+        if dbg__0:
             assert x.shape[0] == self.nq
             assert all([(aMode >= 0) and (aMode <=self.maxTaylorDeg) for aMode in mode ])
         
@@ -485,7 +485,7 @@ class secondOrderSys(dynamicalSystem):
         if restrictInput:
             u = self.ctrlInput(u,t)
         
-        if __debug__:
+        if dbg__0:
             assert x.shape[1] == u.shape[1]
             assert u.shape[0] == self.nu
         
@@ -546,7 +546,7 @@ class secondOrderSys(dynamicalSystem):
         # print("this is ddx", ddx)
         m = x.shape[1]
     
-        if __debug__:
+        if dbg__0:
             assert x.shape[1] == ddx.shape[1]
     
         uStar = np.zeros((self.nu,m),dtype=nfloat)
@@ -664,7 +664,7 @@ class polynomialSys(dynamicalSystem):
     def getTaylorApprox(self, x: np.ndarray, maxDeg: int = None, minDeg: int = 0):
         # TODO this is a naive implementation
 
-        if __debug__:
+        if dbg__0:
             assert (maxDeg is None) or (maxDeg <= self.maxTaylorDeg)
     
         maxDeg = self.maxTaylorDeg if maxDeg is None else maxDeg
@@ -701,7 +701,7 @@ class polynomialSys(dynamicalSystem):
 
         m = x.shape[1]
     
-        if __debug__:
+        if dbg__0:
             assert x.shape[1] == dx.shape[1]
     
         uStar = np.zeros((self.nu, m), dtype=nfloat)
@@ -736,7 +736,7 @@ class polynomialSys(dynamicalSystem):
         :param dx0: reference velocity. If given, only the velocity difference will be returned
         :return:
         """
-        if __debug__:
+        if dbg__0:
             assert x.shape[0] == self.nq
             assert all([(aMode >= 0) and (aMode <= self.maxTaylorDeg) for aMode in mode])
 
@@ -755,7 +755,7 @@ class polynomialSys(dynamicalSystem):
         if restrictInput:
             u = self.ctrlInput(u, t)
 
-        if __debug__:
+        if dbg__0:
             assert x.shape[1] == u.shape[1]
             assert u.shape[0] == self.nu
 

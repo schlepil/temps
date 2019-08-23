@@ -209,7 +209,7 @@ def compPolyCstr_Numba(monomsP:np.ndarray, PG:np.ndarray, monomsG:np.ndarray, wh
     :return:
     """
     # Wait for numba 0.43
-    #if __debug__:
+    #if dbg__0:
     #    assert which.size == coeffsOut.shape[0]
     
     # x'*PG_c[:,idx]*y_c
