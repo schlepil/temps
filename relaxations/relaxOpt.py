@@ -18,7 +18,7 @@ else:
 
 class convexProg():
 
-    def __init__(self, repr:polynomialRepr, solver:str='cvxopt', objective:polynomial=None, firstVarIsOne:bool=True):
+    def __init__(self, repr:polynomialRepr, solver:str='cvxopt', objective:polynomial=None, firstVarIsOne:bool=True, opts_:dict={}):
 
         assert solver in ['cvxopt'], 'Solver not supported'
         assert (objective is None) or (repr is objective.repr)
@@ -354,7 +354,8 @@ class convexProg():
                 if isValid[i]:
                     continue
                 # Do the local search
-                xSol[:,[i]] = self.localSolve(xSol[:,i], fun=sol['primal objective']).reshape((xSol.shape[0],1)) #localSolve expects 1d vector
+                xReopt = self.localSolve(xSol[:,i], fun=sol['primal objective']).reshape((xSol.shape[0],1)) #localSolve expects 1d vector
+                xSol[:,[i]]
                 # Check if now ok
                 thisIsValid = True
                 zSolNew = self.repr.evalAllMonoms(xSol[:,[i]])
@@ -370,7 +371,8 @@ class convexProg():
             # Became redundant due to localSove
             # xSol = xSol[:, isValid]
             
-            #Finally construct the constraint polynomials
+            # Finally construct the constraint polynomials
+            # If the solutions are reoptimized, then the minimizer(s) may not lie on the (sub-)manifold
             if U.shape[1] == 1:
                 # No need to compute them as the result is optimal -> no further search necessary
                 optimalCstr = nzeros((0, self.repr.nMonoms))
@@ -407,6 +409,12 @@ class convexProg():
         # TODO @xiao make this more generic, so that solvers can be easily exchanged, maybe by creating a local-solver object "sugar-coating" existing solvers
         
         thisProbDict = self.localSolveDict(xSol)
+
+        # Check if the constraints are not violated "too much"
+        # If so, do not perform reoptimization
+
+        if nany(thisProbDict['constraints']['fun'](xSol) <= self.opts)
+
         res = localSolve(**thisProbDict)
         if dbg__0:
             if not res.success:
