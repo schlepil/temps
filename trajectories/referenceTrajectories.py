@@ -34,7 +34,7 @@ class analyticTrajectory(referenceTrajectory):
     
     def __init__(self, fX:Callable, fU:Callable, nx:int, nu:int, fXd:Callable=None, tMin:float=0., tMax:float=1. ):
         
-        super(analyticTrajectory, self).__int__(nx, nu, tMin, tMax)
+        super(analyticTrajectory, self).__init__(nx, nu, tMin, tMax)
         
         self._dt = 1e-6*(self.tLims[1]-self.tLims[0])
         

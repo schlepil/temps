@@ -32,6 +32,9 @@ class convexProg():
 
         self.isUpdate = False
 
+        # New
+        self.opts={"weaklyValidCstr":0.05}
+
 
     @property
     def objective(self):
@@ -291,79 +294,46 @@ class convexProg():
                     ###xSol[j, i] = neinsum('m,mn,n', Q[:, j], NList[i, :, :], Q[:, j])
             
             # Check if all constraints are respected (Here it can happen that they are not)
-            isValid = nones((xSol.shape[1],), dtype=np.bool_)
-
             zSol = self.repr.evalAllMonoms(xSol)
-            #Check all constraints
-            # atol = -1e-6
-            # for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
-            #     isValid = isValid and bool(aCstr.isValid(zSol, atol=atol))
-            #
-            # if not isValid:
-            #     isValid = True
-            #     xSolnew = self.localSolve(xSol)
-            #     zSolnew = self.repr.evalAllMonoms(xSolnew)
-            #     for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
-            #         isValid = isValid and bool(aCstr.isValid(zSolnew, atol=atol))
-            #         if not isValid:
-            #             raise RuntimeError
-            #         else:
-            #             xSol = xSolnew
-            # atol = -1.e-6
-            # while True:
-            #     #assert abs(atol)<1e-1
-            #
-            #     for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
-            #         isValid = np.logical_and(isValid, aCstr.isValid(zSol, atol=atol))
-            #
-            #     # TODO check if this is a proper solution
-            #     if nany(isValid) :
-            #         break
-            #     else:
-            #         print('olaolaola')
-            #         for i in range(xSol.shape[0]):
-            #             xSol[i,:]=self.localSolve(xSol[i,:])
-            #             #xSol_i.append(self.localSolve(xSol[i,:]))
-            #         zSol=self.repr.evalAllMonoms(xSol)
-            #         isValid[:] = True
-            #         print('ok',atol)
-            
-            atol=-coreOptions.absTolCstr
+
+            isValid = nones((xSol.shape[1],), dtype=np.bool_)
+            isValidWeak = nones((xSol.shape[1],), dtype=np.bool_)
+            atol = -coreOptions.absTolCstr
+            atolWeak = -coreOptions.absTolCstr + self.opts["weaklyValidCstr"]
             for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
                 isValid = np.logical_and(isValid, aCstr.isValid(zSol, atol=atol))
+                isValidWeak = np.logical_and(isValidWeak, aCstr.isValid(zSol, atol=atolWeak))
+            # Do not use U / varMonomBase if any violations happened
+            if not nall(isValid):
+                optimalCstr = U = varMonomBase = None
 
-            #Actually we only need to reoptimize the solutions that do actually violate a constraint
-            # if not nany(isValid):
-            #             isValid=nones((xSol.shape[1],), dtype=np.bool_)
-            #             xSolnew=nzeros(xSol.shape)
-            #             for i in range(xSol.shape[1]):
-            #                 xSolnew[:,i]=self.localSolve(xSol[:, i])
-            #                 #xSol_i.append(self.localSolve(xSol[i,:]))
-            #             zSolnew=self.repr.evalAllMonoms(xSolnew)
-            #             for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
-            #                 isValid = np.logical_and(isValid, aCstr.isValid(zSolnew, atol=atol))
-            #             print('hello',isValid)
-            #             if not nany(isValid):
-            #                raise RuntimeError
-            #             else:
-            #                xSol=xSolnew
 
-            # TODO : Do not abuse this as results are not reliable
             # Reoptimize only for small violations and/or keep only the worst point (after reoptimization) for non-valid
+            xSolNew = xSol.copy()
+            toRemove = []
             for i in range(xSol.shape[1]):
                 if isValid[i]:
+                    # Solution ok
                     continue
+                if not isValidWeak[i]:
+                    # Solution rejected due to abusive constraint violation
+                    toRemove.append(i)
+                    break
                 # Do the local search
                 xReopt = self.localSolve(xSol[:,i], fun=sol['primal objective']).reshape((xSol.shape[0],1)) #localSolve expects 1d vector
-                xSol[:,[i]]
+                if xReopt is None:
+                    toRemove.append(i) # Reoptimization failed for some reason -> exclude
+                    break
+
                 # Check if now ok
-                thisIsValid = True
-                zSolNew = self.repr.evalAllMonoms(xSol[:,[i]])
-                for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
-                    thisIsValid &= aCstr.isValid(zSolNew, atol=atol)
-                assert thisIsValid, "Ups local solve failed"
+                if dbg__0:
+                    zSolNew = self.repr.evalAllMonoms(xSolNew[:,[i]])
+                    for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
+                        if not bool(aCstr.isValid(zSolNew, atol=atol)):
+                            raise RuntimeError("Local opt failed")
                 isValid[i] = True
-            
+                isValidWeak[i] = True
+
             if dbg__1:
                 print(f"Found valid solution for atol : {atol}")
             
@@ -373,20 +343,21 @@ class convexProg():
             
             # Finally construct the constraint polynomials
             # If the solutions are reoptimized, then the minimizer(s) may not lie on the (sub-)manifold
-            if U.shape[1] == 1:
-                # No need to compute them as the result is optimal -> no further search necessary
-                optimalCstr = nzeros((0, self.repr.nMonoms))
-            else:
-                optimalCstr = nzeros((U.shape[0]-thisRank, self.repr.nMonoms))
-                # Fill up
-                optimalCstr[:, varMonomBase]=U[monomIsBase,:]
-                idxC = 0
-                for k, nBase in enumerate(monomIsBase):
-                    if nBase:
-                        optimalCstr[idxC,k] = -1. #Set the equality
-                        idxC += 1
+            if U is not None:
+                if U.shape[1] == 1:
+                    # No need to compute them as the result is optimal -> no further search necessary
+                    optimalCstr = nzeros((0, self.repr.nMonoms))
+                else:
+                    optimalCstr = nzeros((U.shape[0]-thisRank, self.repr.nMonoms))
+                    # Fill up
+                    optimalCstr[:, varMonomBase]=U[monomIsBase,:]
+                    idxC = 0
+                    for k, nBase in enumerate(monomIsBase):
+                        if nBase:
+                            optimalCstr[idxC,k] = -1. #Set the equality
+                            idxC += 1
             
-        return xSol, optimalCstr, (varMonomBase, U, relTol)
+        return xSolNew, optimalCstr, (varMonomBase, U, relTol)
     
     def localSolveDict(self,xSol, method='COBYLA', tol:float=0.9*coreOptions.absTolCstr, options:dict={})->dict:
         """
@@ -412,10 +383,13 @@ class convexProg():
 
         # Check if the constraints are not violated "too much"
         # If so, do not perform reoptimization
+        try:
+            res = localSolve(**thisProbDict)
+        except BaseException as me:
+            if dbg__0:
+                print(f"Local solve failed with :\\ {me}")
+                return None
 
-        if nany(thisProbDict['constraints']['fun'](xSol) <= self.opts)
-
-        res = localSolve(**thisProbDict)
         if dbg__0:
             if not res.success:
                 raise UserWarning(f'Local opt failed {res}')
@@ -450,8 +424,6 @@ class convexProg():
         print(f"The resulting difference in the objective funciton is \n {np.inner(self.objective.coeffs.squeeze(), nsum(uz,sz, axis=1, keepdims=False))}")
         
         return xStar
-
-
 
     def solve(self, isSparse=False, opts={}):
         if not self.isUpdate:
