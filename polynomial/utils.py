@@ -222,6 +222,8 @@ class polynomialRepr():
                 self.compute()
                 
                 self.fileStr = None #TBD
+
+                # Precompute derivation for computing jacobians and hessians
     
     @property
     def nbrVar0(self):
@@ -286,6 +288,8 @@ class polynomialRepr():
         self.precompLinearChange()
 
         self.getIdxMat()
+
+        self.preCompDeriv()
         
         return None
 
@@ -318,6 +322,9 @@ class polynomialRepr():
                     self.varNum2varNumParents[self.idxMat[i, j], :] = [i, j]
         
         return None
+
+    def preCompDeriv(self):
+        pass
 
 
     
