@@ -869,8 +869,9 @@ def workerSolveVariable(inQueue, outQueue):
 
             zSol = thisRepr.evalAllMonoms(xSol)
             for k, (acstr_coeffs, acstr) in enumerate(zip(inputAll['cstr'], thisProb.constraints.s.cstrList)):
-                is_valid = acstr.isValid(zSol, atol=-1e-4)
+                is_valid = acstr.isValid(zSol, atol=-coreOptions.absTolCstr)
                 if not nall(is_valid):
+                    thisProb.extractOptSol(solution)
                     raise RuntimeError
                 try:
                     cstr_val = acstr.poly.eval2(xSol)

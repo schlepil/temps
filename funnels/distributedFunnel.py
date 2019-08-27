@@ -515,6 +515,8 @@ class distributedFunnel:
         while nany(resultsLin<self.opts['numericEpsPos']):
             thisSol = self.distributor.getSol()
             assert thisSol['sol']['status'] == 'optimal' #TODO make compatible with other solvers
+            if dbg__1:
+                print(f"Retrieved sol for {thisSol['probDict']['resPlacement']} with u {thisSol['probDict']['u'].squeeze()} and {thisSol['probDict']['nCstrNDegType']}")
             # Store the critical points within the result
             # TODO improve structure -> Works only if projection is done in main program not by the worker!
             thisSol['critPoints'] = {'xCrit':thisSol['xSol'].copy(), 'currU':thisSol['probDict']['u'].copy()}
@@ -534,6 +536,11 @@ class distributedFunnel:
                 pass
             else:
                 newProbList = self.analyzeSol(thisSol, allCtrlDictsNzones[k][0])
+                if dbg__1:
+                    print("Resulted in the new problems: ")
+                    for aProb in newProbList:
+                        print(f"New prob has u {thisSol['probDict']['u'].squeeze()} and {thisSol['probDict']['nCstrNDegType']}")
+
                 if (not len(newProbList)) and self.opts['earlyExit']:
                     # this region is a proof for non-convergence
                     break
@@ -660,6 +667,9 @@ class distributedFunnel:
                 # We already posses provably non-converging points
                 isConverging = False
 
+            if dbg__0:
+                print(f"Prior test is for nextZone is converging : {isConverging}")
+
             # Last positive proof
             proofDataLargest = None
 
@@ -673,6 +683,8 @@ class distributedFunnel:
                 
                 #while self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                 while True:
+                    if dbg__0:
+                        print(f"Prior expansion alphaL: {alphaL} alphaU: {alphaL}")
                     (critIsConverging, allAlphas), resultsProp, resultsLinProp = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
                     # First critical point is "original" so the convergence should be ensured
                     assert critIsConverging[0], "Something is wrong with the local solve proof"
@@ -720,6 +732,8 @@ class distributedFunnel:
 
                 #while not self.verify1(tSteps, criticalPoints, allTaylorApprox)[0]:
                 while True:
+                    if dbg__0:
+                        print(f"Prior shrinkage alphaL: {alphaL} alphaU: {alphaL}")
                     (critIsConverging, allAlphas), resultsProp, resultsLinProp = self.propagator.doRescale(tSteps, self, results, resultsLin, allTaylorApprox, alphaFromTo, self.opts['interStepsPropCrit'])
                     # First critical point is "original" so the DI-convergence should be ensured
                     assert not critIsConverging[0], "Something is wrong with the local solve proof"
@@ -730,7 +744,7 @@ class distributedFunnel:
                         alphaL = allAlphas(idx)
                         critIsConverging = critIsConverging[idx]
                         if dbg__0:
-                            assert critIsConverginge, "idx got it wrong"
+                            assert critIsConverging, "idx got it wrong"
                             # Test
                             isConverging, results, resultsLin, timePoints = self.verify1(tSteps, (resultsProp, resultsLinProp),
                                                                                          allTaylorApprox)  # Change to store all in order to exploit the last proof

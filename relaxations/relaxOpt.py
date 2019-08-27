@@ -33,7 +33,7 @@ class convexProg():
         self.isUpdate = False
 
         # New
-        self.opts={"weaklyValidCstr":0.05}
+        self.opts={"weaklyValidCstr":-0.05}
 
 
     @property
@@ -324,6 +324,8 @@ class convexProg():
                 if xReopt is None:
                     toRemove.append(i) # Reoptimization failed for some reason -> exclude
                     break
+                else:
+                    xSolNew[:,[i]] = xReopt
 
                 # Check if now ok
                 if dbg__0:
@@ -333,8 +335,9 @@ class convexProg():
                             raise RuntimeError("Local opt failed")
                 isValid[i] = True
                 isValidWeak[i] = True
+            xSolNew = np.delete(xSolNew, toRemove, axis=1) # Further use of isValid(Weak) also delete?
 
-            if dbg__1:
+            if dbg__2:
                 print(f"Found valid solution for atol : {atol}")
             
             # Only return valid ones

@@ -70,3 +70,5 @@ if __name__ == "__main__":
     myFunnel.compute(refTraj.t[0], refTraj.t[-1], (Pinit, 1.))
 
     print("Done")
+
+    #print
