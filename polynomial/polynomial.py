@@ -22,7 +22,7 @@ class polynomial():
 
         self._evalPoly = None
 
-        self.maxDeg = self.getMaxDegree()
+        #self.maxDeg = self.getMaxDegree() #TODO avoid recomputing
         
         if dbg__0:
             assert self.maxDeg<=self.repr.maxDeg
@@ -39,7 +39,16 @@ class polynomial():
 
     def lock(self):
         self._coeffs.setflags(write=False)
-    
+
+    @property
+    def maxDeg(self):
+        return self.getMaxDegree()
+    @maxDeg.setter
+    def maxDeg(self,other):
+        if dbg__1:
+            print("make maxdeg functional again")
+        return None
+
     @property
     def coeffs(self):
         return self._coeffs
@@ -235,6 +244,53 @@ class polynomial():
 
         return ndot(coeffsEval, z)
 
+    def getGradFunc(self):
+        """
+        Returns a lambda function to compute the gradient as [dim,1]
+        :return:
+        """
+        maxDeg_ = self.getMaxDegree()
+        nMonomsMin_ = len(self.repr.varNumsUpToDeg[maxDeg_-1])
+
+        coeffsMat_ = self.repr.compGradMat(self.coeffs, maxDeg_)
+
+        def compGrad_(x:np.ndarray):
+            assert len(x.shape) == 2
+            x = x if x.shape[0] >= nMonomsMin_ else self.repr.evalAllMonoms(x, maxDeg_-1)
+            return ndot(coeffsMat_, x[:nMonomsMin_,:])
+
+        return compGrad_
+
+    def getHessFunc(self):
+
+        """
+        Returns a lambda function to compute the gradient as [dim,dim] or [nPt,dim,dim]
+        :return:
+        """
+
+        maxDeg_ = self.maxDeg
+        nMonomsMin_ = len(self.repr.varNumsUpToDeg[maxDeg_ - 2])
+
+        coeffsMat_ = self.repr.compHessTensor(self.coeffs, self.maxDeg) #[monoms
+
+        def compHess_(x:np.ndarray):
+            assert len(x.shape) == 2
+            x = x if x.shape[0] >= nMonomsMin_ else self.repr.evalAllMonoms(x, maxDeg_ - 2)
+            # inner prod
+            hess = neinsum("mij,mk->kij", coeffsMat_, x[:nMonomsMin_,:])
+
+            if x.shape[1] == 1:
+                hess = hess[0,:,:]
+            return hess
+
+        return compHess_
+
+
+
+
+
+
+
 
 class polyFunction():
     
@@ -280,4 +336,4 @@ class polyFunction():
         if xs1==1:
             y = y[0,:,:]
         
-        return y #[nPt, *shape_]
+        return y #shape if nPt==1 else [nPt, *shape_]

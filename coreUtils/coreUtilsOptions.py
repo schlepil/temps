@@ -17,3 +17,5 @@ cholDiagMax = 1.e8 # If any diagonal elements of the cholesky decomp are larger 
 # insanely large
 
 doTiming = True
+
+defaultLocalSolve = 'SLSQP'

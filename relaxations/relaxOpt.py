@@ -135,24 +135,35 @@ class convexProg():
             #The simple solution is exact enough
             
             #Check all constraints
-            isValid = True
             zSol = self.repr.evalAllMonoms(xSol)
 
+            isValid = True
+            isValidWeak = True
             atol = -coreOptions.absTolCstr #make a global variable
+            atolWeak = -coreOptions.absTolCstr + self.opts["weaklyValidCstr"]
             for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
                     isValid = isValid and bool(aCstr.isValid(zSol, atol=atol))
+                    isValidWeak = isValidWeak and bool(aCstr.isValid(zSol, atol=atolWeak))
+
+            if not isValidWeak:
+                if dbg__1:
+                    print(f"Single point minimizer violated constraints badly -> no point will be returned")
+                return None, None, (None, None, None)
 
             if not isValid:
-                       isValid=True
-                       xSolnew=self.localSolve(xSol, fun=sol['primal objective']).reshape((-1,1))
-                       zSolnew=self.repr.evalAllMonoms(xSolnew)
-                       for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
-                           isValid = isValid and bool(aCstr.isValid(zSolnew, atol=atol))
-                           if not isValid:
-                               raise RuntimeError
-                           else:
-                               xSol=xSolnew
-            assert abs(atol) < 1e-1
+                # Solution only slightly violates constraints
+                isValid=True
+                xSol=self.localSolve(xSol, fun=sol['primal objective'])
+
+                if dbg__1:
+                    if xSol is None:
+                        print("local opt failed")
+                    else:
+                        zSolnew=self.repr.evalAllMonoms(xSolnew)
+                        for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
+                            isValid = isValid and bool(aCstr.isValid(zSolnew, atol=atol))
+                            if not isValid:
+                                raise RuntimeError
             if dbg__1:
                 print(f"Found valid solution for atol : {atol}")
             
@@ -362,20 +373,50 @@ class convexProg():
             
         return xSolNew, optimalCstr, (varMonomBase, U, relTol)
     
-    def localSolveDict(self,xSol, method='COBYLA', tol:float=0.9*coreOptions.absTolCstr, options:dict={})->dict:
+    def localSolveDict(self,xSol, method=coreOptions.defaultLocalSolve, tol:float=0.9*coreOptions.absTolCstr, options:dict={})->dict:
         """
         # Create a dict that can be passed to sp_minimize
         :param xSol:
         :return:
         """
-        Amat = nzeros((len(self.constraints.s.cstrList[1:]), self.__objective.coeffs.size), dtype=nfloat)
+        # get maximal degree of any constraint
+        maxDegCons = 0
+        for aCstr in self.constraints.s.cstrList[1:]:
+            maxDegCons = max(maxDegCons, aCstr.poly.getMaxDegree())
+        nMonomsCstr = len(self.repr.varNumsUpToDeg[maxDegCons])
+
+        Amat = nzeros((len(self.constraints.s.cstrList[1:]), nMonomsCstr), dtype=nfloat)
         for i, acstr in enumerate(self.constraints.s.cstrList[1:]):
-            Amat[i, :] = acstr.poly.coeffs
-        this_cstr = {'type':'ineq', 'fun':lambda x:ndot(Amat, self.repr.evalAllMonoms(x.reshape((-1, 1)))).squeeze()}
-        gx = lambda x:ndot(self.objective.coeffs, self.repr.evalAllMonoms(x))
+            Amat[i, :] = acstr.poly.coeffs[:nMonomsCstr]
+        this_cstr = {'type':'ineq', 'fun':lambda x:ndot(Amat, self.repr.evalAllMonoms(x.reshape((-1, 1)), maxDegCons)).reshape((-1,))}
+        if method == 'SLSQP':
+            # Also define the jac
+            # Shape ?
+            # Create all the functions
+            gradFunList_ = [aCstr.poly.getGradFunc() for aCstr in self.constraints.s.cstrList[1:]]
+
+            def getJac(x):
+                x=x.reshape((self.repr.nDims))
+                z = self.repr.evalAllMonoms(x,maxDegCons-1)
+                jac = nzeros((len(gradFunList_), self.repr.nDims))
+                #Fill
+                for i, aJacFun in enumerate(gradFunList_):
+                    jac[i,:] = aJacFun(z).squeeze()
+
+                return jac
+
+            this_cstr['jac'] = getJac
+
+        gx = lambda x: float(self.objective.eval2(x.reshape((self.repr.nDims,1))))#lambda x:ndot(self.objective.coeffs, self.repr.evalAllMonoms(x))
         options_ = {'maxiter':20000} #TODO optimize using gradient and hessian instead of increasing the maxiter
         options_.update(options)
-        return {'fun':gx, 'x0':xSol.reshape((-1,)), 'method':method, 'tol':tol, 'constraints':this_cstr, 'options':options_ }
+
+        allDict = {'fun':gx, 'x0':xSol.reshape((-1,)), 'method':method, 'tol':tol, 'constraints':this_cstr, 'options':options_ }
+        if method == 'SLSQP':
+            thisObjJacFun = self.objective.getGradFunc()
+            allDict['jac'] = lambda x: thisObjJacFun(x.reshape((self.repr.nDims,1))).reshape((-1,))
+
+        return allDict
 
     def localSolve(self, xSol:np.ndarray, fun:float=None)->np.ndarray:
         # TODO @xiao take into account possible linear / socp constraints
@@ -391,7 +432,7 @@ class convexProg():
         except BaseException as me:
             if dbg__0:
                 print(f"Local solve failed with :\\ {me}")
-                return None
+            return None
 
         if dbg__0:
             if not res.success:

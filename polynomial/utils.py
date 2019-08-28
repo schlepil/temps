@@ -324,12 +324,44 @@ class polynomialRepr():
         return None
 
     def preCompDeriv(self):
-        pass
+        """
+        Precompute stuff needed for derivation
+        :return:
+        """
 
+        # The ith entry corresponds to the derivative with respect to x_i
+        # Derivation is first copy than multiply : d/dx yx^2->2yx
+        self.deriv = variableStruct()
+        self.deriv.idxMatDeriv = idxMatDeriv_ = nzeros((self.nDims, self.nMonoms), dtype=nint)
+        self.deriv.idxRow = nzeros((self.nDims, self.nMonoms), dtype=nint)
+        self.deriv.multiplier = multiplier_ = nzeros((self.nDims, self.nMonoms), dtype=nint)
 
+        for k in range(self.nDims):
+            self.deriv.idxRow[k,:] = k
+            #Loop over derivs
+            kAsInt = list2int(self.listOfMonomialsPerDeg[1][k], digits=self.digits) #First in list -> highest value
+            for aVarNum, aMonomAsInt, aMonomAsList in zip(self.varNums, self.listOfMonomialsAsInt, self.listOfMonomials):
+                if aMonomAsList[k] == 0:
+                    #The monomial does not depend on x_k
+                    #In this case the coeff of the constant monomial varnum 0 will be copied but then multiplied with zero
+                    continue
+                newVarNum = self.monom2num[aMonomAsInt-kAsInt] #The number of d/dx_i varnum
+                idxMatDeriv_[k,newVarNum] = aVarNum
+                multiplier_[k,newVarNum] = aMonomAsList[k]
+
+        #Done
+        return None
     
     def precompLinearChange(self):
-        
+        """
+        if a linear coordinate change with
+        y = A.x is performed we can compute the new coefficients as every monomial can be written
+        y^alpha = Prod_i (Sum_j Aij.xj)^alpha_i
+        #TODO the current implementation is not suitable for dim>5
+        :return:
+        """
+
+
         self.linChangeList = {}
         
         for aMonomInt, aMonomList in zip(self.listOfMonomialsAsInt,self.listOfMonomials):
@@ -368,6 +400,49 @@ class polynomialRepr():
         Ahatflat = Ahat.flatten()
         cp = linChangeNumba(self.newStyleDict['firstIdxPerMonomial'],self.newStyleDict["cIdx"],self.newStyleDict["cpIdx"],self.newStyleDict["multiplier"],self.newStyleDict["numElem"],self.newStyleDict["idxList"],c,cp,Ahatflat)
         return cp
+
+    def compGradMat(self, coeffs:np.ndarray, maxDeg=None):
+        """
+        Compute the coefficients of the gradient
+        :param coeffs:
+        :param maxDeg:
+        :return:
+        """
+        maxDeg = self.maxDeg if maxDeg is None else maxDeg
+        assert maxDeg <= self.maxDeg
+
+        coeffs = coeffs.reshape((1,-1))
+        coeffsMat = np.tile(coeffs, (self.nDims,1))
+
+        nMonomsDeriv = len(self.varNumsUpToDeg[maxDeg-1])
+
+        gradMat = coeffsMat[ self.deriv.idxRow[:,:nMonomsDeriv].flatten(), self.deriv.idxMatDeriv[:,:nMonomsDeriv].flatten() ].reshape((self.nDims,nMonomsDeriv))
+        gradMat *= self.deriv.multiplier[:,:nMonomsDeriv]
+
+        return gradMat
+
+    def compHessTensor(self, coeffs:np.ndarray, maxDeg=None):
+        """
+        Compute the coefficients for the hessian
+        :param coeffs:
+        :param maxDeg:
+        :return:
+        """
+        maxDeg = self.maxDeg if maxDeg is None else maxDeg
+        assert maxDeg <= self.maxDeg
+
+        nMonomsD1 = len(self.varNumsUpToDeg[maxDeg-1])
+        nMonomsD2 = len(self.varNumsUpToDeg[maxDeg-2])
+
+        coeffs = coeffs.reshape((-1,))
+
+        # hessTens_ij =d^2/dx_i dx_j p
+        hessTens = nzeros((nMonomsD2, self.nDims,self.nDims)) #monoms are first dimension
+
+        fillHessTensNumba(self.nDims, hessTens, coeffs, self.deriv.idxMatDeriv, self.deriv.multiplier, nMonomsD1, nMonomsD2)
+
+        return hessTens
+
 
     def evalAllMonoms(self, x:np.ndarray, maxDeg:int=None):
 

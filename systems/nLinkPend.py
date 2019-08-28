@@ -4,58 +4,90 @@ from dynamicalSystems.inputs import boxInputCstrLFBG
 from polynomial import polynomialRepr
 
 
-from sympy.physics.mechanics import *
+def getSys(repr:polynomialRepr, nLink:int=5, input:List[int]=None):
+    """
 
-def getSys(nLink=5):
-    from sympy import symbols
+    :param repr:
+    :param nLink:
+    :param input:
+    :return:
+    """
+    import sympy.physics.mechanics as mech
 
-    n = 5
-    q = dynamicsymbols('q:'+str(n+1))  # Generalized coordinates
-    u = dynamicsymbols('u:'+str(n+1))  # Generalized speeds
-    f = dynamicsymbols('f')  # Force applied to the cart
-    mom = dynamicsymbols('mom')  # Force applied to the cart
+    #
+    mass = 1. # [kg] mass each link is equal
+    length = 1. # [m] link length; particles and joints coincide
+    g = 9.81 # gravity
 
-    m = symbols('m:'+str(n+1))  # Mass of each bob
-    l = symbols('l:'+str(n))  # Length of each link
-    g, t = symbols('g t')  # Gravity and time
+    input = np.arange(nLink,dtype=nint) if input is None else np.sort(narray(input, dtype=nint))
+    assert input.size == np.unique(input).size and nall(0<=input) and nall(input<nLink)
+    m = input.size
+    n = 2*nLink
 
-    I = ReferenceFrame('I')  # Inertial reference frame
-    O = Point('O')  # Origin point
+    # symbols
+    qS = mech.dynamicsymbols(f"qS:{nLink}")  # Generalized coordinates
+    qdS = mech.dynamicsymbols(f"qd:{nLink}")  # Generalized speeds
+
+    t = sy.symbols('t')  # Gravity and time
+
+    I = mech.ReferenceFrame('I')  # Inertial reference frame
+    O = mech.Point('O')  # Origin point
     O.set_vel(I, 0)  # Origin's velocity is zero
 
-    P0 = Point('P0')  # Hinge point of top link
-    P0.set_pos(O, q[0]*I.x)  # Set the position of P0
-    P0.set_vel(I, u[0]*I.x)  # Set the velocity of P0
-    Pa0 = Particle('Pa0', P0, m[0])
+    frames = [I]  # List to hold the nLink frames
+    points = [O]  # List to hold the n+1 points for the origin plus particles
+    particles = []  # List to hold the nLink particles
+    forces = []  # List to hold the nLink applied forces; Inputs will be treated separately
+    kindiffs = []  # List to hold kinematic ODE's
 
-    frames = [I]  # List to hold the n + 1 frames
-    points = [P0]  # List to hold the n + 1 points
-    particles = [Pa0]  # List to hold the n + 1 particles
-    forces = [(P0, f*I.x-m[0]*g*I.y)]  # List to hold the n + 1 applied forces, including the input force, f
-    kindiffs = [q[0].diff(t)-u[0]]  # List to hold kinematic ODE's
-
-    for i in range(n):
-        Bi = I.orientnew('B'+str(i), 'Axis', [q[i+1], I.z])  # Create a new frame
-        Bi.set_ang_vel(I, u[i+1]*I.z)  # Set angular velocity
+    for i in range(nLink):
+        Bi = I.orientnew('B'+str(i), 'Axis', [sum(qS[:i+1]), I.z])  # Create a new frame that accumulates all the rotations
+        Bi.set_ang_vel(I, sum(qdS[:i+1])*I.z)  # Set angular velocity z-axis common to all frames
         frames.append(Bi)  # Add it to the frames list
 
-        Pi = points[-1].locatenew('P'+str(i+1), l[i]*Bi.x)  # Create a new point
-        Pi.v2pt_theory(points[-1], I, Bi)  # Set the velocity
+        Pi = points[-1].locatenew(f"P{i}", -length*Bi.y)  # Create a new point hanging position for q=0
+        Pi.v2pt_theory(points[-1], I, Bi)  # Set the velocity particle and joint are both fixed in this frame
         points.append(Pi)  # Add it to the points list
 
-        Pai = Particle('Pa'+str(i+1), Pi, m[i+1])  # Create a new particle
+        Pai = mech.Particle(f"Pa{i}", Pi, m)  # Create a new particle
         particles.append(Pai)  # Add it to the particles list
 
-        forces.append((Pi, -m[i+1]*g*I.y))  # Set the force applied at the point
+        forces.append((Pi, -mass*g*I.y))  # Set the force applied at the point due to gravity
 
-        kindiffs.append(q[i+1].diff(t)-u[i+1])  # Define the kinematic ODE:  dq_i / dt - u_i = 0
+        kindiffs.append(qS[i].diff(t)-qdS[i])  # Define the kinematic ODE:  dq_i / dt - u_i = 0
 
-    kane = KanesMethod(I, q_ind=q, u_ind=u, kd_eqs=kindiffs)  # Initialize the object
+    kane = mech.KanesMethod(I, q_ind=qS, u_ind=qdS, kd_eqs=kindiffs)  # Initialize the object
     fr, frstar = kane.kanes_equations(particles, forces)  # Generate EoM's fr + frstar = 0
-    fr, frstar = kane.kanes_equations(particles, forces+[(frames[2], mom*frames[2].z)])  # Generate EoM's fr + frstar = 0
-    fr, frstar = kane.kanes_equations(particles, forces+[(frames[2], mom*frames[2].z), (frames[3], -mom*frames[3].z)])  # Generate EoM's fr + frstar = 0
 
-    return kane
+    # Extract mass matrix
+    massMat = kane.mass_matrix
+    # and system dynamics
+    fDyn = kane.forcing
+
+    # The type is ok, but we have to replace the dynamic symbols with normal ones for further usage
+    q = sy.symbols(f"q:{n}")
+    u = [sy.symbols(f"u{aI}") for aI in input]
+    qM = sy.Matrix(nzeros((n,1)))
+    uM = sy.Matrix(nzeros((m,1)))
+    # format
+    for i,aq in enumerate(q):
+        qM[i,0] = aq
+    for i,au in enumerate(u):
+        uM[i,0] = au
+    #replace using dict
+    replDict = dict( zip(qS+qdS, q) )
+    massMat = massMat.subs(replDict)
+    fDyn = fDyn.subs(replDict)
+
+    # Finally get the input mapping which is simply a selection matrix
+    gInput = nzeros((nLink, m))
+    gInput[input, np.arange(m)] = 1.
+    gInput = sy.Matrix(gInput)
+
+    # Now construct the sys
+    dynSys = secondOrderSys(repr, massMat, fDyn, gInput, qM, uM)
+
+    return dynSys
 
 def getSysWhatIsWrong(repr: polynomialRepr, nLink:int=3, input:List[int]=None, fileName:str=None):
     import sympy.physics.mechanics as mech
@@ -172,10 +204,17 @@ def getSysWhatIsWrong(repr: polynomialRepr, nLink:int=3, input:List[int]=None, f
 
 
 if __name__ == "__main__":
+    import time
     nLink = 3
+    T = time.time()
     thisRepr = polynomialRepr(2*nLink, 3)
+    T = time.time()-T
+    print(f"It took {T} sec to build up repr")
+
+    T = time.time()
     thisSys = getSys(thisRepr, nLink)
-    test()
+    T = time.time() - T
+    print(f"It took {T} sec to build up dyn eq")
 
 
 

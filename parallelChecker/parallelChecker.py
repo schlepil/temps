@@ -369,7 +369,7 @@ class workDistributorNoThread:
 # {'dimsNDeg':(nDims,nDeg)
 # {'nCstrNDegType':(nCstr,deg0,deg1,...)
 
-
+@myProfiling.countedtimer
 def get_or_create(dims_deg:Tuple, cstr_deg_type:List, solver='cvxopt', id_str:str="Base"):
 
     """

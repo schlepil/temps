@@ -23,8 +23,12 @@ def linChangeNumba(firstIdxPerMonom,cIdx,cpIdx,multiplier,numElem,idxList,c,cp,A
             for j in range(startIdx,stopIdx):
                 # Do the actual computation
                 tmpVal2 = c[cIdx[k]]*multiplier[j]
+                if tmpVal2 == 0:
+                    continue
                 for i in range(numElem[j]):
                     tmpVal2 *= Aflat[idxList[i,j]]
+                    if tmpVal2 == 0:
+                        break
                 cp[cpIdx[j]] += tmpVal2
     
     return cp
@@ -219,3 +223,14 @@ def evalMonomsNumba(x, varNum2varNumParents):
       else:
          z = evalMonomsNumbaN(x, varNum2varNumParents)
       return z
+
+@njit(cache=True)
+def fillHessTensNumba(nDims, hessTens, coeffs, idxMatDeriv_, multiplier_, nMonomsD1, nMonomsD2):
+
+    for i in range(nDims):
+        dx_i_coeffs = coeffs[idxMatDeriv_[i, :nMonomsD1]] * multiplier_[i, :nMonomsD1]  # Dirctly multiply
+        for j in range(i, nDims):
+            # For regular functions hessian is sym
+            hessTens[:, i, j] = hessTens[:, j, i] = dx_i_coeffs[idxMatDeriv_[j, :nMonomsD2]] * multiplier_[j, :nMonomsD2]
+
+    return None
