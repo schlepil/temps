@@ -95,6 +95,260 @@ class convexProg():
     def precomp_cvxopt(self):
         return None #Nothing to do for the moment
 
+    def extractOptSol1(self, sol, varMat, opts):
+        # There is only one optimal solution
+        xSol = varMat[1:self.repr.varNumsUpToDeg[1].size, [0]]
+        if opts['reOptimize']:
+            # Optimize the solution locally to reduce rounding errors
+            raise NotImplementedError
+        # The simple solution is exact enough
+
+        # Check all constraints
+        zSol = self.repr.evalAllMonoms(xSol)
+
+        isValid = True
+        isValidWeak = True
+        atol = -coreOptions.absTolCstr  # make a global variable
+        atolWeak = -coreOptions.absTolCstr + self.opts["weaklyValidCstr"]
+        for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
+            isValid = isValid and bool(aCstr.isValid(zSol, atol=atol))
+            isValidWeak = isValidWeak and bool(aCstr.isValid(zSol, atol=atolWeak))
+
+        if not isValidWeak:
+            if dbg__1:
+                print(f"Single point minimizer violated constraints badly -> no point will be returned")
+            return None, None, (None, None, None)
+
+        if not isValid:
+            # Solution only slightly violates constraints
+            isValid = True
+            xSol = self.localSolve(xSol, fun=sol['primal objective'])
+
+            if dbg__1:
+                if xSol is None:
+                    xSol = varMat[1:self.repr.varNumsUpToDeg[1].size, [0]]
+                    xSol = self.localSolve(xSol, fun=sol['primal objective'])
+                    print("local opt failed")
+                else:
+                    zSol = self.repr.evalAllMonoms(xSol)
+                    for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
+                        isValid = isValid and bool(aCstr.isValid(zSol, atol=atol))
+                        if not isValid:
+                            raise RuntimeError
+        if dbg__1:
+            print(f"Found valid solution for atol : {atol}")
+
+        return xSol, None, (None, None, None)
+
+    def extractOptSolN(self, sol, opts, ev_tuple):
+
+        nMonomsH_ = self.repr.varNumsUpToDeg[self.repr.maxDeg // 2].size
+
+        # Here it is more tricky
+        # We will return optimal solutions, however they are not unique
+        # It more that all optimal solutions lie
+        # First get the cholesky decomp if all positive eigenvalues
+
+        v,e,vRel,vMax = ev_tuple
+
+        ind = np.where(vRel > opts['relTol'])[0]
+        thisRank = ind.size
+        v2 = v[ind] ** .5
+        e2 = e[:, ind]
+        V = nmultiply(e2, v2)
+
+        # Get column echelon form
+        # Scipy only provides row echelon form
+        # U, monomBase = sy.Matrix(V.T).rref()# <- This is ; U, monomBase = sy.Matrix(V.T).rref(simplify=True, iszerofunc=lambda x:x**2<1e-20) #is correct but slow
+        # U = narray(U, dtype=nfloat).T
+        cond_ = (v2[0] / v2[-1])
+
+        try:
+            Ue, varMonomBase = robustRREF(V.T, cond_ / 10., tol0_=1e-8, fullOut=False)  # "Exact" rref
+        except RuntimeError:
+            try:
+                Ue, varMonomBase = robustRREF(V.T, cond_ / 100., tol0_=1e-8, fullOut=False)  # "Exact" rref
+            except RuntimeError:
+                # Ue, varMonomBase = robustRREF(V.T, cond_/500., tol0_=1e-7, fullOut=False)  # "Exact" rref
+                try:
+                    Ue, varMonomBase = robustRREF(V.T, cond_ / 500., tol0_=1e-7, fullOut=False)
+                except RuntimeError:
+                    Ue, varMonomBase = robustRREF(V.T, cond_ / 1., tol0_=1e-5, fullOut=False)
+                    print('cest bizzard')
+        Ue = Ue.T.copy()
+
+        varMonomBase = narray(varMonomBase, dtype=nintu).reshape((-1,))
+        monomIsBase = nones((Ue.shape[0],), dtype=np.bool_)
+        monomIsBase[varMonomBase] = False
+
+        allMonomsHalf = self.repr.listOfMonomials[:nMonomsH_]
+
+        firstDegMonoms = self.repr.varNumsPerDeg[1]
+
+        relTol = 1e-6  # Set relative zero, increment if infeasible up to max
+        relTolMax = 1e-1
+        isNOk_ = 1
+        while ((relTol <= relTolMax) and (isNOk_ != 0)):
+            relTol *= 10.
+            U = Ue.copy()
+            # Set to relative zero
+            U[nabs(U) <= nmax(nabs(U), axis=1, keepdims=True) * relTol] = 0.
+
+            monomNotBaseNCoeffs = []
+            for k, aIsNotBase in enumerate(monomIsBase):
+                if not aIsNotBase:
+                    continue
+                newList = [allMonomsHalf[k], [[], []], nzeros((self.repr.nMonoms, 1))]
+                newList[2][varMonomBase, 0] = U[k, :]
+                for i, aIdx in enumerate(U[k, :]):
+                    if abs(aIdx) == 0.:
+                        continue
+                    newList[1][0].append(allMonomsHalf[varMonomBase[i]])
+                    newList[1][1].append(aIdx)
+
+                monomNotBaseNCoeffs.append(newList)
+
+            # Get the multiplier matrices
+            NList = nempty((self.repr.nDims, thisRank, thisRank), nfloat)
+            ###NList = nempty((thisRank, thisRank, thisRank), nfloat)
+
+            isNOk_ = 1
+            for i, iMonom in enumerate(firstDegMonoms):  # The first one is allows the constant value
+                if isNOk_ >= 2:
+                    break
+                ###for i, iMonom in enumerate(monomBase):  # The first one is allows the constant value
+                for j, jMonom in enumerate(varMonomBase):
+                    if isNOk_ >= 2:
+                        break
+                    idxU = self.repr.idxMat[iMonom, jMonom]
+                    if idxU < nMonomsH_:
+                        NList[i, j, :] = U[idxU, :]
+                        isNOk_ = 0
+                    else:
+                        # Recursively replace until all monomials are in the base
+                        xiwjMonomNCoeff = [[idxU], [self.repr.listOfMonomials[idxU]], [1.0]]
+                        while ((not all([aIdx < nMonomsH_ for aIdx in xiwjMonomNCoeff[0]])) and (isNOk_ < 2)):
+                            for k, aIdx in enumerate(xiwjMonomNCoeff[0]):
+                                # Seek the monomial to simplify
+                                isNOk_ = 1
+                                if aIdx >= nMonomsH_:
+                                    toReplace = [aaList.pop(k) for aaList in xiwjMonomNCoeff]
+
+                                # Try relacing once and append
+                                replacement = [[], [], []]
+                                for aMonomNBase in monomNotBaseNCoeffs:
+                                    nRMonom = toReplace[1] - aMonomNBase[0]
+                                    if all(nRMonom >= 0):
+                                        for (rMonomAdd, rCoeff) in zip(*aMonomNBase[1]):
+                                            replacement[1].append(nRMonom + rMonomAdd)
+                                            replacement[0].append(self.repr.monom2num[list2int(replacement[1][-1], self.repr.digits)])
+                                            replacement[2].append(rCoeff * toReplace[2])
+                                        for jj in range(3):
+                                            xiwjMonomNCoeff[jj].extend(replacement[jj])
+                                        isNOk_ = 0
+                                        break
+                                if isNOk_ == 0:
+                                    break
+                                else:
+                                    # The solution/tolerance combo is not sufficient to generate the minimizer with this approach
+                                    isNOk_ = 2
+                                    # relTol *= 10.
+                                    break
+
+                        # Apply
+                        if isNOk_ == 0:
+                            NList[i, j, :] = 0.
+                            for thisIdxU, _, thisCoeff in zip(*xiwjMonomNCoeff):
+                                NList[i, j, :] += U[thisIdxU, :] * thisCoeff
+        if isNOk_ != 0:
+            # No solution can be extracted -> return exect constraints
+            return None, None, (varMonomBase, Ue, relTol)
+
+        # Here comes the tricky part:
+        # we need to get the common eigenvalues of all Ni -> get a "random" linear combination
+        # Therefore all optimal solutions respect some constraints, but they are not unique...
+        N = nsum(NList, axis=0) / NList.shape[0]
+
+        T, Q = schur(N)
+
+        # Now compute the actual solutions or better the representations of it
+        xSol = nempty((self.repr.nDims, thisRank), dtype=nfloat)
+        # Sum up
+        for i in range(NList.shape[0]):
+            for j in range(Q.shape[1]):
+                ###for j in range(Q.shape[1]):
+                xSol[i, j] = neinsum('m,mn,n', Q[:, j], NList[i, :, :], Q[:, j])
+                ###xSol[j, i] = neinsum('m,mn,n', Q[:, j], NList[i, :, :], Q[:, j])
+
+        # Check if all constraints are respected (Here it can happen that they are not)
+        zSol = self.repr.evalAllMonoms(xSol)
+
+        isValid = nones((xSol.shape[1],), dtype=np.bool_)
+        isValidWeak = nones((xSol.shape[1],), dtype=np.bool_)
+        atol = -coreOptions.absTolCstr
+        atolWeak = -coreOptions.absTolCstr + self.opts["weaklyValidCstr"]
+        for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
+            isValid = np.logical_and(isValid, aCstr.isValid(zSol, atol=atol))
+            isValidWeak = np.logical_and(isValidWeak, aCstr.isValid(zSol, atol=atolWeak))
+        # Do not use U / varMonomBase if any violations happened
+        if not nall(isValid):
+            optimalCstr = U = varMonomBase = None
+
+        # Reoptimize only for small violations and/or keep only the worst point (after reoptimization) for non-valid
+        xSolNew = xSol.copy()
+        toRemove = []
+        for i in range(xSol.shape[1]):
+            if isValid[i]:
+                # Solution ok
+                continue
+            if not isValidWeak[i]:
+                # Solution rejected due to abusive constraint violation
+                toRemove.append(i)
+                continue
+            # Do the local search
+            xReopt = self.localSolve(xSol[:, [i]], fun=sol['primal objective']).reshape((xSol.shape[0], 1))  # localSolve expects 1d vector
+            if xReopt is None:
+                toRemove.append(i)  # Reoptimization failed for some reason -> exclude
+                continue
+            else:
+                xSolNew[:, [i]] = xReopt
+
+            # Check if now ok
+            if dbg__0:
+                zSolNew = self.repr.evalAllMonoms(xSolNew[:, [i]])
+                for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
+                    if not bool(aCstr.isValid(zSolNew, atol=atol)):
+                        raise RuntimeError("Local opt failed")
+            isValid[i] = True
+            isValidWeak[i] = True
+        xSolNew = np.delete(xSolNew, toRemove, axis=1)  # Further use of isValid(Weak) also delete?
+        xSolNew = xSolNew if xSolNew.size else None
+
+        if dbg__2:
+            print(f"Found valid solution for atol : {atol}")
+
+        # Only return valid ones
+        # Became redundant due to localSove
+        # xSol = xSol[:, isValid]
+
+        # Finally construct the constraint polynomials
+        # If the solutions are reoptimized, then the minimizer(s) may not lie on the (sub-)manifold
+        if U is not None:
+            if U.shape[1] == 1:
+                # No need to compute them as the result is optimal -> no further search necessary
+                optimalCstr = nzeros((0, self.repr.nMonoms))
+            else:
+                optimalCstr = nzeros((U.shape[0] - thisRank, self.repr.nMonoms))
+                # Fill up
+                optimalCstr[:, varMonomBase] = U[monomIsBase, :]
+                idxC = 0
+                for k, nBase in enumerate(monomIsBase):
+                    if nBase:
+                        optimalCstr[idxC, k] = -1.  # Set the equality
+                        idxC += 1
+
+        return xSolNew, optimalCstr, (varMonomBase, U, relTol)
+
     def extractOptSol(self, sol:Union[np.ndarray, dict], **kwargs):
         """
         Implements ftp://nozdr.ru/biblio/kolxoz/M/MOac/Henrion%20D.,%20Garulli%20A.%20(eds.)%20Positive%20polynomials%20in%20control%20(Springer,%202005)(ISBN%203540239480)(O)(310s)_MOc_.pdf#page=289
@@ -126,252 +380,10 @@ class convexProg():
             assert vRel[0] > -opts_['relTol']
 
         if (nall(vRel[:-1]<opts_['relTol'])):
-            # There is only one optimal solution
-            xSol = varMat[1:self.repr.varNumsUpToDeg[1].size,[0]]
-            optimalCstr = nzeros((0,self.repr.nMonoms))
-            if opts_['reOptimize']:
-                # Optimize the solution locally to reduce rounding errors
-                raise NotImplementedError
-            #The simple solution is exact enough
-            
-            #Check all constraints
-            zSol = self.repr.evalAllMonoms(xSol)
-
-            isValid = True
-            isValidWeak = True
-            atol = -coreOptions.absTolCstr #make a global variable
-            atolWeak = -coreOptions.absTolCstr + self.opts["weaklyValidCstr"]
-            for aCstr in self.constraints.l.cstrList+self.constraints.q.cstrList+self.constraints.s.cstrList:
-                    isValid = isValid and bool(aCstr.isValid(zSol, atol=atol))
-                    isValidWeak = isValidWeak and bool(aCstr.isValid(zSol, atol=atolWeak))
-
-            if not isValidWeak:
-                if dbg__1:
-                    print(f"Single point minimizer violated constraints badly -> no point will be returned")
-                return None, None, (None, None, None)
-
-            if not isValid:
-                # Solution only slightly violates constraints
-                isValid=True
-                xSol=self.localSolve(xSol, fun=sol['primal objective'])
-
-                if dbg__1:
-                    if xSol is None:
-                        print("local opt failed")
-                    else:
-                        zSolnew=self.repr.evalAllMonoms(xSolnew)
-                        for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
-                            isValid = isValid and bool(aCstr.isValid(zSolnew, atol=atol))
-                            if not isValid:
-                                raise RuntimeError
-            if dbg__1:
-                print(f"Found valid solution for atol : {atol}")
-            
-            return xSol, None, (None, None, None)
+            return self.extractOptSol1(sol, varMat, opts_)
         else:
-            # Here it is more tricky
-            # We will return optimal solutions, however they are not unique
-            # It more that all optimal solutions lie
-            #First get the cholesky decomp if all positive eigenvalues
-            ind = np.where(vRel>opts_['relTol'])[0]
-            thisRank = ind.size
-            v2 = v[ind]**.5
-            e2 = e[:, ind]
-            V = nmultiply(e2, v2)
+            return self.extractOptSolN(sol, opts_, (v,e,vRel,vMax))
 
-            # Get column echelon form
-            # Scipy only provides row echelon form
-            #U, monomBase = sy.Matrix(V.T).rref()# <- This is ; U, monomBase = sy.Matrix(V.T).rref(simplify=True, iszerofunc=lambda x:x**2<1e-20) #is correct but slow
-            #U = narray(U, dtype=nfloat).T
-            cond_ = (v2[0]/v2[-1])
-            
-            try:
-                Ue, varMonomBase = robustRREF(V.T, cond_/10., tol0_=1e-8, fullOut=False) #"Exact" rref
-            except RuntimeError:
-                try:
-                    Ue, varMonomBase = robustRREF(V.T, cond_/100., tol0_=1e-8, fullOut=False)  # "Exact" rref
-                except RuntimeError:
-                       # Ue, varMonomBase = robustRREF(V.T, cond_/500., tol0_=1e-7, fullOut=False)  # "Exact" rref
-                       try:
-                           Ue, varMonomBase = robustRREF(V.T, cond_ / 500., tol0_=1e-7, fullOut=False)
-                       except RuntimeError:
-                           Ue, varMonomBase = robustRREF(V.T, cond_ / 1., tol0_=1e-5, fullOut=False)
-                           print('cest bizzard')
-            Ue = Ue.T.copy()
-
-            varMonomBase = narray(varMonomBase, dtype=nintu).reshape((-1,))
-            monomIsBase = nones((Ue.shape[0],), dtype=np.bool_)
-            monomIsBase[varMonomBase] = False
-
-            allMonomsHalf = self.repr.listOfMonomials[:nMonomsH_]
-
-            firstDegMonoms = self.repr.varNumsPerDeg[1]
-            
-            relTol = 1e-6 #Set relative zero, increment if infeasible up to max
-            relTolMax = 1e-1
-            isNOk_ = 1
-            while ((relTol <= relTolMax) and (isNOk_!=0)):
-                relTol *= 10.
-                U = Ue.copy()
-                #Set to relative zero
-                U[nabs(U) <= nmax(nabs(U), axis=1, keepdims=True)*relTol] = 0.
-            
-                monomNotBaseNCoeffs = []
-                for k,aIsNotBase in enumerate(monomIsBase):
-                    if not aIsNotBase:
-                        continue
-                    newList = [allMonomsHalf[k], [[],[]], nzeros((self.repr.nMonoms,1))]
-                    newList[2][varMonomBase,0] = U[k,:]
-                    for i, aIdx in enumerate(U[k,:]):
-                        if abs(aIdx) == 0.:
-                            continue
-                        newList[1][0].append( allMonomsHalf[varMonomBase[i]] )
-                        newList[1][1].append( aIdx )
-                        
-                    monomNotBaseNCoeffs.append(newList)
-            
-                #Get the multiplier matrices
-                NList = nempty((self.repr.nDims, thisRank, thisRank), nfloat)
-                ###NList = nempty((thisRank, thisRank, thisRank), nfloat)
-
-                isNOk_ = 1
-                for i, iMonom in enumerate(firstDegMonoms): #The first one is allows the constant value
-                    if isNOk_>=2:
-                        break
-                ###for i, iMonom in enumerate(monomBase):  # The first one is allows the constant value
-                    for j, jMonom in enumerate(varMonomBase):
-                        if isNOk_ >= 2:
-                            break
-                        idxU = self.repr.idxMat[iMonom, jMonom]
-                        if idxU<nMonomsH_:
-                            NList[i,j,:] = U[idxU,:]
-                            isNOk_ = 0
-                        else:
-                            # Recursively replace until all monomials are in the base
-                            xiwjMonomNCoeff = [[idxU],[self.repr.listOfMonomials[idxU]], [1.0]]
-                            while ((not all([aIdx<nMonomsH_ for aIdx in xiwjMonomNCoeff[0]])) and (isNOk_<2)):
-                                for k, aIdx in enumerate(xiwjMonomNCoeff[0]):
-                                    # Seek the monomial to simplify
-                                    isNOk_ = 1
-                                    if aIdx>=nMonomsH_:
-                                        toReplace = [aaList.pop(k) for aaList in  xiwjMonomNCoeff]
-                                    
-                                    #Try relacing once and append
-                                    replacement = [[],[],[]]
-                                    for aMonomNBase in monomNotBaseNCoeffs:
-                                        nRMonom = toReplace[1]-aMonomNBase[0]
-                                        if all(nRMonom>=0):
-                                            for (rMonomAdd, rCoeff) in zip(*aMonomNBase[1]):
-                                                replacement[1].append(nRMonom+rMonomAdd)
-                                                replacement[0].append( self.repr.monom2num[list2int(replacement[1][-1], self.repr.digits)] )
-                                                replacement[2].append(rCoeff*toReplace[2])
-                                            for jj in range(3):
-                                                xiwjMonomNCoeff[jj].extend(replacement[jj])
-                                            isNOk_ = 0
-                                            break
-                                    if isNOk_==0:
-                                        break
-                                    else:
-                                        # The solution/tolerance combo is not sufficient to generate the minimizer with this approach
-                                        isNOk_=2
-                                        #relTol *= 10.
-                                        break
-                                        
-                            #Apply
-                            if isNOk_ == 0:
-                                NList[i, j, :] = 0.
-                                for thisIdxU,_,thisCoeff in zip(*xiwjMonomNCoeff):
-                                    NList[i, j, :] += U[thisIdxU, :]*thisCoeff
-            if isNOk_ != 0:
-                #No solution can be extracted -> return exect constraints
-                return None, None, (varMonomBase, Ue, relTol)
-                    
-                        
-
-            # Here comes the tricky part:
-            # we need to get the common eigenvalues of all Ni -> get a "random" linear combination
-            # Therefore all optimal solutions respect some constraints, but they are not unique...
-            N = nsum(NList,axis=0)/NList.shape[0]
-
-            T,Q = schur(N)
-            
-            #Now compute the actual solutions or better the representations of it
-            xSol = nempty((self.repr.nDims, thisRank), dtype=nfloat)
-            #Sum up
-            for i in range(NList.shape[0]):
-                for j in range(Q.shape[1]):
-                ###for j in range(Q.shape[1]):
-                    xSol[i,j] = neinsum('m,mn,n', Q[:,j], NList[i,:,:], Q[:,j])
-                    ###xSol[j, i] = neinsum('m,mn,n', Q[:, j], NList[i, :, :], Q[:, j])
-            
-            # Check if all constraints are respected (Here it can happen that they are not)
-            zSol = self.repr.evalAllMonoms(xSol)
-
-            isValid = nones((xSol.shape[1],), dtype=np.bool_)
-            isValidWeak = nones((xSol.shape[1],), dtype=np.bool_)
-            atol = -coreOptions.absTolCstr
-            atolWeak = -coreOptions.absTolCstr + self.opts["weaklyValidCstr"]
-            for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
-                isValid = np.logical_and(isValid, aCstr.isValid(zSol, atol=atol))
-                isValidWeak = np.logical_and(isValidWeak, aCstr.isValid(zSol, atol=atolWeak))
-            # Do not use U / varMonomBase if any violations happened
-            if not nall(isValid):
-                optimalCstr = U = varMonomBase = None
-
-
-            # Reoptimize only for small violations and/or keep only the worst point (after reoptimization) for non-valid
-            xSolNew = xSol.copy()
-            toRemove = []
-            for i in range(xSol.shape[1]):
-                if isValid[i]:
-                    # Solution ok
-                    continue
-                if not isValidWeak[i]:
-                    # Solution rejected due to abusive constraint violation
-                    toRemove.append(i)
-                    break
-                # Do the local search
-                xReopt = self.localSolve(xSol[:,i], fun=sol['primal objective']).reshape((xSol.shape[0],1)) #localSolve expects 1d vector
-                if xReopt is None:
-                    toRemove.append(i) # Reoptimization failed for some reason -> exclude
-                    break
-                else:
-                    xSolNew[:,[i]] = xReopt
-
-                # Check if now ok
-                if dbg__0:
-                    zSolNew = self.repr.evalAllMonoms(xSolNew[:,[i]])
-                    for aCstr in self.constraints.l.cstrList + self.constraints.q.cstrList + self.constraints.s.cstrList:
-                        if not bool(aCstr.isValid(zSolNew, atol=atol)):
-                            raise RuntimeError("Local opt failed")
-                isValid[i] = True
-                isValidWeak[i] = True
-            xSolNew = np.delete(xSolNew, toRemove, axis=1) # Further use of isValid(Weak) also delete?
-
-            if dbg__2:
-                print(f"Found valid solution for atol : {atol}")
-            
-            # Only return valid ones
-            # Became redundant due to localSove
-            # xSol = xSol[:, isValid]
-            
-            # Finally construct the constraint polynomials
-            # If the solutions are reoptimized, then the minimizer(s) may not lie on the (sub-)manifold
-            if U is not None:
-                if U.shape[1] == 1:
-                    # No need to compute them as the result is optimal -> no further search necessary
-                    optimalCstr = nzeros((0, self.repr.nMonoms))
-                else:
-                    optimalCstr = nzeros((U.shape[0]-thisRank, self.repr.nMonoms))
-                    # Fill up
-                    optimalCstr[:, varMonomBase]=U[monomIsBase,:]
-                    idxC = 0
-                    for k, nBase in enumerate(monomIsBase):
-                        if nBase:
-                            optimalCstr[idxC,k] = -1. #Set the equality
-                            idxC += 1
-            
-        return xSolNew, optimalCstr, (varMonomBase, U, relTol)
     
     def localSolveDict(self,xSol, method=coreOptions.defaultLocalSolve, tol:float=0.9*coreOptions.absTolCstr, options:dict={})->dict:
         """
@@ -412,11 +424,48 @@ class convexProg():
         options_.update(options)
 
         allDict = {'fun':gx, 'x0':xSol.reshape((-1,)), 'method':method, 'tol':tol, 'constraints':this_cstr, 'options':options_ }
+        if method == "COBYLA":
+            options_['catol'] = tol
         if method == 'SLSQP':
             thisObjJacFun = self.objective.getGradFunc()
             allDict['jac'] = lambda x: thisObjJacFun(x.reshape((self.repr.nDims,1))).reshape((-1,))
+            allDict['options']['ftol'] = 0.5*allDict['tol']
 
         return allDict
+
+    def SLSQPpostNpre(self, thisProbDict, x, fun=None, pre=True):
+
+        fun = 0. if fun is None else fun
+        xBase = x.copy()
+        assert self.constraints.q.nCstr == 0, "TBD"
+        thisCstrEval = thisProbDict['constraints']["fun"](x.reshape((-1,)))
+        newVal = fun
+        if nany(thisCstrEval <= -coreOptions.absTolCstr):
+            thisCstrJac = thisProbDict['constraints']["jac"](x.reshape((-1,))).T
+            thisCstrJac /= ((norm(thisCstrJac, axis=0)) + coreOptions.floatEps)
+
+            # just follow the gradient
+            counter = 1
+            while True:
+                thisCstrEval = thisProbDict['constraints']["fun"](x.reshape((-1,))).reshape((1, -1))
+                thisCstrEval = np.minimum(thisCstrEval, 0.0)
+                if nall(thisCstrEval >= -0.5 * coreOptions.absTolCstr):
+                    newVal = thisProbDict['fun'](x.reshape((-1,)))
+                    if dbg__0:
+                        print(f"local solution correction took {counter} steps with a delta value of {newVal - fun}")
+                    if ((not pre) and (not newVal - fun >= 0.)):
+                        raise UserWarning("Value should go up")
+                    break
+                grad = nsum(thisCstrEval * thisCstrJac, axis=1, keepdims=True)
+                x -= grad * (0.5 / np.sum(thisCstrEval < 0.))  # make small steps
+                counter += 1
+                if counter>20:
+                    assert pre
+                    x=xBase
+                    thisProbDict['method'] = 'COBYLA'
+                    if dbg__1:
+                        print("SLSQP pre switches to COBYLA")
+        return x, newVal
 
     def localSolve(self, xSol:np.ndarray, fun:float=None)->np.ndarray:
         # TODO @xiao take into account possible linear / socp constraints
@@ -428,7 +477,16 @@ class convexProg():
         # Check if the constraints are not violated "too much"
         # If so, do not perform reoptimization
         try:
+            if 1 and thisProbDict['method'] == "SLSQP":
+                thisProbDict['x0'] = self.SLSQPpostNpre(thisProbDict, xSol, fun, True)[0].reshape((-1,))
             res = localSolve(**thisProbDict)
+            res.x.resize((self.repr.nDims,1))
+            # Ensure contraints are respected
+            # TODO this is really annoying
+            if 1 and thisProbDict['method'] == "SLSQP":
+                res.x, res.fun = self.SLSQPpostNpre(thisProbDict, res.x, fun, False)
+                res.x.resize((self.repr.nDims,1))
+
         except BaseException as me:
             if dbg__0:
                 print(f"Local solve failed with :\\ {me}")
@@ -440,10 +498,10 @@ class convexProg():
             if not nall(thisProbDict['constraints']['fun'](res.x)>-coreOptions.absTolCstr):
                 print('shit')
             if fun is not None:
-                if not (fun<=res.fun-coreOptions.numericEpsPos*10.):
+                if not ((fun<=res.fun-coreOptions.numericEpsPos*100.) or ((res.fun-fun)/max(abs(fun),abs(res.fun)) >=100*coreOptions.numericEpsPos)):
                     raise UserWarning(f"Global opt did not provide a lower bound: glob: {fun}, local: {res.fun}")
         assert res.success
-        assert (fun is None) or (fun<=res.fun-coreOptions.numericEpsPos*10.), "Convex opt has to provide a lower bound" # TODO check epsilon
+        assert (fun is None) or ((fun<=res.fun-coreOptions.numericEpsPos*100.) or ((res.fun-fun)/max(abs(fun),abs(res.fun)) >=100*coreOptions.numericEpsPos)), "Convex opt has to provide a lower bound" # TODO check epsilon
         
         return res.x
 

@@ -879,6 +879,10 @@ def workerSolveVariable(inQueue, outQueue):
                         raise RuntimeError
                 except AttributeError:
                     pass
+                except BaseException as me:
+                    print(me)
+                    cstr_val = acstr.poly.eval2(xSol)
+                    print("huh")
 
             if solution['obj'] < coreOptions.numericEpsPos:
                 print(f"Found critical point with {solution['obj']} at \n {ySol}")
